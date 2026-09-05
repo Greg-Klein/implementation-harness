@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { spawn as spawnChild } from "node:child_process";
 import { appendFile, copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
@@ -35,6 +36,7 @@ let terminal: pty.IPty | null = null;
 let artifactWatcher: FSWatcher | null = null;
 let terminalBuffer = "";
 let state: RunState = emptyState();
+const scheduledSelfAudits = new Set<string>();
 const app = next({ dev, hostname, port, dir: harnessRoot });
 const handle = app.getRequestHandler();
 const sockets = new Set<WebSocket>();
@@ -159,31 +161,36 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   publishState();
   await startArtifactWatcher(cwd);
   const command = `/x-implement:x-implement ${state.issueUrl}${state.instruction ? ` ${state.instruction}` : ""}`;
-  terminal = pty.spawn(claude, ["--plugin-dir", pluginRoot, "--name", `x-implement ${path.basename(cwd)}`, command], {
+  const runTerminal = pty.spawn(claude, ["--plugin-dir", pluginRoot, "--name", `x-implement ${path.basename(cwd)}`, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
     env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", X_IMPLEMENT_RUN_ID: id, X_IMPLEMENT_HARNESS_HOOK_URL: `http://${hostname}:${port}/api/hooks` },
   });
+  terminal = runTerminal;
   state.status = "running";
   activity("system", "Claude Code démarré", command);
   publishState();
-  terminal.onData((data) => {
+  runTerminal.onData((data) => {
     terminalBuffer = (terminalBuffer + data).slice(-600_000);
     broadcast({ type: "terminal.output", data });
     if (state.id) void appendFile(path.join(dataRoot, state.id, "terminal.log"), data).catch(() => undefined);
   });
-  terminal.onExit(({ exitCode }) => {
-    terminal = null;
+  runTerminal.onExit(({ exitCode }) => {
+    if (state.id !== id) return;
+    if (terminal === runTerminal) terminal = null;
     state.status = exitCode === 0 ? "completed" : "failed";
     state.endedAt = now();
     if (exitCode !== 0) state.error = `Claude Code s’est arrêté avec le code ${exitCode}.`;
     activity("system", exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
     publishState();
+    scheduleAutonomousReview(id);
   });
 }
 function stopRun() {
   if (!terminal) return;
+  const runId = state.id;
   terminal.kill(); terminal = null; state.status = "completed"; state.endedAt = now();
   activity("system", "Session arrêtée par l’utilisateur"); publishState();
+  if (runId) scheduleAutonomousReview(runId);
 }
 async function saveFeedback(body: string) {
   const feedback = body.trim();
@@ -198,6 +205,75 @@ async function saveFeedback(body: string) {
   }, null, 2));
   activity("artifact", "Retour ajouté à la boucle RSI", `${id}.json`);
   publishState();
+}
+async function queueAutonomousReview(runId: string, snapshot: RunState) {
+  if (scheduledSelfAudits.has(runId)) return;
+  scheduledSelfAudits.add(runId);
+  const id = `self-audit-${runId}`;
+  try {
+    await mkdir(feedbackRoot, { recursive: true });
+    await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
+      id, runId, createdAt: now(), status: "pending", source: "autonomous",
+      objective: "Find durable improvements from observable friction, failures, repeated review findings and missing verification in this run.",
+      signals: {
+        finalStatus: snapshot.status,
+        finalPhase: snapshot.phase,
+        elapsedMs: snapshot.startedAt ? Date.now() - new Date(snapshot.startedAt).getTime() : null,
+        agents: snapshot.agents.map((agent) => ({ name: agent.name, status: agent.status })),
+        artifacts: snapshot.artifacts,
+        attentionEvents: snapshot.activities.filter((item) => item.kind === "attention").map((item) => item.title),
+        error: snapshot.error,
+      },
+    }, null, 2));
+  } catch (error) {
+    scheduledSelfAudits.delete(runId);
+    throw error;
+  }
+  if (state.id === runId) {
+    activity("artifact", "Auto-audit RSI mis en file", `${id}.json`);
+    publishState();
+  }
+}
+function startAutonomousImprovement(runId: string) {
+  if (process.env.X_IMPLEMENT_RSI_AUTORUN !== "true") return;
+  const claude = findExecutable("claude");
+  if (!claude) return;
+  const worktreeName = `rsi-${runId.slice(-8)}`;
+  const feedbackDirectory = path.join(harnessRoot, "data", "feedback");
+  const child = spawnChild(claude, [
+    "--background", "--worktree", worktreeName,
+    "--add-dir", pluginRoot,
+    "--plugin-dir", pluginRoot,
+    "--permission-mode", "auto",
+    "--name", `x-implement RSI ${runId.slice(-8)}`,
+    `/x-implement:x-improve ${feedbackDirectory}`,
+  ], {
+    cwd: pluginRoot,
+    env: { ...process.env, X_IMPLEMENT_RSI_PRIMARY_CHECKOUT: pluginRoot },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  let launchError: Error | undefined;
+  child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
+  child.stderr.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
+  child.on("error", (error) => { launchError = error; });
+  child.on("close", (code) => {
+    if (state.id === runId) {
+      const launched = code === 0 && !launchError;
+      activity(launched ? "agent" : "attention", launched ? "Auto-amélioration RSI lancée" : "Auto-amélioration RSI non démarrée", normalizeText(launchError?.message ?? output));
+      publishState();
+    }
+  });
+}
+function scheduleAutonomousReview(runId: string) {
+  const snapshot = structuredClone(state);
+  void queueAutonomousReview(runId, snapshot)
+    .then(() => startAutonomousImprovement(runId))
+    .catch((error) => {
+      if (state.id !== runId) return;
+      activity("attention", "Auto-audit RSI impossible", normalizeText(error instanceof Error ? error.message : error));
+      publishState();
+    });
 }
 function processHook(body: Record<string, unknown>) {
   if (!state.id || body.runId !== state.id) return;
@@ -221,6 +297,9 @@ function processHook(body: Record<string, unknown>) {
     if (state.phase >= 8) state.phase = 10;
     state.status = state.phase >= 10 ? "completed" : "attention";
     activity("attention", state.phase >= 10 ? "Workflow terminé" : "Claude Code attend une réponse");
+    if (state.phase >= 10 && state.id) {
+      scheduleAutonomousReview(state.id);
+    }
   }
   publishState();
 }

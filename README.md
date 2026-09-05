@@ -80,6 +80,17 @@ Cette commande lance Claude Code sur `/x-improve`. Il regroupe les retours en at
 
 Les tickets, logs et retours bruts restent sous `harness/data/` et ne sont jamais ajoutés au commit d’amélioration.
 
+Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, artefacts manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité.
+
+La politique se règle dans `.env` :
+
+```dotenv
+X_IMPLEMENT_RSI_AUTORUN='true'
+X_IMPLEMENT_RSI_AUTO_APPLY='true'
+```
+
+`RSI_AUTORUN` lance l’analyse en arrière-plan à la fin du run. `RSI_AUTO_APPLY` fusionne uniquement un commit validé par fast-forward dans le checkout installé. Aucun changement n’est poussé sur GitHub. Les deux options valent `false` dans `.env.example`; il faut les activer consciemment. Après une promotion, redémarrer le harnais pour charger les changements du serveur local.
+
 ## Fonctionnement
 
 Claude Code reste le moteur du workflow. Le harnais ajoute :
