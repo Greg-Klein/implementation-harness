@@ -1,0 +1,6 @@
+.DS_Store
+harness/node_modules/
+harness/.next/
+harness/data/
+harness/*.tsbuildinfo
+*.log
