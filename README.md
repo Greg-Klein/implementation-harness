@@ -52,7 +52,7 @@ X_IMPLEMENT_REPOSITORIES='{"groupe/projet":"~/workspace/projet"}'
 X_IMPLEMENT_SEARCH_ROOTS='~/workspace,~/code'
 ```
 
-Le mapping exact est prioritaire. Sinon, le harnais inspecte les remotes Git des dossiers situés directement dans les racines de recherche. Le `.env` est ignoré par Git.
+Le mapping exact est prioritaire. Sinon, le harnais inspecte les remotes Git des dossiers situés directement dans les racines de recherche. Après collage d’un ticket, le chemin détecté remplit le champ projet s’il est vide. Ce champ reste éditable et propose les dépôts du mapping `.env` pendant la saisie. Le `.env` est ignoré par Git.
 
 ### Port et navigateur
 

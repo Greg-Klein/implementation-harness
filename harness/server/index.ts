@@ -16,6 +16,7 @@ type AgentStatus = "running" | "completed" | "failed";
 type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 type RunState = { id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string; startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; artifacts: string[]; error?: string };
+type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 type ClientMessage =
   | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string }
   | { type: "terminal.input"; data: string }
@@ -79,25 +80,27 @@ function gitLabProjectPath(issueUrl: string) {
   }
 }
 function repositoryMappings(): Record<string, string> {
-  try { return JSON.parse(process.env.X_IMPLEMENT_REPOSITORIES ?? "{}") as Record<string, string>; }
+  try {
+    const parsed = JSON.parse(process.env.X_IMPLEMENT_REPOSITORIES ?? "{}") as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+  }
   catch { return {}; }
 }
-async function resolveProjectDirectory(input: string, issueUrl: string) {
-  if (input.trim()) {
-    const explicit = path.resolve(expandHome(input.trim()));
-    if (!existsSync(explicit)) throw new Error("Le répertoire du projet n’existe pas.");
-    return explicit;
-  }
-
-  const project = gitLabProjectPath(issueUrl);
-  if (!project) throw new Error("L’URL du ticket GitLab n’est pas reconnue.");
-  const mapped = repositoryMappings()[project];
-  if (mapped) {
-    const candidate = path.resolve(expandHome(mapped));
-    if (existsSync(candidate)) return candidate;
-  }
-
-  const roots = (process.env.X_IMPLEMENT_SEARCH_ROOTS ?? "~/workspace").split(",").map((root) => path.resolve(expandHome(root.trim())));
+function configuredRepositories(): RepositoryOption[] {
+  return Object.entries(repositoryMappings())
+    .map(([project, repositoryPath]) => {
+      const resolvedPath = path.resolve(expandHome(repositoryPath));
+      return { project, path: repositoryPath, resolvedPath, exists: existsSync(resolvedPath) };
+    })
+    .sort((left, right) => left.project.localeCompare(right.project));
+}
+async function discoverProjectDirectory(project: string) {
+  const roots = (process.env.X_IMPLEMENT_SEARCH_ROOTS ?? "~/workspace")
+    .split(",")
+    .map((root) => root.trim())
+    .filter(Boolean)
+    .map((root) => path.resolve(expandHome(root)));
   for (const root of roots) {
     if (!existsSync(root)) continue;
     const entries = await readdir(root, { withFileTypes: true });
@@ -110,6 +113,31 @@ async function resolveProjectDirectory(input: string, issueUrl: string) {
       } catch { /* This directory is not a regular Git checkout. */ }
     }
   }
+  return undefined;
+}
+async function detectProjectDirectory(issueUrl: string) {
+  const project = gitLabProjectPath(issueUrl);
+  if (!project) return undefined;
+  const mapped = repositoryMappings()[project];
+  if (mapped) {
+    const resolvedPath = path.resolve(expandHome(mapped));
+    if (existsSync(resolvedPath)) return { project, path: mapped, resolvedPath, exists: true, source: "env" as const };
+  }
+  const discovered = await discoverProjectDirectory(project);
+  if (discovered) return { project, path: discovered, resolvedPath: discovered, exists: true, source: "git" as const };
+  return undefined;
+}
+async function resolveProjectDirectory(input: string, issueUrl: string) {
+  if (input.trim()) {
+    const explicit = path.resolve(expandHome(input.trim()));
+    if (!existsSync(explicit)) throw new Error("Le répertoire du projet n’existe pas.");
+    return explicit;
+  }
+
+  const project = gitLabProjectPath(issueUrl);
+  if (!project) throw new Error("L’URL du ticket GitLab n’est pas reconnue.");
+  const detected = await detectProjectDirectory(issueUrl);
+  if (detected) return detected.resolvedPath;
   throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute-le à X_IMPLEMENT_REPOSITORIES.`);
 }
 function normalizeText(value: unknown): string | undefined {
@@ -320,6 +348,17 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === "/api/state") { respond(response, 200, { state }); return; }
+  if (request.method === "GET" && request.url?.startsWith("/api/repositories")) {
+    const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
+    const issueUrl = requestUrl.searchParams.get("issueUrl") ?? "";
+    try {
+      const detected = issueUrl ? await detectProjectDirectory(issueUrl) : undefined;
+      respond(response, 200, { repositories: configuredRepositories(), detected: detected ?? null });
+    } catch (error) {
+      respond(response, 500, { repositories: configuredRepositories(), detected: null, error: error instanceof Error ? error.message : "Discovery failed." });
+    }
+    return;
+  }
   await handle(request, response);
 });
 const wss = new WebSocketServer({ noServer: true });

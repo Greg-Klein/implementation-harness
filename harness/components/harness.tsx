@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  ArrowRightIcon, CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, GitBranchIcon,
-  PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon,
+  ArrowRightIcon, CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, FolderOpenIcon,
+  GitBranchIcon, PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon,
 } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
 type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
@@ -13,6 +13,11 @@ type Activity = { id: string; at: string; kind: string; title: string; detail?: 
 type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; artifacts: string[]; error?: string;
+};
+type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
+type RepositoryResponse = {
+  repositories: RepositoryOption[];
+  detected: (RepositoryOption & { source: "env" | "git" }) | null;
 };
 
 const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
@@ -39,6 +44,10 @@ export function Harness() {
   const [cwd, setCwd] = useState("");
   const [issueUrl, setIssueUrl] = useState("");
   const [instruction, setInstruction] = useState("");
+  const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
+  const [detectedProject, setDetectedProject] = useState<string>();
+  const [detectingProject, setDetectingProject] = useState(false);
+  const cwdRef = useRef("");
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
 
@@ -61,11 +70,49 @@ export function Harness() {
     return () => { disposed = true; if (retry) clearTimeout(retry); socketRef.current?.close(); };
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/repositories", { signal: controller.signal })
+      .then((response) => response.json() as Promise<RepositoryResponse>)
+      .then((result) => setRepositories(result.repositories))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!issueUrl.includes("/-/issues/") || cwdRef.current.trim()) {
+      setDetectingProject(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setDetectingProject(true);
+      fetch(`/api/repositories?issueUrl=${encodeURIComponent(issueUrl)}`, { signal: controller.signal })
+        .then((response) => response.json() as Promise<RepositoryResponse>)
+        .then((result) => {
+          setRepositories(result.repositories);
+          if (result.detected && !cwdRef.current.trim()) {
+            cwdRef.current = result.detected.path;
+            setCwd(result.detected.path);
+            setDetectedProject(result.detected.project);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => { if (!controller.signal.aborted) setDetectingProject(false); });
+    }, 180);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [issueUrl]);
+
   const send = useCallback((message: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
   }, []);
   const terminalInput = useCallback((data: string) => send({ type: "terminal.input", data }), [send]);
   const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
+  const changeCwd = useCallback((value: string, project?: string) => {
+    cwdRef.current = value;
+    setCwd(value);
+    setDetectedProject(project);
+  }, []);
   const start = () => { terminalRef.current?.clear(); send({ type: "run.start", cwd, issueUrl, instruction }); };
   const active = run.status === "starting" || run.status === "running" || run.status === "attention";
   const canStart = connected && !active && issueUrl.trim().length > 0;
@@ -76,7 +123,10 @@ export function Harness() {
         <header className="flex min-h-16 items-center justify-between border-b border-[var(--line)] px-5 md:px-7">
           <div className="flex items-center gap-3">
             <div className="grid size-8 place-items-center rounded-[10px] bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
-            <div><h1 className="text-[15px] font-semibold tracking-[-.02em]">X-Implement</h1><p className="text-[11px] text-[var(--muted)]">Claude Code workflow harness</p></div>
+            <div>
+              <h1 className="text-[15px] font-semibold tracking-[-.02em]">X-Implement</h1>
+              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#8a928d]">développé par <span className="font-medium text-[#68716c]">Gregory Klein</span></span></p>
+            </div>
           </div>
           <div className="flex items-center gap-2.5 text-xs text-[var(--muted)]">
             <span className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
@@ -86,7 +136,7 @@ export function Harness() {
         </header>
 
         {run.status === "idle" ? (
-          <LaunchForm cwd={cwd} setCwd={setCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} canStart={canStart} onStart={start} />
+          <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
         ) : (
           <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:grid-cols-[236px_minmax(0,1fr)_320px]">
             <PhaseRail run={run} />
@@ -105,9 +155,10 @@ export function Harness() {
   );
 }
 
-function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstruction, canStart, onStart }: {
-  cwd: string; setCwd: (value: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
-  instruction: string; setInstruction: (value: string) => void; canStart: boolean; onStart: () => void;
+function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart }: {
+  cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
+  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
+  detectingProject: boolean; canStart: boolean; onStart: () => void;
 }) {
   return (
     <section className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
@@ -129,8 +180,8 @@ function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstru
             <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
           </div>
-          <Field label="Répertoire du projet · facultatif"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Détecté depuis le ticket GitLab" className="field font-mono text-xs" /></Field>
           <Field label="Ticket GitLab"><input type="url" value={issueUrl} onChange={(event) => setIssueUrl(event.target.value)} placeholder="https://gitlab.com/…/-/issues/217" className="field text-sm" /></Field>
+          <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />
           <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· facultatif</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> Lancer x-implement</span><ArrowRightIcon size={16} />
@@ -143,6 +194,90 @@ function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstru
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
+}
+
+function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting }: {
+  value: string;
+  onChange: (value: string, project?: string) => void;
+  repositories: RepositoryOption[];
+  detectedProject?: string;
+  detecting: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const query = value.trim().toLocaleLowerCase("fr");
+  const suggestions = useMemo(() => {
+    if (!query) return [];
+    return repositories.filter((repository) =>
+      `${repository.project} ${repository.path} ${repository.resolvedPath}`.toLocaleLowerCase("fr").includes(query),
+    ).slice(0, 7);
+  }, [query, repositories]);
+  const listOpen = open && query.length > 0;
+
+  useEffect(() => setActiveIndex(0), [query]);
+
+  const select = (repository: RepositoryOption) => {
+    onChange(repository.path, repository.project);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative mb-5">
+      <div className="mb-2 flex min-h-4 items-center justify-between gap-3">
+        <label htmlFor="project-directory" className="text-xs font-medium">Répertoire du projet <span className="font-normal text-[var(--muted)]">· facultatif</span></label>
+        <span className="truncate text-right font-mono text-[9px] text-[var(--accent)]">
+          {detecting ? "Détection…" : detectedProject ? `Projet · ${detectedProject}` : ""}
+        </span>
+      </div>
+      <div className="relative">
+        <FolderOpenIcon aria-hidden="true" size={15} className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-[var(--muted)]" />
+        <input
+          id="project-directory"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={listOpen}
+          aria-controls="repository-suggestions"
+          aria-activedescendant={listOpen && suggestions[activeIndex] ? `repository-${activeIndex}` : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onChange={(event) => { onChange(event.target.value); setOpen(true); }}
+          onKeyDown={(event) => {
+            if (!listOpen || suggestions.length === 0) return;
+            if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => (index + 1) % suggestions.length); }
+            if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
+            if (event.key === "Enter") { event.preventDefault(); select(suggestions[activeIndex]); }
+            if (event.key === "Escape") setOpen(false);
+          }}
+          placeholder="Détecté depuis le ticket, ou commence à taper…"
+          className="field !pl-10 !pr-9 font-mono text-xs"
+        />
+        {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
+      </div>
+      {listOpen && (
+        <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-white p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
+          {suggestions.length > 0 ? suggestions.map((repository, index) => (
+            <button
+              key={`${repository.project}-${repository.path}`}
+              id={`repository-${index}`}
+              role="option"
+              aria-selected={index === activeIndex}
+              type="button"
+              onMouseDown={(event) => { event.preventDefault(); select(repository); }}
+              onMouseEnter={() => setActiveIndex(index)}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[#f4f5f1]"}`}
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-white text-[var(--accent)]"><GitBranchIcon size={13} /></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
+              {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Introuvable</span>}
+            </button>
+          )) : <p className="px-3 py-3 text-[11px] text-[var(--muted)]">Aucun dépôt déclaré ne correspond.</p>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PhaseRail({ run }: { run: RunState }) {
