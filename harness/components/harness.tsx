@@ -5,7 +5,7 @@ import {
   GitBranchIcon, PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon, XIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeAgents } from "@/lib/run-state";
+import { activeAgents, pendingAnswerLabel } from "@/lib/run-state";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
 type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
@@ -433,7 +433,7 @@ function DocumentViewer({ documents, workflowActive, pendingQuestionCount, onClo
         </aside>
         <div className="flex min-w-0 flex-col">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5"><div className="min-w-0"><p className="truncate text-xs font-semibold">{selected}</p><p className="mt-1 flex items-center gap-1.5 text-[10px] text-[var(--muted)]">{workflowActive && <span className="size-1.5 rounded-full bg-[var(--accent)] status-breathe" />}{workflowActive ? "Le workflow continue en arrière-plan" : "Aperçu en lecture seule"}</p></div><button type="button" onClick={onClose} aria-label="Fermer" className="grid size-8 place-items-center rounded-full border border-[var(--line)] transition hover:bg-white active:scale-95"><XIcon size={14} /></button></header>
-          {pendingQuestionCount > 0 && <div className="flex shrink-0 items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-3 text-amber-900"><div className="flex min-w-0 items-center gap-2.5"><WarningIcon size={15} weight="fill" className="shrink-0" /><p className="truncate text-[11px] font-semibold">Claude attend {pendingQuestionCount === 1 ? "une réponse" : `${pendingQuestionCount} réponses`}</p></div><button type="button" onClick={onClose} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold transition hover:bg-amber-100 active:translate-y-px">Répondre</button></div>}
+          {pendingQuestionCount > 0 && <div className="flex shrink-0 items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-3 text-amber-900"><div className="flex min-w-0 items-center gap-2.5"><WarningIcon size={15} weight="fill" className="shrink-0" /><p className="truncate text-[11px] font-semibold">{pendingAnswerLabel(pendingQuestionCount)}</p></div><button type="button" onClick={onClose} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold transition hover:bg-amber-100 active:translate-y-px">Répondre</button></div>}
           <div className="scrollbar-thin min-h-0 flex-1 overflow-auto bg-white p-6">
             {loading ? <div className="flex items-center gap-2 text-xs text-[var(--muted)]"><CircleNotchIcon className="animate-spin" size={14} />Chargement du document…</div> : document?.kind === "image" ? <img src={document.content} alt={document.path} className="mx-auto max-h-full max-w-full rounded-lg border border-[var(--line)] object-contain" /> : <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#303733]">{document?.content}</pre>}
           </div>

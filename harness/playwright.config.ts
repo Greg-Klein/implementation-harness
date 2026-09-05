@@ -16,7 +16,12 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `PORT=${port} npm run dev`,
+    command: "npm run dev",
+    env: {
+      PORT: String(port),
+      X_IMPLEMENT_DEMO_STEP_MS: "500",
+      X_IMPLEMENT_REPOSITORIES: JSON.stringify({ "group/repo": "." }),
+    },
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,
     timeout: 120_000,

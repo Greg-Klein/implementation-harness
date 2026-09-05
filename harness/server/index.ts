@@ -10,7 +10,7 @@ import next from "next";
 import * as pty from "node-pty";
 import chokidar, { type FSWatcher } from "chokidar";
 import { WebSocketServer, WebSocket } from "ws";
-import { normalizeQuestion, resolveArtifactPath, type Question } from "./domain";
+import { gitLabProjectPath, imageMimeType, normalizeAnswers, normalizeQuestion, parseRepositoryMappings, phaseForArtifact, positiveDuration, resolveArtifactPath, type Question } from "./domain";
 
 type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
 type AgentStatus = "running" | "completed" | "failed";
@@ -49,7 +49,7 @@ const scheduledSelfAudits = new Set<string>();
 const app = next({ dev, hostname, port, dir: harnessRoot });
 const handle = app.getRequestHandler();
 const sockets = new Set<WebSocket>();
-const demoStepDuration = 5_000;
+const demoStepDuration = positiveDuration(process.env.X_IMPLEMENT_DEMO_STEP_MS, 5_000);
 const demoArtifactContents: Record<string, string> = {
   "ticket-context.md": `# IH-42 · Préférences de notification
 
@@ -167,9 +167,7 @@ async function readArtifact(artifactPath: string) {
   if (!target) throw new Error("Chemin de document invalide.");
   const buffer = await readFile(target);
   if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
-  const extension = path.extname(target).toLowerCase();
-  const imageTypes: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml" };
-  const imageType = imageTypes[extension];
+  const imageType = imageMimeType(target);
   if (imageType) return { path: artifactPath, kind: "image", content: `data:${imageType};base64,${buffer.toString("base64")}` };
   return { path: artifactPath, kind: "text", content: buffer.toString("utf8") };
 }
@@ -183,22 +181,8 @@ function findExecutable(name: string) {
 function expandHome(value: string) {
   return value === "~" ? os.homedir() : value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
 }
-function gitLabProjectPath(issueUrl: string) {
-  try {
-    const url = new URL(issueUrl);
-    const match = url.pathname.match(/^\/(.+?)\/-\/issues\/\d+/);
-    return match?.[1];
-  } catch {
-    return undefined;
-  }
-}
 function repositoryMappings(): Record<string, string> {
-  try {
-    const parsed = JSON.parse(process.env.X_IMPLEMENT_REPOSITORIES ?? "{}") as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-  }
-  catch { return {}; }
+  return parseRepositoryMappings(process.env.X_IMPLEMENT_REPOSITORIES);
 }
 function configuredRepositories(): RepositoryOption[] {
   return Object.entries(repositoryMappings())
@@ -280,9 +264,10 @@ function waitForQuestionAnswer(payload: Record<string, unknown>) {
 }
 function answerQuestion(answers: Record<string, string>) {
   if (!state.pendingQuestion) throw new Error("Aucune question n’attend de réponse.");
-  const normalizedAnswers = Object.fromEntries(state.pendingQuestion.questions.map(({ question }) => [question, answers[question]?.trim() ?? ""]));
-  if (Object.values(normalizedAnswers).some((answer) => !answer)) throw new Error("Réponds à chaque question avant de continuer.");
-  if (state.id?.startsWith("demo-")) {
+  const normalizedAnswers = normalizeAnswers(state.pendingQuestion.questions, answers);
+  if (!normalizedAnswers) throw new Error("Réponds à chaque question avant de continuer.");
+  if (!pendingQuestionInput || !resolvePendingQuestion) {
+    if (!state.id?.startsWith("demo-")) throw new Error("Le pont de réponse avec Claude Code n’est plus actif.");
     state.pendingQuestion = undefined;
     state.status = "running";
     activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
@@ -291,7 +276,6 @@ function answerQuestion(answers: Record<string, string>) {
     continueDemoRun();
     return;
   }
-  if (!pendingQuestionInput || !resolvePendingQuestion) throw new Error("Le pont de réponse avec Claude Code n’est plus actif.");
 
   const resolve = resolvePendingQuestion;
   const output: HookOutput = {
@@ -308,18 +292,6 @@ function answerQuestion(answers: Record<string, string>) {
   activity("system", "Réponse transmise à Claude Code");
   publishState();
   resolve(output);
-}
-function phaseForArtifact(relativePath: string) {
-  const name = path.basename(relativePath);
-  if (name === "ticket-context.md") return 1;
-  if (name === "open-questions.md") return 2;
-  if (name === "planner-output.json") return 4;
-  if (name.startsWith("developer-report")) return 5;
-  if (name.startsWith("senior-review") || name.startsWith("designer-review") || name.startsWith("qa-report")) return 6;
-  if (name === "review-summary.md") return 7;
-  if (name === "mr-description.md") return 8;
-  if (name === "mr-review-comment.md") return 9;
-  return 0;
 }
 async function archiveArtifact(source: string) {
   if (!state.id) return;
