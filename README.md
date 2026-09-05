@@ -13,23 +13,13 @@ Prérequis :
 - Node.js 22 ou plus récent;
 - `git` et [`glab`](https://gitlab.com/gitlab-org/cli) installé et authentifié.
 
-Lorsque le dépôt sera public, exécuter :
+Exécuter :
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash
 ```
 
 La même commande met à jour une installation existante avec un `git pull --ff-only`.
-
-Tant que le dépôt est privé, la machine doit avoir accès au dépôt avec `gh` et une clé SSH. Après `gh auth login`, utiliser :
-
-```bash
-curl -fsSL \
-  -H "Authorization: Bearer $(gh auth token)" \
-  -H "Accept: application/vnd.github.raw+json" \
-  https://api.github.com/repos/Greg-Klein/implementation-harness/contents/install-remote.sh \
-  | X_IMPLEMENT_REPOSITORY='git@github.com:Greg-Klein/implementation-harness.git' bash
-```
 
 L’installateur télécharge les dépendances et crée deux commandes dans `~/.local/bin` :
 
