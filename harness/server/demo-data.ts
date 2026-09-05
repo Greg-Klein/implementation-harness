@@ -1,3 +1,36 @@
+export const demoRsiDiff = `diff --git a/agents/developer/prompts/system.md b/agents/developer/prompts/system.md
+index 3a2f1c8..b7e04d2 100644
+--- a/agents/developer/prompts/system.md
++++ b/agents/developer/prompts/system.md
+@@ -14,6 +14,9 @@ Tu es l'agent développeur du workflow x-implement.
+ ## Règles
+
+ - Respecte strictement les critères d'acceptation du ticket.
++- Avant de marquer l'implémentation comme terminée, vérifie que chaque
++  critère d'acceptation a un test unitaire ou d'intégration correspondant.
++- Si un critère n'est pas couvert, crée le test avant de passer à la review.
+ - Ne modifie pas les fichiers hors du périmètre défini dans le plan.
+ - Signale immédiatement tout blocage ou ambiguïté à l'orchestrateur.
+
+diff --git a/agents/senior-reviewer/prompts/system.md b/agents/senior-reviewer/prompts/system.md
+index 9f8c3e1..c14a07f 100644
+--- a/agents/senior-reviewer/prompts/system.md
++++ b/agents/senior-reviewer/prompts/system.md
+@@ -22,7 +22,12 @@ Tu es le reviewer senior du workflow x-implement.
+ ## Critères de validation
+
+ - Chaque critère d'acceptation du ticket est couvert par un test.
++- Les cas limites (timezone, locale, permissions) sont explicitement testés.
+ - Le code ne contient pas de régression visible dans les tests existants.
+ - L'accessibilité est respectée pour tout composant UI.
++
++## Sur les fuseaux horaires
++
++Vérifie systématiquement que les dates et heures affichées tiennent compte
++du fuseau horaire de l'utilisateur. C'est un vecteur de régression fréquent
++identifié dans les runs précédents.
+`;
+
 export const demoArtifactContents: Record<string, string> = {
   "ticket-context.md": `# IH-42 · Préférences de notification
 

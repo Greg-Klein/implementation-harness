@@ -158,4 +158,11 @@ export function continueDemoRun() {
     publishState();
     demoTerminal("Merge request simulée prête. Fin de la démonstration.");
   });
+  scheduleDemo(demoStepDuration * 11, () => {
+    const worktreeName = `demo-rsi-${crypto.randomUUID().slice(0, 8)}`;
+    ctx.state.pendingRsiReview = { worktreeName, runId: ctx.state.id ?? "" };
+    activity("agent", "Améliorations RSI prêtes — en attente de validation");
+    publishState();
+    demoTerminal("Auto-audit RSI terminé. Des améliorations sont proposées dans le panneau de droite.");
+  });
 }

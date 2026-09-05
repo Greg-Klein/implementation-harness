@@ -13,6 +13,7 @@ import { hostname, port, dev, pluginRoot, dataRoot, harnessRoot } from "./config
 import { closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
+import { demoRsiDiff } from "./demo-data.js";
 import { saveFeedback, scheduleAutonomousReview } from "./rsi.js";
 import { configuredRepositories, detectProjectDirectory, findExecutable, resolveProjectDirectory } from "./repository.js";
 import type { ClientMessage } from "./types.js";
@@ -24,6 +25,12 @@ const intentionallyStoppedRuns = new Set<string>();
 async function applyRsiReview(worktreeName: string, merge: boolean) {
   if (!ctx.state.pendingRsiReview || ctx.state.pendingRsiReview.worktreeName !== worktreeName)
     throw new Error("Aucune révision RSI en attente pour ce worktree.");
+  if (worktreeName.startsWith("demo-")) {
+    activity("system", merge ? "Améliorations RSI fusionnées (démo)" : "Améliorations RSI ignorées (démo)", worktreeName);
+    ctx.state.pendingRsiReview = undefined;
+    publishState();
+    return;
+  }
   const { stdout: listOut } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
   const block = listOut.split("\n\n").find((b) => b.includes(`refs/heads/${worktreeName}`));
   const worktreePath = block?.split("\n").find((l) => l.startsWith("worktree "))?.slice("worktree ".length);
@@ -84,6 +91,7 @@ function stopRun() {
   if (ctx.state.id?.startsWith("demo-")) {
     clearDemoTimers();
     ctx.state.pendingQuestion = undefined;
+    ctx.state.pendingRsiReview = undefined;
     ctx.state.status = "completed";
     ctx.state.endedAt = now();
     activity("system", "Démonstration arrêtée");
@@ -133,6 +141,7 @@ const server = createServer(async (request, response) => {
   if (request.method === "GET" && request.url?.startsWith("/api/rsi/diff")) {
     const worktreeName = new URL(request.url, `http://${hostname}:${port}`).searchParams.get("worktree") ?? "";
     if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Nom de worktree invalide." }); return; }
+    if (worktreeName.startsWith("demo-")) { respond(response, 200, { diff: demoRsiDiff }); return; }
     try {
       const exec = promisify(execFile);
       const { stdout: listOut } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
