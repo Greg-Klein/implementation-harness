@@ -10,7 +10,7 @@ import next from "next";
 import * as pty from "node-pty";
 import chokidar, { type FSWatcher } from "chokidar";
 import { WebSocketServer, WebSocket } from "ws";
-import { gitLabProjectPath, imageMimeType, normalizeAnswers, normalizeQuestion, parseRepositoryMappings, phaseForArtifact, positiveDuration, resolveArtifactPath, type Question } from "./domain";
+import { gitLabProjectPath, imageMimeType, normalizeAnswers, normalizeQuestion, parseRepositoryMappings, phaseForArtifact, positiveDuration, resolveArtifactPath, terminalExitStatus, type Question } from "./domain";
 
 type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
 type AgentStatus = "running" | "completed" | "failed";
@@ -46,6 +46,7 @@ let pendingQuestionInput: Record<string, unknown> | null = null;
 let resolvePendingQuestion: ((output?: HookOutput) => void) | null = null;
 const demoTimers = new Set<ReturnType<typeof setTimeout>>();
 const scheduledSelfAudits = new Set<string>();
+const intentionallyStoppedRuns = new Set<string>();
 const app = next({ dev, hostname, port, dir: harnessRoot });
 const handle = app.getRequestHandler();
 const sockets = new Set<WebSocket>();
@@ -342,16 +343,17 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
     if (state.id) void appendFile(path.join(dataRoot, state.id, "terminal.log"), data).catch(() => undefined);
   });
   runTerminal.onExit(({ exitCode }) => {
+    const intentionallyStopped = intentionallyStoppedRuns.delete(id);
     if (state.id !== id) return;
     if (terminal === runTerminal) terminal = null;
-    state.status = exitCode === 0 ? "completed" : "failed";
+    state.status = terminalExitStatus(exitCode, intentionallyStopped);
     resolvePendingQuestion?.();
     resolvePendingQuestion = null;
     pendingQuestionInput = null;
     state.pendingQuestion = undefined;
     state.endedAt = now();
-    if (exitCode !== 0) state.error = `Claude Code s’est arrêté avec le code ${exitCode}.`;
-    activity("system", exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
+    if (state.status === "failed") state.error = `Claude Code s’est arrêté avec le code ${exitCode}.`;
+    activity("system", intentionallyStopped ? "Session arrêtée par l’utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
     publishState();
     scheduleAutonomousReview(id);
   });
@@ -511,9 +513,8 @@ function stopRun() {
   resolvePendingQuestion = null;
   pendingQuestionInput = null;
   state.pendingQuestion = undefined;
-  terminal.kill(); terminal = null; state.status = "completed"; state.endedAt = now();
-  activity("system", "Session arrêtée par l’utilisateur"); publishState();
-  if (runId) scheduleAutonomousReview(runId);
+  if (runId) intentionallyStoppedRuns.add(runId);
+  terminal.kill(); terminal = null;
 }
 async function saveFeedback(body: string) {
   const feedback = body.trim();

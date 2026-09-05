@@ -19,6 +19,8 @@ fi
 
 printf 'Installation des dépendances…\n'
 npm ci --prefix "$repo_root/harness" --no-audit --no-fund
+printf 'Compilation de l’interface…\n'
+npm run build --prefix "$repo_root/harness"
 
 if [[ ! -f "$repo_root/.env" ]]; then
   cp "$repo_root/.env.example" "$repo_root/.env"

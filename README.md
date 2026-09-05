@@ -19,7 +19,7 @@ Exécuter :
 curl -fsSL https://raw.githubusercontent.com/Greg-Klein/implementation-harness/main/install-remote.sh | bash
 ```
 
-La même commande met à jour une installation existante avec un `git pull --ff-only`.
+La même commande met à jour une installation existante avec un `git pull --ff-only`. L’installation compile l’interface Next.js, puis `ximpl` lance cette version de production.
 
 L’installateur télécharge les dépendances et crée deux commandes dans `~/.local/bin` :
 
@@ -137,6 +137,8 @@ Les tests d’intégration sont répartis par parcours dans `tests/integration/`
 ```bash
 npm run test:integration:headed
 ```
+
+GitHub Actions exécute le contrôle TypeScript, les tests unitaires, le build de production et les tests d’intégration à chaque pull request et à chaque push sur `main`.
 
 ## Développement
 

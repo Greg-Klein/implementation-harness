@@ -54,4 +54,4 @@ fi
 ) &
 
 cd "$harness_dir"
-PORT="$app_port" exec npm run dev
+PORT="$app_port" exec npm run start

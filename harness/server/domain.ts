@@ -42,6 +42,10 @@ export function positiveDuration(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean) {
+  return intentionallyStopped || exitCode === 0 ? "completed" as const : "failed" as const;
+}
+
 export function gitLabProjectPath(issueUrl: string) {
   try {
     const url = new URL(issueUrl);

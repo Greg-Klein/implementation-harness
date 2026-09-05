@@ -1,6 +1,6 @@
 ---
 name: x-implement
-description: Implement a GitLab ticket end to end on a dedicated branch: read the ticket and its linked designs, plan, implement with developer agents, challenge with senior / QA / designer reviews, then open a merge request. Use when the user gives a GitLab issue URL to implement.
+description: "Implement a GitLab ticket end to end on a dedicated branch: read the ticket and its linked designs, plan, implement with developer agents, challenge with senior / QA / designer reviews, then open a merge request. Use when the user gives a GitLab issue URL to implement."
 disable-model-invocation: true
 argument-hint: <gitlab-issue-url> [instructions for this run]
 ---

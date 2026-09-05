@@ -10,7 +10,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     baseURL: `http://127.0.0.1:${port}`,
-    channel: "chrome",
+    channel: process.env.CI ? undefined : "chrome",
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
