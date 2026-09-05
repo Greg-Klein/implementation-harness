@@ -1,46 +1,14 @@
 "use client";
 
-import {
-  ArrowRightIcon, CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, FolderOpenIcon,
-  GitBranchIcon, PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon, XIcon,
-} from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { activeAgents, pendingAnswerLabel } from "@/lib/run-state";
+import { CodeIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
+import { ActivityPanel } from "./activity-panel";
+import { LaunchForm } from "./launch-form";
+import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
-type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
-type Agent = { id: string; name: string; status: "running" | "completed" | "failed"; startedAt: string; endedAt?: string };
-type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
-type QuestionOption = { label: string; description?: string };
-type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
-type RunState = {
-  id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
-  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; artifacts: string[]; pendingQuestion?: PendingQuestion; error?: string;
-};
-type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
-type RepositoryResponse = {
-  repositories: RepositoryOption[];
-  detected: (RepositoryOption & { source: "env" | "git" }) | null;
-};
-type ArtifactResponse = { path: string; kind: "text" | "image"; content: string; error?: string };
-
 const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
-const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
-
-function statusLabel(status: Status) {
-  if (status === "starting") return "Démarrage";
-  if (status === "running") return "En cours";
-  if (status === "attention") return "À toi de jouer";
-  if (status === "completed") return "Terminé";
-  if (status === "failed") return "Erreur";
-  return "Disponible";
-}
-function elapsed(start: string, end?: string) {
-  const milliseconds = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
-  const minutes = Math.floor(milliseconds / 60_000);
-  const seconds = Math.floor((milliseconds % 60_000) / 1_000);
-  return minutes ? `${minutes} min ${seconds.toString().padStart(2, "0")} s` : `${seconds} s`;
-}
 
 export function Harness() {
   const [run, setRun] = useState<RunState>(initialState);
@@ -115,6 +83,7 @@ export function Harness() {
   const send = useCallback((message: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
   }, []);
+
   useEffect(() => {
     if (!connected || demoStartedRef.current || new URLSearchParams(window.location.search).get("demo") !== "1") return;
     demoStartedRef.current = true;
@@ -122,6 +91,7 @@ export function Harness() {
     send({ type: "demo.start" });
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
+
   const terminalInput = useCallback((data: string) => send({ type: "terminal.input", data }), [send]);
   const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
   const changeCwd = useCallback((value: string, project?: string) => {
@@ -163,282 +133,10 @@ export function Harness() {
               </div>
               <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
             </section>
-            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} />
+            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} onRsiApprove={(worktreeName) => send({ type: "rsi.approve", worktreeName })} onRsiReject={(worktreeName) => send({ type: "rsi.reject", worktreeName })} />
           </div>
         )}
       </div>
     </main>
-  );
-}
-
-function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstruction, repositories, detectedProject, detectingProject, canStart, onStart }: {
-  cwd: string; setCwd: (value: string, project?: string) => void; issueUrl: string; setIssueUrl: (value: string) => void;
-  instruction: string; setInstruction: (value: string) => void; repositories: RepositoryOption[]; detectedProject?: string;
-  detectingProject: boolean; canStart: boolean; onStart: () => void;
-}) {
-  return (
-    <section className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
-      <div className="flex flex-col justify-between px-6 py-10 md:px-12 md:py-14 lg:px-[7vw]">
-        <div className="reveal">
-          <p className="mb-8 font-mono text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--accent)]">Nouvelle exécution</p>
-          <h2 className="max-w-[760px] text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-6xl">Du ticket à la MR,<span className="block text-[var(--muted)]">sans perdre le fil.</span></h2>
-          <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Lance ton workflow Claude Code habituel. Les agents, les documents générés et les revues remontent ici pendant que le terminal reste pleinement interactif.</p>
-        </div>
-        <div className="mt-16 flex items-center gap-8 border-t border-[var(--line)] pt-5 text-xs text-[var(--muted)]">
-          <span className="flex items-center gap-2"><RobotIcon size={15} /> 6 agents spécialisés</span>
-          <span className="flex items-center gap-2"><FileTextIcon size={15} /> Historique local</span>
-        </div>
-      </div>
-
-      <div className="flex items-center border-t border-[var(--line)] bg-[#eceee8] p-5 md:p-10 lg:border-l lg:border-t-0">
-        <form className="w-full rounded-[22px] border border-white/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_rgba(255,255,255,.8)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
-          <div className="mb-7 flex items-start justify-between">
-            <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
-            <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
-          </div>
-          <Field label="Ticket GitLab"><input type="url" value={issueUrl} onChange={(event) => setIssueUrl(event.target.value)} placeholder="https://gitlab.com/…/-/issues/217" className="field text-sm" /></Field>
-          <RepositoryPicker value={cwd} onChange={setCwd} repositories={repositories} detectedProject={detectedProject} detecting={detectingProject} />
-          <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· facultatif</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
-          <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
-            <span className="flex items-center gap-2"><PlayIcon size={15} weight="fill" /> Lancer x-implement</span><ArrowRightIcon size={16} />
-          </button>
-        </form>
-      </div>
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="mb-5 block"><span className="mb-2 block text-xs font-medium">{label}</span>{children}</label>;
-}
-
-function RepositoryPicker({ value, onChange, repositories, detectedProject, detecting }: {
-  value: string;
-  onChange: (value: string, project?: string) => void;
-  repositories: RepositoryOption[];
-  detectedProject?: string;
-  detecting: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const query = value.trim().toLocaleLowerCase("fr");
-  const suggestions = useMemo(() => {
-    if (!query) return [];
-    return repositories.filter((repository) =>
-      `${repository.project} ${repository.path} ${repository.resolvedPath}`.toLocaleLowerCase("fr").includes(query),
-    ).slice(0, 7);
-  }, [query, repositories]);
-  const listOpen = open && query.length > 0;
-
-  useEffect(() => setActiveIndex(0), [query]);
-
-  const select = (repository: RepositoryOption) => {
-    onChange(repository.path, repository.project);
-    setOpen(false);
-  };
-
-  return (
-    <div className="relative mb-5">
-      <div className="mb-2 flex min-h-4 items-center justify-between gap-3">
-        <label htmlFor="project-directory" className="text-xs font-medium">Répertoire du projet <span className="font-normal text-[var(--muted)]">· facultatif</span></label>
-        <span className="truncate text-right font-mono text-[9px] text-[var(--accent)]">
-          {detecting ? "Détection…" : detectedProject ? `Projet · ${detectedProject}` : ""}
-        </span>
-      </div>
-      <div className="relative">
-        <FolderOpenIcon aria-hidden="true" size={15} className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2 text-[var(--muted)]" />
-        <input
-          id="project-directory"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={listOpen}
-          aria-controls="repository-suggestions"
-          aria-activedescendant={listOpen && suggestions[activeIndex] ? `repository-${activeIndex}` : undefined}
-          autoComplete="off"
-          spellCheck={false}
-          value={value}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setOpen(false)}
-          onChange={(event) => { onChange(event.target.value); setOpen(true); }}
-          onKeyDown={(event) => {
-            if (!listOpen || suggestions.length === 0) return;
-            if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => (index + 1) % suggestions.length); }
-            if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => (index - 1 + suggestions.length) % suggestions.length); }
-            if (event.key === "Enter") { event.preventDefault(); select(suggestions[activeIndex]); }
-            if (event.key === "Escape") setOpen(false);
-          }}
-          placeholder="Détecté depuis le ticket, ou commence à taper…"
-          className="field !pl-10 !pr-9 font-mono text-xs"
-        />
-        {detectedProject && <CheckIcon aria-hidden="true" size={14} weight="bold" className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--accent)]" />}
-      </div>
-      {listOpen && (
-        <div id="repository-suggestions" role="listbox" className="absolute left-0 right-0 top-[calc(100%+7px)] z-30 overflow-hidden rounded-[11px] border border-[var(--line)] bg-white p-1.5 shadow-[0_18px_45px_-22px_rgba(28,33,31,.38)]">
-          {suggestions.length > 0 ? suggestions.map((repository, index) => (
-            <button
-              key={`${repository.project}-${repository.path}`}
-              id={`repository-${index}`}
-              role="option"
-              aria-selected={index === activeIndex}
-              type="button"
-              onMouseDown={(event) => { event.preventDefault(); select(repository); }}
-              onMouseEnter={() => setActiveIndex(index)}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${index === activeIndex ? "bg-[var(--accent-soft)]" : "hover:bg-[#f4f5f1]"}`}
-            >
-              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-[var(--line)] bg-white text-[var(--accent)]"><GitBranchIcon size={13} /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{repository.project}</span><span className="mt-0.5 block truncate font-mono text-[9px] text-[var(--muted)]">{repository.path}</span></span>
-              {!repository.exists && <span className="shrink-0 text-[9px] text-amber-700">Introuvable</span>}
-            </button>
-          )) : <p className="px-3 py-3 text-[11px] text-[var(--muted)]">Aucun dépôt déclaré ne correspond.</p>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PhaseRail({ run }: { run: RunState }) {
-  return (
-    <aside className="p-5">
-      <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{statusLabel(run.status)}</span></div>
-      <ol>{phases.map((phase, index) => {
-        const number = index + 1; const done = number < run.phase || run.phase === 10; const current = number === run.phase && run.phase < 10;
-        return <li key={phase} className="relative flex min-h-10 gap-3 text-xs">
-          {index < phases.length - 1 && <span className={`absolute left-[9px] top-5 h-5 w-px ${done ? "bg-[var(--accent)]" : "bg-[var(--line)]"}`} />}
-          <span className={`relative grid size-5 shrink-0 place-items-center rounded-full border font-mono text-[9px] ${done ? "border-[var(--accent)] bg-[var(--accent)] text-white" : current ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--line)] bg-[var(--surface)] text-[var(--muted)]"}`}>{done ? <CheckIcon size={10} weight="bold" /> : number}</span>
-          <span className={`pt-0.5 ${current ? "font-semibold text-[var(--ink)]" : done ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>{phase}</span>
-        </li>;
-      })}</ol>
-      <div className="mt-6 border-t border-[var(--line)] pt-4"><p className="truncate font-mono text-[10px] text-[var(--muted)]" title={run.cwd}>{run.cwd}</p>{run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsed(run.startedAt, run.endedAt ?? undefined)}</p>}</div>
-    </aside>
-  );
-}
-
-function QuestionPanel({ pending, onAnswer }: { pending: PendingQuestion; onAnswer: (answers: Record<string, string>) => void }) {
-  const [answers, setAnswers] = useState<Record<string, string>>(() => Object.fromEntries(pending.questions.map(({ question }) => [question, ""])));
-  const ready = pending.questions.every(({ question }) => answers[question]?.trim());
-  const chooseOption = (question: PendingQuestion["questions"][number], label: string) => {
-    setAnswers((current) => {
-      if (!question.multiSelect) return { ...current, [question.question]: label };
-      const selected = current[question.question]?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
-      const next = selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label];
-      return { ...current, [question.question]: next.join(", ") };
-    });
-  };
-
-  return (
-    <section className="max-h-[72vh] overflow-y-auto border-b border-[var(--line)] bg-[#eef2ec] p-5">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ink)] text-white"><RobotIcon size={14} /></div>
-        <div><p className="text-xs font-semibold">Décision requise</p><p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Claude attend ta réponse. Le terminal reste disponible.</p></div>
-      </div>
-      <form onSubmit={(event) => { event.preventDefault(); if (ready) onAnswer(answers); }}>
-        <div className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
-          {pending.questions.map((question, index) => (
-            <fieldset key={question.question} className="py-4 first:pt-3 last:pb-3">
-              <legend className="font-mono text-[9px] font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{question.header}</legend>
-              <p className="mt-2 text-[11px] font-medium leading-4">{question.question}</p>
-              {question.options.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{question.options.map((option) => {
-                const selected = answers[question.question]?.split(",").map((value) => value.trim()).includes(option.label);
-                return <button key={option.label} type="button" title={option.description} onClick={() => chooseOption(question, option.label)} className={`rounded-md border px-2 py-1.5 text-[10px] transition active:translate-y-px ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[#aeb6b0]"}`}>{option.label}</button>;
-              })}</div>}
-              <label htmlFor={`question-answer-${index}`} className="mt-3 block text-[10px] text-[var(--muted)]">Ta réponse</label>
-              <textarea id={`question-answer-${index}`} rows={2} value={answers[question.question] ?? ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.question]: event.target.value }))} placeholder="Écris ta réponse…" className="field mt-1.5 resize-none text-[11px] leading-4" />
-            </fieldset>
-          ))}
-        </div>
-        <button type="submit" disabled={!ready} className="mt-4 flex w-full items-center justify-between rounded-lg bg-[var(--ink)] px-3 py-2.5 text-[11px] font-semibold text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35"><span>Transmettre à Claude</span><ArrowRightIcon size={13} /></button>
-      </form>
-    </section>
-  );
-}
-
-function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void }) {
-  const runningAgents = activeAgents(run.agents);
-  const [feedback, setFeedback] = useState("");
-  const [queued, setQueued] = useState(false);
-  const [documentsOpen, setDocumentsOpen] = useState(false);
-  const submitFeedback = () => {
-    if (!feedback.trim()) return;
-    onFeedback(feedback);
-    setFeedback("");
-    setQueued(true);
-  };
-  return (
-    <aside className="flex min-h-0 flex-col bg-[#f7f8f4]">
-      {run.pendingQuestion && <QuestionPanel key={run.pendingQuestion.id} pending={run.pendingQuestion} onAnswer={onAnswer} />}
-      {run.error && <div className="m-4 flex gap-2.5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
-      <section aria-labelledby="active-agents-title" className="border-b border-[var(--line)] p-5">
-        <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
-        {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :
-          <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
-            <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsed(agent.startedAt, agent.endedAt)}</p></div>
-          </div>)}</div>}
-      </section>
-      <section className="min-h-0 flex-1 p-5">
-        <div className="mb-4 flex items-center justify-between"><h2 className="text-xs font-semibold">Activité</h2><span className="font-mono text-[10px] text-[var(--muted)]">LIVE</span></div>
-        <div className="scrollbar-thin max-h-[38vh] space-y-4 overflow-y-auto pr-1 lg:max-h-[calc(100dvh-410px)]">{run.activities.map((item, index) => <div key={item.id} className="reveal grid grid-cols-[8px_1fr] gap-2.5" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
-          <span className={`mt-1.5 size-1.5 rounded-full ${item.kind === "attention" ? "bg-amber-500" : item.kind === "artifact" ? "bg-[var(--accent)]" : "bg-[#aeb5b0]"}`} />
-          <div className="min-w-0"><p className="text-[11px] font-medium leading-4">{item.title}</p>{item.detail && <p className="mt-0.5 line-clamp-2 font-mono text-[9px] leading-4 text-[var(--muted)]">{item.detail}</p>}<p className="mt-1 font-mono text-[9px] text-[#9aa19c]">{new Date(item.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p></div>
-        </div>)}</div>
-      </section>
-      <section className="border-t border-[var(--line)] p-5">
-        <button type="button" disabled={run.artifacts.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}<ArrowRightIcon size={11} /></span></button>
-        {!run.id?.startsWith("demo-") && (run.status === "completed" || run.status === "failed") && <div className="mt-4 border-t border-[var(--line)] pt-4">
-          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
-          <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
-          <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle RSI</button>
-          {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">Retour enregistré. Lance <code>ximpl improve</code> pour produire l’amélioration.</p>}
-        </div>}
-      </section>
-      {documentsOpen && <DocumentViewer documents={run.artifacts} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} />}
-    </aside>
-  );
-}
-
-function DocumentViewer({ documents, workflowActive, pendingQuestionCount, onClose }: { documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void }) {
-  const [selected, setSelected] = useState(() => documents.at(-1) ?? "");
-  const [document, setDocument] = useState<ArtifactResponse>();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setDocument(undefined);
-    fetch(`/api/artifacts?path=${encodeURIComponent(selected)}`, { signal: controller.signal })
-      .then(async (response) => {
-        const result = await response.json() as ArtifactResponse;
-        if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
-        setDocument(result);
-      })
-      .catch((error) => { if (!controller.signal.aborted) setDocument({ path: selected, kind: "text", content: error instanceof Error ? error.message : "Impossible de charger ce document." }); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [selected]);
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
-  return (
-    <div role="dialog" aria-modal="true" aria-label="Documents générés" className="fixed inset-0 z-50 grid place-items-center bg-[#17201bb8] p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="grid h-[min(760px,88vh)] w-[min(1120px,94vw)] grid-cols-[270px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-white/15 bg-[var(--surface)] shadow-[0_32px_90px_-28px_rgba(0,0,0,.6)]">
-        <aside className="min-h-0 border-r border-[var(--line)] bg-[#f1f3ee] p-4">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-semibold">Documents générés</p><p className="mt-1 font-mono text-[9px] text-[var(--muted)]">{documents.length} fichier{documents.length > 1 ? "s" : ""}</p></div><FileTextIcon size={16} className="text-[var(--accent)]" /></div>
-          <nav className="scrollbar-thin max-h-[calc(88vh-90px)] space-y-1 overflow-y-auto pr-1" aria-label="Liste des documents">
-            {documents.map((name) => <button key={name} type="button" onClick={() => setSelected(name)} className={`w-full rounded-lg px-3 py-2.5 text-left font-mono text-[10px] leading-4 transition ${selected === name ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"}`}><span className="block break-all">{name}</span></button>)}
-          </nav>
-        </aside>
-        <div className="flex min-w-0 flex-col">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5"><div className="min-w-0"><p className="truncate text-xs font-semibold">{selected}</p><p className="mt-1 flex items-center gap-1.5 text-[10px] text-[var(--muted)]">{workflowActive && <span className="size-1.5 rounded-full bg-[var(--accent)] status-breathe" />}{workflowActive ? "Le workflow continue en arrière-plan" : "Aperçu en lecture seule"}</p></div><button type="button" onClick={onClose} aria-label="Fermer" className="grid size-8 place-items-center rounded-full border border-[var(--line)] transition hover:bg-white active:scale-95"><XIcon size={14} /></button></header>
-          {pendingQuestionCount > 0 && <div className="flex shrink-0 items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-3 text-amber-900"><div className="flex min-w-0 items-center gap-2.5"><WarningIcon size={15} weight="fill" className="shrink-0" /><p className="truncate text-[11px] font-semibold">{pendingAnswerLabel(pendingQuestionCount)}</p></div><button type="button" onClick={onClose} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold transition hover:bg-amber-100 active:translate-y-px">Répondre</button></div>}
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-auto bg-white p-6">
-            {loading ? <div className="flex items-center gap-2 text-xs text-[var(--muted)]"><CircleNotchIcon className="animate-spin" size={14} />Chargement du document…</div> : document?.kind === "image" ? <img src={document.content} alt={document.path} className="mx-auto max-h-full max-w-full rounded-lg border border-[var(--line)] object-contain" /> : <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#303733]">{document?.content}</pre>}
-          </div>
-        </div>
-      </section>
-    </div>
   );
 }
