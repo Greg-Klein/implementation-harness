@@ -1,8 +1,8 @@
 # Implementation Harness
 
-Une interface locale pour lancer et suivre le workflow `/x-implement` dans le véritable Claude Code.
+Implementation Harness est une interface locale pour piloter Claude Code pendant l’implémentation d’un ticket GitLab. On colle l’URL du ticket, le harnais détecte le checkout correspondant, ouvre un terminal Claude Code et rend visibles la progression, les agents, les outils et les livrables.
 
-Le harnais affiche le terminal interactif, la progression du ticket, les sous-agents actifs, les appels d’outils et les artefacts produits par les revues. Il utilise la connexion Claude Code déjà présente sur la machine et ne fait aucun appel direct à l’API Anthropic.
+Le dépôt contient un plugin Claude Code dont la commande `/x-implement` orchestre le travail : lecture du ticket, questions de clarification, planification, implémentation, tests, revues spécialisées et préparation de la merge request. Le harnais constitue la couche visuelle de cette commande. Il utilise la connexion Claude Code déjà présente sur la machine et ne fait aucun appel direct à l’API Anthropic.
 
 ## Installation en une commande
 

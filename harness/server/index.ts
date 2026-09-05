@@ -363,7 +363,7 @@ const server = createServer(async (request, response) => {
 });
 const wss = new WebSocketServer({ noServer: true });
 server.on("upgrade", (request, socket, head) => {
-  if (request.url !== "/ws") { socket.destroy(); return; }
+  if (request.url !== "/ws") return;
   wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
 });
 wss.on("connection", (socket) => {
