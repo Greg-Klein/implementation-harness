@@ -58,13 +58,17 @@ export function Harness() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
       socketRef.current = socket;
-      socket.onopen = () => setConnected(true);
+      socket.onopen = () => { if (socketRef.current === socket) setConnected(true); };
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as { type: string; state?: RunState; data?: string };
         if (message.type === "state" && message.state) setRun(message.state);
         if (message.type === "terminal.output" && message.data) terminalRef.current?.write(message.data);
       };
-      socket.onclose = () => { setConnected(false); if (!disposed) retry = setTimeout(connect, 1200); };
+      socket.onclose = () => {
+        if (socketRef.current !== socket) return;
+        setConnected(false);
+        if (!disposed) retry = setTimeout(connect, 1200);
+      };
     };
     connect();
     return () => { disposed = true; if (retry) clearTimeout(retry); socketRef.current?.close(); };
@@ -128,9 +132,9 @@ export function Harness() {
               <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">Gregory Klein</span></p>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 text-xs text-[var(--muted)]">
+          <div title="Connexion temps réel entre cette page et le serveur local du harnais" className="flex items-center gap-2 text-xs text-[var(--muted)]">
             <span className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
-            {connected ? "Harnais connecté" : "Reconnexion…"}
+            <span>Serveur local</span><span aria-hidden="true" className="text-[var(--line)]">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
             {run.status !== "idle" && !active && <button type="button" onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Nouveau run</button>}
           </div>
         </header>
