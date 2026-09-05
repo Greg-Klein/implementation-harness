@@ -125,12 +125,12 @@ export function Harness() {
             <div className="grid size-8 place-items-center rounded-[10px] bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
             <div>
               <h1 className="text-[15px] font-semibold tracking-[-.02em]">X-Implement</h1>
-              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#8a928d]">développé par <span className="font-medium text-[#68716c]">Gregory Klein</span></span></p>
+              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">Gregory Klein</span></p>
             </div>
           </div>
           <div className="flex items-center gap-2.5 text-xs text-[var(--muted)]">
             <span className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
-            {connected ? "Claude Code prêt" : "Connexion…"}
+            {connected ? "Harnais connecté" : "Reconnexion…"}
             {run.status !== "idle" && !active && <button type="button" onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Nouveau run</button>}
           </div>
         </header>
