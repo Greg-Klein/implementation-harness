@@ -33,7 +33,7 @@ export function DocumentViewer({ documents, workflowActive, pendingQuestionCount
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Documents générés" className="fixed inset-0 z-50 grid place-items-center bg-[#17201bb8] p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="grid h-[min(760px,88vh)] w-[min(1120px,94vw)] grid-cols-[270px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-white/15 bg-[var(--surface)] shadow-[0_32px_90px_-28px_rgba(0,0,0,.6)]">
+      <section className="grid h-[min(760px,88vh)] w-[min(1120px,94vw)] grid-cols-[270px_minmax(0,1fr)] overflow-hidden rounded-5 border border-white/15 bg-[var(--surface)] shadow-[0_32px_90px_-28px_rgba(0,0,0,.6)]">
         <aside className="min-h-0 border-r border-[var(--line)] bg-[#f1f3ee] p-4">
           <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-semibold">Documents générés</p><p className="mt-1 font-mono text-[9px] text-[var(--muted)]">{documents.length} fichier{documents.length > 1 ? "s" : ""}</p></div><FileTextIcon size={16} className="text-[var(--accent)]" /></div>
           <nav className="scrollbar-thin max-h-[calc(88vh-90px)] space-y-1 overflow-y-auto pr-1" aria-label="Liste des documents">

@@ -30,7 +30,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer, onRsiApprove, onRsiRe
     <aside className="flex min-h-0 flex-col bg-[#f7f8f4]">
       {run.pendingRsiReview && <RsiReviewPanel review={run.pendingRsiReview} onApprove={() => onRsiApprove(run.pendingRsiReview!.worktreeName)} onReject={() => onRsiReject(run.pendingRsiReview!.worktreeName)} />}
       {run.pendingQuestion && <QuestionPanel key={run.pendingQuestion.id} pending={run.pendingQuestion} onAnswer={onAnswer} />}
-      {run.error && <div className="m-4 flex gap-2.5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
+      {run.error && <div className="m-4 flex gap-2.5 rounded-2.5 border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
       <section aria-labelledby="active-agents-title" className="border-b border-[var(--line)] p-5">
         <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
         {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :

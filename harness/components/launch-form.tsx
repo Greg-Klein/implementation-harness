@@ -102,7 +102,7 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, se
       <div className="flex flex-col justify-between px-6 py-10 md:px-12 md:py-14 lg:px-[7vw]">
         <div className="reveal">
           <p className="mb-8 font-mono text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--accent)]">Nouvelle exécution</p>
-          <h2 className="max-w-[760px] text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-6xl">Du ticket à la MR,<span className="block text-[var(--muted)]">sans perdre le fil.</span></h2>
+          <h2 className="max-w-190 text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-6xl">Du ticket à la MR,<span className="block text-[var(--muted)]">sans perdre le fil.</span></h2>
           <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Lance ton workflow Claude Code habituel. Les agents, les documents générés et les revues remontent ici pendant que le terminal reste pleinement interactif.</p>
         </div>
         <div className="mt-16 flex items-center gap-8 border-t border-[var(--line)] pt-5 text-xs text-[var(--muted)]">
@@ -112,7 +112,7 @@ export function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, se
       </div>
 
       <div className="flex items-center border-t border-[var(--line)] bg-[#eceee8] p-5 md:p-10 lg:border-l lg:border-t-0">
-        <form className="w-full rounded-[22px] border border-white/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_rgba(255,255,255,.8)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
+        <form className="w-full rounded-5.5 border border-white/70 bg-[var(--surface)] p-5 shadow-[0_18px_45px_-28px_rgba(30,42,35,.35),inset_0_1px_0_rgba(255,255,255,.8)] md:p-7" onSubmit={(event) => { event.preventDefault(); if (canStart) onStart(); }}>
           <div className="mb-7 flex items-start justify-between">
             <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>

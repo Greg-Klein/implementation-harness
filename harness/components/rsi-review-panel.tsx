@@ -17,7 +17,7 @@ function DiffModal({ worktreeName, onClose }: { worktreeName: string; onClose: (
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Diff des améliorations RSI" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-[18px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-30px_rgba(20,30,25,.55)]">
+      <div className="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-4.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_30px_80px_-30px_rgba(20,30,25,.55)]">
         <div className="flex items-center justify-between border-b border-[var(--line)] px-5 py-3.5">
           <div className="flex items-center gap-2 text-sm font-semibold"><CodeIcon size={15} /> Améliorations RSI · {worktreeName}</div>
           <button type="button" onClick={onClose} className="grid size-7 place-items-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"><XIcon size={15} /></button>
@@ -45,7 +45,7 @@ export function RsiReviewPanel({ review, onApprove, onReject }: { review: Pendin
 
   return (
     <>
-      <div className="m-4 rounded-[12px] border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
+      <div className="m-4 rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
         <p className="mb-1 text-[11px] font-semibold text-[var(--accent)]">Améliorations RSI prêtes</p>
         <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName}</p>
         <button type="button" onClick={() => setDiffOpen(true)} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">

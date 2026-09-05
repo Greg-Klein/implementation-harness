@@ -105,10 +105,10 @@ export function Harness() {
 
   return (
     <main className="min-h-[100dvh] bg-[var(--paper)] p-3 md:p-5">
-      <div className="mx-auto max-w-[1580px] overflow-hidden rounded-[26px] border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)]">
+      <div className="mx-auto max-w-395 overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)]">
         <header className="flex min-h-16 items-center justify-between border-b border-[var(--line)] px-5 md:px-7">
           <div className="flex items-center gap-3">
-            <div className="grid size-8 place-items-center rounded-[10px] bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
+            <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
             <div>
               <h1 className="text-[15px] font-semibold tracking-[-.02em]">X-Implement</h1>
               <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">by Gregory Klein</span></p>
@@ -126,7 +126,7 @@ export function Harness() {
         ) : (
           <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:grid-cols-[236px_minmax(0,1fr)_320px]">
             <PhaseRail run={run} />
-            <section className="min-h-[540px] border-y border-[var(--line)] bg-[var(--terminal)] lg:border-x lg:border-y-0">
+            <section className="min-h-135 border-y border-[var(--line)] bg-[var(--terminal)] lg:border-x lg:border-y-0">
               <div className="flex h-12 items-center justify-between border-b border-white/8 px-4 text-white">
                 <div className="flex items-center gap-2 text-xs font-medium"><TerminalWindowIcon size={16} />Claude Code</div>
                 {active && <button type="button" onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-white/55 transition hover:bg-white/8 hover:text-white active:scale-[.98]"><StopIcon size={12} weight="fill" /> Arrêter</button>}
