@@ -36,14 +36,25 @@ ximpl
 
 Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 
-1. renseigner le chemin local du projet à modifier;
-2. coller l’URL du ticket GitLab;
+1. coller l’URL du ticket GitLab;
+2. vérifier le projet détecté ou renseigner son chemin;
 3. ajouter si nécessaire une instruction propre à cette exécution;
 4. lancer le workflow et répondre aux questions dans le terminal intégré.
 
 Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Les commandes et les agents restent dans le dépôt; aucun fichier n’est copié dans `~/.claude`.
 
 ## Configuration
+
+L’installateur crée un `.env` local à partir de `.env.example`. Pour associer automatiquement les projets GitLab à leurs checkouts :
+
+```dotenv
+X_IMPLEMENT_REPOSITORIES='{"groupe/projet":"~/workspace/projet"}'
+X_IMPLEMENT_SEARCH_ROOTS='~/workspace,~/code'
+```
+
+Le mapping exact est prioritaire. Sinon, le harnais inspecte les remotes Git des dossiers situés directement dans les racines de recherche. Le `.env` est ignoré par Git.
+
+### Port et navigateur
 
 Changer le port par défaut :
 
@@ -56,6 +67,18 @@ Lancer sans ouvrir automatiquement le navigateur :
 ```bash
 X_IMPLEMENT_NO_OPEN=1 ximpl
 ```
+
+## Boucle d’auto-amélioration
+
+À la fin d’un run, le panneau de droite permet d’enregistrer un retour concret. Il est conservé localement avec l’identifiant du run et ses artefacts, puis traité avec :
+
+```bash
+ximpl improve
+```
+
+Cette commande lance Claude Code sur `/x-improve`. Il regroupe les retours en attente, vérifie les preuves du run, crée une branche `improve-rsi-*`, applique la plus petite amélioration durable, exécute les vérifications et crée un commit local. Il ne pousse rien et ne fusionne rien : le résultat reste inspectable et réversible.
+
+Les tickets, logs et retours bruts restent sous `harness/data/` et ne sont jamais ajoutés au commit d’amélioration.
 
 ## Fonctionnement
 
@@ -94,7 +117,7 @@ Le front utilise Next.js, React, TypeScript, Tailwind CSS et xterm.js. Le serveu
 
 ```text
 agents/       sous-agents Claude Code
-commands/     commandes /x-implement et /x-review
+commands/     commandes /x-implement, /x-review et /x-improve
 hooks/        événements envoyés au harnais local
 bin/          lanceur ximpl
 harness/      interface Next.js et serveur PTY

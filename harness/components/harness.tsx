@@ -68,7 +68,7 @@ export function Harness() {
   const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
   const start = () => { terminalRef.current?.clear(); send({ type: "run.start", cwd, issueUrl, instruction }); };
   const active = run.status === "starting" || run.status === "running" || run.status === "attention";
-  const canStart = connected && !active && cwd.trim().length > 0 && issueUrl.trim().length > 0;
+  const canStart = connected && !active && issueUrl.trim().length > 0;
 
   return (
     <main className="min-h-[100dvh] bg-[var(--paper)] p-3 md:p-5">
@@ -97,7 +97,7 @@ export function Harness() {
               </div>
               <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
             </section>
-            <ActivityPanel run={run} />
+            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} />
           </div>
         )}
       </div>
@@ -129,7 +129,7 @@ function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstru
             <div><h3 className="text-lg font-semibold tracking-[-.025em]">Configurer le run</h3><p className="mt-1 text-xs text-[var(--muted)]">La commande sera exécutée dans le projet choisi.</p></div>
             <div className="grid size-9 place-items-center rounded-full border border-[var(--line)] text-[var(--muted)]"><GitBranchIcon size={16} /></div>
           </div>
-          <Field label="Répertoire du projet"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="/chemin/vers/le/projet" className="field font-mono text-xs" /></Field>
+          <Field label="Répertoire du projet · facultatif"><input value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="Détecté depuis le ticket GitLab" className="field font-mono text-xs" /></Field>
           <Field label="Ticket GitLab"><input type="url" value={issueUrl} onChange={(event) => setIssueUrl(event.target.value)} placeholder="https://gitlab.com/…/-/issues/217" className="field text-sm" /></Field>
           <label className="block"><span className="mb-2 block text-xs font-medium">Instruction particulière <span className="font-normal text-[var(--muted)]">· facultatif</span></span><textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Desktop uniquement, ne pas toucher au tracking…" rows={3} className="field resize-none text-sm leading-5" /></label>
           <button type="submit" disabled={!canStart} className="mt-7 flex w-full items-center justify-between rounded-[11px] bg-[var(--ink)] px-4 py-3.5 text-sm font-medium text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
@@ -162,8 +162,16 @@ function PhaseRail({ run }: { run: RunState }) {
   );
 }
 
-function ActivityPanel({ run }: { run: RunState }) {
+function ActivityPanel({ run, onFeedback }: { run: RunState; onFeedback: (body: string) => void }) {
   const runningAgents = run.agents.filter((agent) => agent.status === "running");
+  const [feedback, setFeedback] = useState("");
+  const [queued, setQueued] = useState(false);
+  const submitFeedback = () => {
+    if (!feedback.trim()) return;
+    onFeedback(feedback);
+    setFeedback("");
+    setQueued(true);
+  };
   return (
     <aside className="flex min-h-0 flex-col bg-[#f7f8f4]">
       {run.error && <div className="m-4 flex gap-2.5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
@@ -182,7 +190,15 @@ function ActivityPanel({ run }: { run: RunState }) {
           <div className="min-w-0"><p className="text-[11px] font-medium leading-4">{item.title}</p>{item.detail && <p className="mt-0.5 line-clamp-2 font-mono text-[9px] leading-4 text-[var(--muted)]">{item.detail}</p>}<p className="mt-1 font-mono text-[9px] text-[#9aa19c]">{new Date(item.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p></div>
         </div>)}</div>
       </section>
-      <section className="border-t border-[var(--line)] p-5"><div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Artefacts archivés</span><span className="font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}</span></div></section>
+      <section className="border-t border-[var(--line)] p-5">
+        <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Artefacts archivés</span><span className="font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}</span></div>
+        {(run.status === "completed" || run.status === "failed") && <div className="mt-4 border-t border-[var(--line)] pt-4">
+          <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
+          <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
+          <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle RSI</button>
+          {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">Retour enregistré. Lance <code>ximpl improve</code> pour produire l’amélioration.</p>}
+        </div>}
+      </section>
     </aside>
   );
 }

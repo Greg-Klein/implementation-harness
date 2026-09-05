@@ -1,4 +1,6 @@
 .DS_Store
+.env
+.env.local
 harness/node_modules/
 harness/.next/
 harness/data/

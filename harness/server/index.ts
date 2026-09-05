@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { appendFile, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -19,11 +20,14 @@ type ClientMessage =
   | { type: "terminal.input"; data: string }
   | { type: "terminal.resize"; cols: number; rows: number }
   | { type: "run.stop" }
-  | { type: "run.reset" };
+  | { type: "run.reset" }
+  | { type: "feedback.submit"; body: string };
 
 const harnessRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.resolve(harnessRoot, "..");
+try { process.loadEnvFile(path.join(pluginRoot, ".env")); } catch { /* Local mappings are optional. */ }
 const dataRoot = path.join(harnessRoot, "data", "runs");
+const feedbackRoot = path.join(harnessRoot, "data", "feedback", "pending");
 const port = Number(process.env.PORT ?? 3210);
 const hostname = process.env.X_IMPLEMENT_HOST ?? "127.0.0.1";
 const dev = process.env.NODE_ENV !== "production";
@@ -59,6 +63,52 @@ function findExecutable(name: string) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
+}
+function expandHome(value: string) {
+  return value === "~" ? os.homedir() : value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
+}
+function gitLabProjectPath(issueUrl: string) {
+  try {
+    const url = new URL(issueUrl);
+    const match = url.pathname.match(/^\/(.+?)\/-\/issues\/\d+/);
+    return match?.[1];
+  } catch {
+    return undefined;
+  }
+}
+function repositoryMappings(): Record<string, string> {
+  try { return JSON.parse(process.env.X_IMPLEMENT_REPOSITORIES ?? "{}") as Record<string, string>; }
+  catch { return {}; }
+}
+async function resolveProjectDirectory(input: string, issueUrl: string) {
+  if (input.trim()) {
+    const explicit = path.resolve(expandHome(input.trim()));
+    if (!existsSync(explicit)) throw new Error("Le répertoire du projet n’existe pas.");
+    return explicit;
+  }
+
+  const project = gitLabProjectPath(issueUrl);
+  if (!project) throw new Error("L’URL du ticket GitLab n’est pas reconnue.");
+  const mapped = repositoryMappings()[project];
+  if (mapped) {
+    const candidate = path.resolve(expandHome(mapped));
+    if (existsSync(candidate)) return candidate;
+  }
+
+  const roots = (process.env.X_IMPLEMENT_SEARCH_ROOTS ?? "~/workspace").split(",").map((root) => path.resolve(expandHome(root.trim())));
+  for (const root of roots) {
+    if (!existsSync(root)) continue;
+    const entries = await readdir(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(root, entry.name);
+      try {
+        const config = await readFile(path.join(candidate, ".git", "config"), "utf8");
+        if (config.includes(project)) return candidate;
+      } catch { /* This directory is not a regular Git checkout. */ }
+    }
+  }
+  throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute-le à X_IMPLEMENT_REPOSITORIES.`);
 }
 function normalizeText(value: unknown): string | undefined {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
@@ -99,8 +149,7 @@ async function startArtifactWatcher(cwd: string) {
 }
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
   if (terminal) throw new Error("Une session Claude Code est déjà active.");
-  const cwd = path.resolve(message.cwd.trim());
-  if (!existsSync(cwd)) throw new Error("Le répertoire du projet n’existe pas.");
+  const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
   const claude = findExecutable("claude");
   if (!claude) throw new Error("Claude Code est introuvable dans PATH.");
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
@@ -135,6 +184,20 @@ function stopRun() {
   if (!terminal) return;
   terminal.kill(); terminal = null; state.status = "completed"; state.endedAt = now();
   activity("system", "Session arrêtée par l’utilisateur"); publishState();
+}
+async function saveFeedback(body: string) {
+  const feedback = body.trim();
+  if (!state.id) throw new Error("Aucune exécution à laquelle rattacher ce retour.");
+  if (!feedback) throw new Error("Le retour est vide.");
+  if (feedback.length > 5_000) throw new Error("Le retour dépasse 5 000 caractères.");
+  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
+  await mkdir(feedbackRoot, { recursive: true });
+  await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
+    id, runId: state.id, createdAt: now(), status: "pending", feedback,
+    issueUrl: state.issueUrl, projectDirectory: state.cwd,
+  }, null, 2));
+  activity("artifact", "Retour ajouté à la boucle RSI", `${id}.json`);
+  publishState();
 }
 function processHook(body: Record<string, unknown>) {
   if (!state.id || body.runId !== state.id) return;
@@ -196,6 +259,7 @@ wss.on("connection", (socket) => {
       if (message.type === "terminal.resize") terminal?.resize(message.cols, message.rows);
       if (message.type === "run.stop") stopRun();
       if (message.type === "run.reset" && !terminal) { state = emptyState(); terminalBuffer = ""; publishState(); }
+      if (message.type === "feedback.submit") await saveFeedback(message.body);
     } catch (error) {
       state.status = "failed"; state.error = error instanceof Error ? error.message : "Impossible d’exécuter cette action.";
       activity("system", "Erreur", state.error); publishState();

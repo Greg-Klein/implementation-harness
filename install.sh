@@ -20,6 +20,10 @@ fi
 printf 'Installation des dépendances…\n'
 npm ci --prefix "$repo_root/harness" --no-audit --no-fund
 
+if [[ ! -f "$repo_root/.env" ]]; then
+  cp "$repo_root/.env.example" "$repo_root/.env"
+fi
+
 mkdir -p "$bin_dir"
 chmod +x "$repo_root/bin/x-implement-ui"
 ln -sfn "$repo_root/bin/x-implement-ui" "$bin_dir/x-implement-ui"
@@ -27,6 +31,7 @@ ln -sfn "$repo_root/bin/x-implement-ui" "$bin_dir/ximpl"
 
 printf '\nInstallation terminée.\n'
 printf 'Lancer l’interface : ximpl\n'
+printf 'Traiter les retours RSI : ximpl improve\n'
 if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
   printf '\nAjoute %s à PATH, puis ouvre un nouveau terminal :\n' "$bin_dir"
   printf '  export PATH="%s:$PATH"\n' "$bin_dir"

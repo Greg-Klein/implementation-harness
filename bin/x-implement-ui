@@ -17,6 +17,12 @@ harness_dir="$repo_root/harness"
 app_port="${X_IMPLEMENT_PORT:-3210}"
 app_url="http://127.0.0.1:$app_port"
 
+if [[ "${1:-}" == "improve" ]]; then
+  mkdir -p "$harness_dir/data/feedback/pending"
+  cd "$repo_root"
+  exec claude --plugin-dir "$repo_root" --name "x-implement RSI" "/x-implement:x-improve $harness_dir/data/feedback"
+fi
+
 open_app() {
   if [[ "${X_IMPLEMENT_NO_OPEN:-0}" == "1" ]]; then return; fi
   if command -v open >/dev/null 2>&1; then

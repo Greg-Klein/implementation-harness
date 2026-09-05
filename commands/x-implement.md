@@ -480,7 +480,7 @@ Record whether the design was fully read. A partially read design lowers the con
 
 ## Repository resolution
 
-The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`). If the current directory already is the right repository, stay there. Otherwise, search the user's workspace for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
+The issue URL gives the project path (`gitlab.com/<group>/<project>/-/issues/<iid>`). If the current directory already is the right repository, stay there. Otherwise, read `X_IMPLEMENT_REPOSITORIES` when present: it is a JSON object mapping GitLab project paths to local checkouts. If there is no matching entry, search the comma-separated `X_IMPLEMENT_SEARCH_ROOTS` directories for a checkout whose `origin` matches the project path. If no checkout is found, ask for the path as part of the step 2 question rather than guessing.
 
 ---
 

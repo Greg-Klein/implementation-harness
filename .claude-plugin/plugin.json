@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "description": "End-to-end GitLab ticket implementation workflow with observable hooks",
   "author": {
-    "name": "Greg Klein"
+    "name": "Gregory Klein"
   }
 }
