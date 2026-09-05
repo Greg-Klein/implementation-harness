@@ -40,7 +40,7 @@ Pour découvrir l’interface sans ticket ni appel à Claude Code :
 ximpl demo
 ```
 
-Cette commande ouvre un scénario local simulé avec progression, agents, artefacts et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle RSI. Le mode démo n’ajoute aucun contrôle à l’interface normale.
+Cette commande ouvre un scénario local simulé avec progression, agents, documents générés et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle RSI. Le mode démo n’ajoute aucun contrôle à l’interface normale.
 
 Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 
@@ -48,6 +48,10 @@ Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 2. vérifier le projet détecté ou renseigner son chemin;
 3. ajouter si nécessaire une instruction propre à cette exécution;
 4. lancer le workflow et répondre aux décisions dans le panneau dédié ou échanger librement dans le terminal.
+
+Le bouton **Documents générés** ouvre un lecteur intégré pour consulter le contexte du ticket, les plans, rapports de tests, reviews et descriptions de MR conservés pendant le run.
+
+Le lecteur n’interrompt pas l’exécution. Si Claude Code pose une question pendant sa consultation, un bandeau signale la décision attendue et le bouton **Répondre** referme le lecteur pour afficher la carte de clarification.
 
 Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Les commandes et les agents restent dans le dépôt; aucun fichier n’est copié dans `~/.claude`.
 
@@ -80,7 +84,7 @@ X_IMPLEMENT_NO_OPEN=1 ximpl
 
 ## Boucle d’auto-amélioration
 
-À la fin d’un run, le panneau de droite permet d’enregistrer un retour concret. Il est conservé localement avec l’identifiant du run et ses artefacts, puis traité avec :
+À la fin d’un run, le panneau de droite permet d’enregistrer un retour concret. Il est conservé localement avec l’identifiant du run et ses documents générés, puis traité avec :
 
 ```bash
 ximpl improve
@@ -90,7 +94,7 @@ Cette commande lance Claude Code sur `/x-improve`. Il regroupe les retours en at
 
 Les tickets, logs et retours bruts restent sous `harness/data/` et ne sont jamais ajoutés au commit d’amélioration.
 
-Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, artefacts manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité.
+Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, documents manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité.
 
 La politique se règle dans `.env` :
 
@@ -113,9 +117,24 @@ Les données sont archivées dans `harness/data/runs/<run-id>/` :
 
 - `run.json` contient l’état, les agents et l’activité;
 - `terminal.log` contient la sortie brute du terminal;
-- `artifacts/` contient les plans, rapports QA, revues et captures produits pendant le run.
+- `artifacts/` contient les documents générés pendant le run : plans, rapports QA, reviews et captures.
 
 Ce dossier est local et ignoré par Git. Il peut contenir des informations confidentielles provenant des tickets traités; il ne faut pas le partager.
+
+## Tests
+
+Depuis le dossier `harness/` :
+
+```bash
+npm run test:unit
+npm run test:integration
+```
+
+Les tests d’intégration utilisent Playwright avec Google Chrome et démarrent un serveur isolé sur le port `3211`. Pour observer leur exécution :
+
+```bash
+npm run test:integration:headed
+```
 
 ## Développement
 

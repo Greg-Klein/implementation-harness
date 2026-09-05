@@ -2,9 +2,10 @@
 
 import {
   ArrowRightIcon, CheckIcon, CircleNotchIcon, CodeIcon, FileTextIcon, FolderOpenIcon,
-  GitBranchIcon, PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon,
+  GitBranchIcon, PlayIcon, RobotIcon, StopIcon, TerminalWindowIcon, WarningIcon, XIcon,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { activeAgents } from "@/lib/run-state";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
 type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
@@ -21,6 +22,7 @@ type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "env" | "git" }) | null;
 };
+type ArtifactResponse = { path: string; kind: "text" | "image"; content: string; error?: string };
 
 const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
 const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
@@ -180,7 +182,7 @@ function LaunchForm({ cwd, setCwd, issueUrl, setIssueUrl, instruction, setInstru
         <div className="reveal">
           <p className="mb-8 font-mono text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--accent)]">Nouvelle exécution</p>
           <h2 className="max-w-[760px] text-4xl font-medium leading-[.98] tracking-[-.055em] md:text-6xl">Du ticket à la MR,<span className="block text-[var(--muted)]">sans perdre le fil.</span></h2>
-          <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Lance ton workflow Claude Code habituel. Les agents, les artefacts et les revues remontent ici pendant que le terminal reste pleinement interactif.</p>
+          <p className="mt-7 max-w-[52ch] text-sm leading-6 text-[var(--muted)] md:text-base">Lance ton workflow Claude Code habituel. Les agents, les documents générés et les revues remontent ici pendant que le terminal reste pleinement interactif.</p>
         </div>
         <div className="mt-16 flex items-center gap-8 border-t border-[var(--line)] pt-5 text-xs text-[var(--muted)]">
           <span className="flex items-center gap-2"><RobotIcon size={15} /> 6 agents spécialisés</span>
@@ -351,9 +353,10 @@ function QuestionPanel({ pending, onAnswer }: { pending: PendingQuestion; onAnsw
 }
 
 function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void }) {
-  const runningAgents = run.agents.filter((agent) => agent.status === "running");
+  const runningAgents = activeAgents(run.agents);
   const [feedback, setFeedback] = useState("");
   const [queued, setQueued] = useState(false);
+  const [documentsOpen, setDocumentsOpen] = useState(false);
   const submitFeedback = () => {
     if (!feedback.trim()) return;
     onFeedback(feedback);
@@ -364,10 +367,10 @@ function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedbac
     <aside className="flex min-h-0 flex-col bg-[#f7f8f4]">
       {run.pendingQuestion && <QuestionPanel key={run.pendingQuestion.id} pending={run.pendingQuestion} onAnswer={onAnswer} />}
       {run.error && <div className="m-4 flex gap-2.5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
-      <section className="border-b border-[var(--line)] p-5">
-        <div className="mb-4 flex items-center justify-between"><h2 className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
-        {run.agents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>En attente de délégation</div> :
-          <div className="space-y-2.5">{run.agents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
+      <section aria-labelledby="active-agents-title" className="border-b border-[var(--line)] p-5">
+        <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
+        {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :
+          <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
             <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsed(agent.startedAt, agent.endedAt)}</p></div>
           </div>)}</div>}
@@ -380,7 +383,7 @@ function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedbac
         </div>)}</div>
       </section>
       <section className="border-t border-[var(--line)] p-5">
-        <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Artefacts archivés</span><span className="font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}</span></div>
+        <button type="button" disabled={run.artifacts.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}<ArrowRightIcon size={11} /></span></button>
         {!run.id?.startsWith("demo-") && (run.status === "completed" || run.status === "failed") && <div className="mt-4 border-t border-[var(--line)] pt-4">
           <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
           <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
@@ -388,6 +391,54 @@ function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedbac
           {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">Retour enregistré. Lance <code>ximpl improve</code> pour produire l’amélioration.</p>}
         </div>}
       </section>
+      {documentsOpen && <DocumentViewer documents={run.artifacts} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} />}
     </aside>
+  );
+}
+
+function DocumentViewer({ documents, workflowActive, pendingQuestionCount, onClose }: { documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void }) {
+  const [selected, setSelected] = useState(() => documents.at(-1) ?? "");
+  const [document, setDocument] = useState<ArtifactResponse>();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setDocument(undefined);
+    fetch(`/api/artifacts?path=${encodeURIComponent(selected)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const result = await response.json() as ArtifactResponse;
+        if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
+        setDocument(result);
+      })
+      .catch((error) => { if (!controller.signal.aborted) setDocument({ path: selected, kind: "text", content: error instanceof Error ? error.message : "Impossible de charger ce document." }); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [selected]);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Documents générés" className="fixed inset-0 z-50 grid place-items-center bg-[#17201bb8] p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className="grid h-[min(760px,88vh)] w-[min(1120px,94vw)] grid-cols-[270px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-white/15 bg-[var(--surface)] shadow-[0_32px_90px_-28px_rgba(0,0,0,.6)]">
+        <aside className="min-h-0 border-r border-[var(--line)] bg-[#f1f3ee] p-4">
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-semibold">Documents générés</p><p className="mt-1 font-mono text-[9px] text-[var(--muted)]">{documents.length} fichier{documents.length > 1 ? "s" : ""}</p></div><FileTextIcon size={16} className="text-[var(--accent)]" /></div>
+          <nav className="scrollbar-thin max-h-[calc(88vh-90px)] space-y-1 overflow-y-auto pr-1" aria-label="Liste des documents">
+            {documents.map((name) => <button key={name} type="button" onClick={() => setSelected(name)} className={`w-full rounded-lg px-3 py-2.5 text-left font-mono text-[10px] leading-4 transition ${selected === name ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"}`}><span className="block break-all">{name}</span></button>)}
+          </nav>
+        </aside>
+        <div className="flex min-w-0 flex-col">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5"><div className="min-w-0"><p className="truncate text-xs font-semibold">{selected}</p><p className="mt-1 flex items-center gap-1.5 text-[10px] text-[var(--muted)]">{workflowActive && <span className="size-1.5 rounded-full bg-[var(--accent)] status-breathe" />}{workflowActive ? "Le workflow continue en arrière-plan" : "Aperçu en lecture seule"}</p></div><button type="button" onClick={onClose} aria-label="Fermer" className="grid size-8 place-items-center rounded-full border border-[var(--line)] transition hover:bg-white active:scale-95"><XIcon size={14} /></button></header>
+          {pendingQuestionCount > 0 && <div className="flex shrink-0 items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-3 text-amber-900"><div className="flex min-w-0 items-center gap-2.5"><WarningIcon size={15} weight="fill" className="shrink-0" /><p className="truncate text-[11px] font-semibold">Claude attend {pendingQuestionCount === 1 ? "une réponse" : `${pendingQuestionCount} réponses`}</p></div><button type="button" onClick={onClose} className="shrink-0 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold transition hover:bg-amber-100 active:translate-y-px">Répondre</button></div>}
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-auto bg-white p-6">
+            {loading ? <div className="flex items-center gap-2 text-xs text-[var(--muted)]"><CircleNotchIcon className="animate-spin" size={14} />Chargement du document…</div> : document?.kind === "image" ? <img src={document.content} alt={document.path} className="mx-auto max-h-full max-w-full rounded-lg border border-[var(--line)] object-contain" /> : <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[#303733]">{document?.content}</pre>}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

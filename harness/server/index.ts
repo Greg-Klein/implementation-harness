@@ -10,13 +10,12 @@ import next from "next";
 import * as pty from "node-pty";
 import chokidar, { type FSWatcher } from "chokidar";
 import { WebSocketServer, WebSocket } from "ws";
+import { normalizeQuestion, resolveArtifactPath, type Question } from "./domain";
 
 type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
 type AgentStatus = "running" | "completed" | "failed";
 type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
-type QuestionOption = { label: string; description?: string };
-type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
 type PendingQuestion = { id: string; questions: Question[] };
 type RunState = { id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string; startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; artifacts: string[]; pendingQuestion?: PendingQuestion; error?: string };
 type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
@@ -51,6 +50,78 @@ const app = next({ dev, hostname, port, dir: harnessRoot });
 const handle = app.getRequestHandler();
 const sockets = new Set<WebSocket>();
 const demoStepDuration = 5_000;
+const demoArtifactContents: Record<string, string> = {
+  "ticket-context.md": `# IH-42 · Préférences de notification
+
+## Objectif
+Permettre à chaque utilisateur de choisir les notifications reçues tout en conservant les alertes critiques.
+
+## Critères d’acceptation
+- Les préférences sont enregistrées par utilisateur.
+- Les alertes critiques restent actives.
+- Le réglage est pris en compte sans rechargement de la page.`,
+  "implementation-plan.md": `# Plan d’implémentation
+
+1. Ajouter le modèle de préférences.
+2. Créer le panneau de réglages.
+3. Connecter l’enregistrement optimiste.
+4. Ajouter les tests du fallback critique.
+5. Vérifier l’accessibilité et les états d’erreur.`,
+  "developer-report.md": `# Rapport d’implémentation
+
+- Modèle de préférences ajouté.
+- Formulaire connecté au serveur.
+- Mise à jour optimiste avec restauration en cas d’échec.
+- Tests unitaires ajoutés.
+
+Statut : prêt pour review.`,
+  "test-report.json": `{
+  "status": "passed",
+  "tests": 11,
+  "passed": 11,
+  "failed": 0
+}`,
+  "senior-review-round-1.md": `# Review 1/2 · Changements demandés
+
+## Retours
+1. Le fallback des alertes critiques ignore le fuseau horaire de l’utilisateur.
+2. Aucun test ne couvre ce cas de régression.
+
+Décision : corrections requises avant approbation.`,
+  "test-report-round-2.json": `{
+  "status": "passed",
+  "tests": 12,
+  "passed": 12,
+  "failed": 0,
+  "regressionTest": "critical-alert-timezone"
+}`,
+  "senior-review-round-2.md": `# Review 2/2 · Approuvée
+
+Les deux retours du premier passage sont résolus :
+
+- le fallback utilise désormais le fuseau horaire de l’utilisateur ;
+- un test de régression couvre ce comportement.
+
+Décision : approuvé.`,
+  "qa-report.json": `{
+  "status": "passed",
+  "accessibility": "passed",
+  "typecheck": "passed",
+  "unitTests": "12/12"
+}`,
+  "mr-description.md": `# IH-42 · Ajouter les préférences de notification
+
+## Changements
+- Ajout du panneau de préférences.
+- Enregistrement optimiste des réglages.
+- Conservation des alertes critiques.
+- Prise en compte des retours de review sur le fuseau horaire.
+
+## Validation
+- 12 tests passent.
+- Review senior approuvée au second passage.
+- QA validée.`,
+};
 
 function emptyState(): RunState {
   return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
@@ -82,6 +153,25 @@ function demoTerminal(message: string) {
   const line = `\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`;
   terminalBuffer = (terminalBuffer + line).slice(-600_000);
   broadcast({ type: "terminal.output", data: line });
+}
+async function readArtifact(artifactPath: string) {
+  if (!state.id || !state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
+  if (state.id.startsWith("demo-")) {
+    const content = demoArtifactContents[artifactPath];
+    if (content === undefined) throw new Error("Document de démonstration introuvable.");
+    return { path: artifactPath, kind: "text", content };
+  }
+
+  const root = path.resolve(dataRoot, state.id, "artifacts");
+  const target = resolveArtifactPath(root, artifactPath);
+  if (!target) throw new Error("Chemin de document invalide.");
+  const buffer = await readFile(target);
+  if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
+  const extension = path.extname(target).toLowerCase();
+  const imageTypes: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml" };
+  const imageType = imageTypes[extension];
+  if (imageType) return { path: artifactPath, kind: "image", content: `data:${imageType};base64,${buffer.toString("base64")}` };
+  return { path: artifactPath, kind: "text", content: buffer.toString("utf8") };
 }
 function findExecutable(name: string) {
   for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
@@ -165,23 +255,6 @@ async function resolveProjectDirectory(input: string, issueUrl: string) {
 }
 function normalizeText(value: unknown): string | undefined {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
-}
-function normalizeQuestion(value: unknown): Question | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const input = value as Record<string, unknown>;
-  if (typeof input.question !== "string" || !input.question.trim()) return undefined;
-  const options = Array.isArray(input.options) ? input.options.flatMap((option) => {
-    if (!option || typeof option !== "object") return [];
-    const candidate = option as Record<string, unknown>;
-    if (typeof candidate.label !== "string" || !candidate.label.trim()) return [];
-    return [{ label: candidate.label.trim(), description: typeof candidate.description === "string" ? candidate.description.trim() : undefined }];
-  }) : [];
-  return {
-    question: input.question.trim(),
-    header: typeof input.header === "string" && input.header.trim() ? input.header.trim() : "Question",
-    options,
-    multiSelect: input.multiSelect === true,
-  };
 }
 function waitForQuestionAnswer(payload: Record<string, unknown>) {
   const toolInput = payload.tool_input as Record<string, unknown> | undefined;
@@ -603,6 +676,12 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (request.method === "GET" && request.url === "/api/state") { respond(response, 200, { state }); return; }
+  if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
+    const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
+    try { respond(response, 200, await readArtifact(requestUrl.searchParams.get("path") ?? "")); }
+    catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document introuvable." }); }
+    return;
+  }
   if (request.method === "GET" && request.url?.startsWith("/api/repositories")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const issueUrl = requestUrl.searchParams.get("issueUrl") ?? "";
