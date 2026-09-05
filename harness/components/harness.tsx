@@ -129,7 +129,7 @@ export function Harness() {
             <div className="grid size-8 place-items-center rounded-[10px] bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
             <div>
               <h1 className="text-[15px] font-semibold tracking-[-.02em]">X-Implement</h1>
-              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">Gregory Klein</span></p>
+              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">par Gregory Klein</span></p>
             </div>
           </div>
           <div title="Connexion temps réel entre cette page et le serveur local du harnais" className="flex items-center gap-2 text-xs text-[var(--muted)]">
