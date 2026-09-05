@@ -34,14 +34,24 @@ Si `~/.local/bin` n’est pas encore dans `PATH`, l’installateur affiche la li
 ximpl
 ```
 
+Pour découvrir l’interface sans ticket ni appel à Claude Code :
+
+```bash
+ximpl demo
+```
+
+Cette commande ouvre un scénario local simulé avec progression, agents, artefacts et décisions interactives. Chaque étape dure cinq secondes. La première review demande des corrections, renvoie le travail à l’agent d’implémentation, puis une seconde review valide les changements. Elle ne modifie aucun dépôt, ne contacte pas GitLab et n’alimente pas la boucle RSI. Le mode démo n’ajoute aucun contrôle à l’interface normale.
+
 Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 
 1. coller l’URL du ticket GitLab;
 2. vérifier le projet détecté ou renseigner son chemin;
 3. ajouter si nécessaire une instruction propre à cette exécution;
-4. lancer le workflow et répondre aux questions dans le terminal intégré.
+4. lancer le workflow et répondre aux décisions dans le panneau dédié ou échanger librement dans le terminal.
 
 Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Les commandes et les agents restent dans le dépôt; aucun fichier n’est copié dans `~/.claude`.
+
+Quand Claude Code utilise `AskUserQuestion`, le harnais présente les décisions dans un panneau dédié : les choix suggérés peuvent remplir la réponse, qui reste éditable dans un champ de texte avant son envoi. La réponse est transmise à Claude Code par le hook en attente. Le terminal intégré reste visible et interactif pendant toute l’exécution pour les échanges libres et les commandes qui ne passent pas par ce panneau.
 
 ## Configuration
 
@@ -96,7 +106,7 @@ X_IMPLEMENT_RSI_AUTO_APPLY='true'
 Claude Code reste le moteur du workflow. Le harnais ajoute :
 
 - un pseudo-terminal interactif relié à l’interface avec WebSocket;
-- des hooks Claude Code pour suivre les agents, les outils et les demandes d’attention;
+- des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
 - une surveillance de `.claude/tasks/` pour suivre les étapes et conserver les rapports avant leur nettoyage.
 
 Les données sont archivées dans `harness/data/runs/<run-id>/` :

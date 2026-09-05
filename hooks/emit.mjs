@@ -8,7 +8,8 @@ if (!endpoint) process.exit(0);
 
 try {
   const payload = JSON.parse(input || "{}");
-  await fetch(endpoint, {
+  const waitsForHarnessAnswer = payload.hook_event_name === "PreToolUse" && payload.tool_name === "AskUserQuestion";
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -16,8 +17,12 @@ try {
       receivedAt: new Date().toISOString(),
       payload,
     }),
-    signal: AbortSignal.timeout(800),
+    signal: AbortSignal.timeout(waitsForHarnessAnswer ? 3_600_000 : 800),
   });
+  if (waitsForHarnessAnswer && response.ok) {
+    const result = await response.json();
+    if (result.hookOutput) process.stdout.write(JSON.stringify(result.hookOutput));
+  }
 } catch {
   // The harness is optional: hooks must never interrupt Claude Code.
 }

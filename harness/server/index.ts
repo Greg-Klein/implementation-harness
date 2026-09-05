@@ -15,15 +15,21 @@ type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "
 type AgentStatus = "running" | "completed" | "failed";
 type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
-type RunState = { id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string; startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; artifacts: string[]; error?: string };
+type QuestionOption = { label: string; description?: string };
+type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
+type PendingQuestion = { id: string; questions: Question[] };
+type RunState = { id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string; startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; artifacts: string[]; pendingQuestion?: PendingQuestion; error?: string };
 type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
+type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
 type ClientMessage =
   | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string }
   | { type: "terminal.input"; data: string }
   | { type: "terminal.resize"; cols: number; rows: number }
   | { type: "run.stop" }
   | { type: "run.reset" }
-  | { type: "feedback.submit"; body: string };
+  | { type: "demo.start" }
+  | { type: "feedback.submit"; body: string }
+  | { type: "question.answer"; answers: Record<string, string> };
 
 const harnessRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pluginRoot = path.resolve(harnessRoot, "..");
@@ -37,10 +43,14 @@ let terminal: pty.IPty | null = null;
 let artifactWatcher: FSWatcher | null = null;
 let terminalBuffer = "";
 let state: RunState = emptyState();
+let pendingQuestionInput: Record<string, unknown> | null = null;
+let resolvePendingQuestion: ((output?: HookOutput) => void) | null = null;
+const demoTimers = new Set<ReturnType<typeof setTimeout>>();
 const scheduledSelfAudits = new Set<string>();
 const app = next({ dev, hostname, port, dir: harnessRoot });
 const handle = app.getRequestHandler();
 const sockets = new Set<WebSocket>();
+const demoStepDuration = 5_000;
 
 function emptyState(): RunState {
   return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
@@ -54,12 +64,25 @@ function broadcast(message: object) {
   for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(serialized);
 }
 async function persistState() {
-  if (!state.id) return;
+  if (!state.id || state.id.startsWith("demo-")) return;
   const runDir = path.join(dataRoot, state.id);
   await mkdir(runDir, { recursive: true });
   await writeFile(path.join(runDir, "run.json"), JSON.stringify(state, null, 2));
 }
 function publishState() { broadcast({ type: "state", state }); void persistState(); }
+function scheduleDemo(delay: number, callback: () => void) {
+  const timer = setTimeout(() => { demoTimers.delete(timer); callback(); }, delay);
+  demoTimers.add(timer);
+}
+function clearDemoTimers() {
+  for (const timer of demoTimers) clearTimeout(timer);
+  demoTimers.clear();
+}
+function demoTerminal(message: string) {
+  const line = `\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`;
+  terminalBuffer = (terminalBuffer + line).slice(-600_000);
+  broadcast({ type: "terminal.output", data: line });
+}
 function findExecutable(name: string) {
   for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
     const candidate = path.join(directory, name);
@@ -143,6 +166,76 @@ async function resolveProjectDirectory(input: string, issueUrl: string) {
 function normalizeText(value: unknown): string | undefined {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
 }
+function normalizeQuestion(value: unknown): Question | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Record<string, unknown>;
+  if (typeof input.question !== "string" || !input.question.trim()) return undefined;
+  const options = Array.isArray(input.options) ? input.options.flatMap((option) => {
+    if (!option || typeof option !== "object") return [];
+    const candidate = option as Record<string, unknown>;
+    if (typeof candidate.label !== "string" || !candidate.label.trim()) return [];
+    return [{ label: candidate.label.trim(), description: typeof candidate.description === "string" ? candidate.description.trim() : undefined }];
+  }) : [];
+  return {
+    question: input.question.trim(),
+    header: typeof input.header === "string" && input.header.trim() ? input.header.trim() : "Question",
+    options,
+    multiSelect: input.multiSelect === true,
+  };
+}
+function waitForQuestionAnswer(payload: Record<string, unknown>) {
+  const toolInput = payload.tool_input as Record<string, unknown> | undefined;
+  if (!toolInput || (toolInput.answers && typeof toolInput.answers === "object")) return undefined;
+  const questions = Array.isArray(toolInput.questions) ? toolInput.questions.flatMap((question) => {
+    const normalized = normalizeQuestion(question);
+    return normalized ? [normalized] : [];
+  }) : [];
+  if (questions.length === 0 || resolvePendingQuestion) return undefined;
+
+  pendingQuestionInput = toolInput;
+  state.pendingQuestion = {
+    id: normalizeText(payload.tool_use_id) ?? crypto.randomUUID(),
+    questions,
+  };
+  state.status = "attention";
+  activity("attention", questions.length > 1 ? `${questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
+
+  return new Promise<HookOutput | undefined>((resolve) => {
+    resolvePendingQuestion = resolve;
+    publishState();
+  });
+}
+function answerQuestion(answers: Record<string, string>) {
+  if (!state.pendingQuestion) throw new Error("Aucune question n’attend de réponse.");
+  const normalizedAnswers = Object.fromEntries(state.pendingQuestion.questions.map(({ question }) => [question, answers[question]?.trim() ?? ""]));
+  if (Object.values(normalizedAnswers).some((answer) => !answer)) throw new Error("Réponds à chaque question avant de continuer.");
+  if (state.id?.startsWith("demo-")) {
+    state.pendingQuestion = undefined;
+    state.status = "running";
+    activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
+    publishState();
+    demoTerminal("Réponses reçues. Le workflow simulé reprend.");
+    continueDemoRun();
+    return;
+  }
+  if (!pendingQuestionInput || !resolvePendingQuestion) throw new Error("Le pont de réponse avec Claude Code n’est plus actif.");
+
+  const resolve = resolvePendingQuestion;
+  const output: HookOutput = {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "allow",
+      updatedInput: { ...pendingQuestionInput, answers: normalizedAnswers },
+    },
+  };
+  resolvePendingQuestion = null;
+  pendingQuestionInput = null;
+  state.pendingQuestion = undefined;
+  state.status = "running";
+  activity("system", "Réponse transmise à Claude Code");
+  publishState();
+  resolve(output);
+}
 function phaseForArtifact(relativePath: string) {
   const name = path.basename(relativePath);
   if (name === "ticket-context.md") return 1;
@@ -179,6 +272,7 @@ async function startArtifactWatcher(cwd: string) {
 }
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
   if (terminal) throw new Error("Une session Claude Code est déjà active.");
+  clearDemoTimers();
   const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
   const claude = findExecutable("claude");
   if (!claude) throw new Error("Claude Code est introuvable dans PATH.");
@@ -206,6 +300,10 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
     if (state.id !== id) return;
     if (terminal === runTerminal) terminal = null;
     state.status = exitCode === 0 ? "completed" : "failed";
+    resolvePendingQuestion?.();
+    resolvePendingQuestion = null;
+    pendingQuestionInput = null;
+    state.pendingQuestion = undefined;
     state.endedAt = now();
     if (exitCode !== 0) state.error = `Claude Code s’est arrêté avec le code ${exitCode}.`;
     activity("system", exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
@@ -213,9 +311,161 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
     scheduleAutonomousReview(id);
   });
 }
+function startDemoRun() {
+  if (terminal || state.status === "running" || state.status === "starting" || state.status === "attention") throw new Error("Une session est déjà active.");
+  clearDemoTimers();
+  terminalBuffer = "";
+  const id = `demo-${crypto.randomUUID().slice(0, 8)}`;
+  state = {
+    ...emptyState(), id, status: "running", phase: 1,
+    cwd: "~/workspace/acme-dashboard", issueUrl: "ticket-simule://IH-42",
+    instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
+  };
+  activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
+  publishState();
+  demoTerminal("Lecture du ticket GitLab simulé…");
+  scheduleDemo(demoStepDuration, () => {
+    state.artifacts = ["ticket-context.md"];
+    activity("artifact", "Contexte du ticket consolidé", "ticket-context.md");
+    publishState();
+    demoTerminal("Critères d’acceptation et cas limites extraits.");
+  });
+  scheduleDemo(demoStepDuration * 2, () => {
+    state.phase = 2;
+    state.status = "attention";
+    state.pendingQuestion = {
+      id: `demo-question-${id}`,
+      questions: [
+        {
+          header: "Branche de base",
+          question: "Sur quelle branche faut-il construire cette implémentation ?",
+          options: [
+            { label: "develop", description: "Suit le flux d’intégration existant." },
+            { label: "main", description: "Part directement de la branche stable." },
+          ],
+          multiSelect: false,
+        },
+        {
+          header: "Notifications",
+          question: "Quel comportement faut-il appliquer quand les notifications sont désactivées ?",
+          options: [
+            { label: "Tout masquer", description: "Aucune notification n’est présentée." },
+            { label: "Garder les alertes critiques", description: "Les alertes de sécurité restent visibles." },
+          ],
+          multiSelect: false,
+        },
+      ],
+    };
+    activity("attention", "Deux décisions attendent ta réponse");
+    publishState();
+    demoTerminal("Claude attend tes décisions dans le panneau de droite.");
+  });
+}
+function continueDemoRun() {
+  scheduleDemo(0, () => {
+    state.phase = 3;
+    activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
+    publishState();
+    demoTerminal("Branche et plan de travail préparés.");
+  });
+  scheduleDemo(demoStepDuration, () => {
+    state.phase = 4;
+    state.artifacts = [...state.artifacts, "implementation-plan.md"];
+    activity("artifact", "Plan d’implémentation validé", "implementation-plan.md");
+    publishState();
+    demoTerminal("Plan découpé en composants, tests et migration de données.");
+  });
+  scheduleDemo(demoStepDuration * 2, () => {
+    state.phase = 5;
+    state.agents = [{ id: "demo-developer", name: "developer", status: "running", startedAt: now() }];
+    activity("agent", "developer démarre");
+    publishState();
+    demoTerminal("Délégation de l’implémentation à l’agent developer…");
+  });
+  scheduleDemo(demoStepDuration * 3, () => {
+    state.phase = 6;
+    state.agents = [
+      ...state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
+      { id: "demo-reviewer", name: "senior-reviewer", status: "running", startedAt: now() },
+    ];
+    state.artifacts = [...state.artifacts, "developer-report.md", "test-report.json"];
+    activity("agent", "Implémentation terminée, vérifications en cours");
+    publishState();
+    demoTerminal("Tests unitaires et contrôle TypeScript terminés. Passage en review…");
+  });
+  scheduleDemo(demoStepDuration * 4, () => {
+    state.phase = 7;
+    state.agents = state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "failed", endedAt: now() } : agent);
+    state.artifacts = [...state.artifacts, "senior-review-round-1.md"];
+    activity("attention", "Review : corrections demandées", "Le fallback critique ignore le fuseau horaire · un test de régression manque");
+    publishState();
+    demoTerminal("Review 1/2 : changements demandés sur le fallback et sa couverture de test.");
+  });
+  scheduleDemo(demoStepDuration * 5, () => {
+    state.phase = 5;
+    state.agents = state.agents.map((agent) => agent.id === "demo-developer" ? { ...agent, status: "running", startedAt: now(), endedAt: undefined } : agent);
+    activity("agent", "developer reprend l’implémentation", "Application des deux retours de review");
+    publishState();
+    demoTerminal("Boucle vers l’implémentation : correction du fallback et ajout du test manquant…");
+  });
+  scheduleDemo(demoStepDuration * 6, () => {
+    state.phase = 6;
+    state.agents = state.agents.map((agent) => {
+      if (agent.id === "demo-developer") return { ...agent, status: "completed", endedAt: now() };
+      if (agent.id === "demo-reviewer") return { ...agent, status: "running", startedAt: now(), endedAt: undefined };
+      return agent;
+    });
+    state.artifacts = [...state.artifacts, "test-report-round-2.json"];
+    activity("agent", "Corrections vérifiées", "12 tests passent, dont le nouveau test de régression");
+    publishState();
+    demoTerminal("Corrections terminées. Les 12 tests passent, nouvelle review demandée.");
+  });
+  scheduleDemo(demoStepDuration * 7, () => {
+    state.phase = 7;
+    state.agents = state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed", endedAt: now() } : agent);
+    state.artifacts = [...state.artifacts, "senior-review-round-2.md", "qa-report.json"];
+    activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
+    publishState();
+    demoTerminal("Review 2/2 : approuvée. Les retours ont bien été pris en compte.");
+  });
+  scheduleDemo(demoStepDuration * 8, () => {
+    state.phase = 8;
+    state.artifacts = [...state.artifacts, "mr-description.md"];
+    activity("artifact", "Merge request préparée", "mr-description.md");
+    publishState();
+    demoTerminal("Description et checklist de merge request générées.");
+  });
+  scheduleDemo(demoStepDuration * 9, () => {
+    state.phase = 9;
+    activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
+    publishState();
+    demoTerminal("Rapport final publié dans la merge request simulée.");
+  });
+  scheduleDemo(demoStepDuration * 10, () => {
+    state.phase = 10;
+    state.status = "completed";
+    state.endedAt = now();
+    activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
+    publishState();
+    demoTerminal("Merge request simulée prête. Fin de la démonstration.");
+  });
+}
 function stopRun() {
+  if (state.id?.startsWith("demo-")) {
+    clearDemoTimers();
+    state.pendingQuestion = undefined;
+    state.status = "completed";
+    state.endedAt = now();
+    activity("system", "Démonstration arrêtée");
+    publishState();
+    return;
+  }
   if (!terminal) return;
   const runId = state.id;
+  resolvePendingQuestion?.();
+  resolvePendingQuestion = null;
+  pendingQuestionInput = null;
+  state.pendingQuestion = undefined;
   terminal.kill(); terminal = null; state.status = "completed"; state.endedAt = now();
   activity("system", "Session arrêtée par l’utilisateur"); publishState();
   if (runId) scheduleAutonomousReview(runId);
@@ -223,6 +473,7 @@ function stopRun() {
 async function saveFeedback(body: string) {
   const feedback = body.trim();
   if (!state.id) throw new Error("Aucune exécution à laquelle rattacher ce retour.");
+  if (state.id.startsWith("demo-")) throw new Error("La démonstration n’enregistre pas de retour RSI.");
   if (!feedback) throw new Error("Le retour est vide.");
   if (feedback.length > 5_000) throw new Error("Le retour dépasse 5 000 caractères.");
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
@@ -317,6 +568,7 @@ function processHook(body: Record<string, unknown>) {
     activity("agent", `${agentName} termine`);
   } else if (event === "PreToolUse") {
     const tool = normalizeText(payload.tool_name) ?? "outil";
+    if (tool === "AskUserQuestion") return waitForQuestionAnswer(payload);
     const toolInput = payload.tool_input as Record<string, unknown> | undefined;
     activity("tool", tool, normalizeText(toolInput?.description) ?? normalizeText(toolInput?.command));
   } else if (event === "Notification") {
@@ -343,7 +595,10 @@ await mkdir(dataRoot, { recursive: true });
 await app.prepare();
 const server = createServer(async (request, response) => {
   if (request.method === "POST" && request.url === "/api/hooks") {
-    try { processHook(await readBody(request)); respond(response, 200, { ok: true }); }
+    try {
+      const hookOutput = await processHook(await readBody(request));
+      respond(response, 200, { ok: true, hookOutput: hookOutput ?? null });
+    }
     catch { respond(response, 400, { ok: false }); }
     return;
   }
@@ -376,8 +631,10 @@ wss.on("connection", (socket) => {
       if (message.type === "terminal.input") terminal?.write(message.data);
       if (message.type === "terminal.resize") terminal?.resize(message.cols, message.rows);
       if (message.type === "run.stop") stopRun();
-      if (message.type === "run.reset" && !terminal) { state = emptyState(); terminalBuffer = ""; publishState(); }
+      if (message.type === "run.reset" && !terminal) { clearDemoTimers(); state = emptyState(); terminalBuffer = ""; publishState(); }
+      if (message.type === "demo.start") startDemoRun();
       if (message.type === "feedback.submit") await saveFeedback(message.body);
+      if (message.type === "question.answer") answerQuestion(message.answers);
     } catch (error) {
       state.status = "failed"; state.error = error instanceof Error ? error.message : "Impossible d’exécuter cette action.";
       activity("system", "Erreur", state.error); publishState();
@@ -386,6 +643,6 @@ wss.on("connection", (socket) => {
   socket.on("close", () => sockets.delete(socket));
 });
 server.listen(port, hostname, () => console.log(`X-Implement Harness: http://${hostname}:${port}`));
-async function shutdown() { terminal?.kill(); await artifactWatcher?.close(); server.close(); }
+async function shutdown() { clearDemoTimers(); terminal?.kill(); await artifactWatcher?.close(); server.close(); }
 process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));

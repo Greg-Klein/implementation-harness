@@ -10,9 +10,11 @@ import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
 type Agent = { id: string; name: string; status: "running" | "completed" | "failed"; startedAt: string; endedAt?: string };
 type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
+type QuestionOption = { label: string; description?: string };
+type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
 type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
-  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; artifacts: string[]; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; artifacts: string[]; pendingQuestion?: PendingQuestion; error?: string;
 };
 type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 type RepositoryResponse = {
@@ -48,6 +50,7 @@ export function Harness() {
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
   const cwdRef = useRef("");
+  const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
 
@@ -110,6 +113,13 @@ export function Harness() {
   const send = useCallback((message: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
   }, []);
+  useEffect(() => {
+    if (!connected || demoStartedRef.current || new URLSearchParams(window.location.search).get("demo") !== "1") return;
+    demoStartedRef.current = true;
+    terminalRef.current?.clear();
+    send({ type: "demo.start" });
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [connected, send]);
   const terminalInput = useCallback((data: string) => send({ type: "terminal.input", data }), [send]);
   const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
   const changeCwd = useCallback((value: string, project?: string) => {
@@ -151,7 +161,7 @@ export function Harness() {
               </div>
               <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
             </section>
-            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} />
+            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} />
           </div>
         )}
       </div>
@@ -301,7 +311,46 @@ function PhaseRail({ run }: { run: RunState }) {
   );
 }
 
-function ActivityPanel({ run, onFeedback }: { run: RunState; onFeedback: (body: string) => void }) {
+function QuestionPanel({ pending, onAnswer }: { pending: PendingQuestion; onAnswer: (answers: Record<string, string>) => void }) {
+  const [answers, setAnswers] = useState<Record<string, string>>(() => Object.fromEntries(pending.questions.map(({ question }) => [question, ""])));
+  const ready = pending.questions.every(({ question }) => answers[question]?.trim());
+  const chooseOption = (question: PendingQuestion["questions"][number], label: string) => {
+    setAnswers((current) => {
+      if (!question.multiSelect) return { ...current, [question.question]: label };
+      const selected = current[question.question]?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
+      const next = selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label];
+      return { ...current, [question.question]: next.join(", ") };
+    });
+  };
+
+  return (
+    <section className="max-h-[72vh] overflow-y-auto border-b border-[var(--line)] bg-[#eef2ec] p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ink)] text-white"><RobotIcon size={14} /></div>
+        <div><p className="text-xs font-semibold">Décision requise</p><p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Claude attend ta réponse. Le terminal reste disponible.</p></div>
+      </div>
+      <form onSubmit={(event) => { event.preventDefault(); if (ready) onAnswer(answers); }}>
+        <div className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          {pending.questions.map((question, index) => (
+            <fieldset key={question.question} className="py-4 first:pt-3 last:pb-3">
+              <legend className="font-mono text-[9px] font-semibold uppercase tracking-[.14em] text-[var(--accent)]">{question.header}</legend>
+              <p className="mt-2 text-[11px] font-medium leading-4">{question.question}</p>
+              {question.options.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{question.options.map((option) => {
+                const selected = answers[question.question]?.split(",").map((value) => value.trim()).includes(option.label);
+                return <button key={option.label} type="button" title={option.description} onClick={() => chooseOption(question, option.label)} className={`rounded-md border px-2 py-1.5 text-[10px] transition active:translate-y-px ${selected ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[#aeb6b0]"}`}>{option.label}</button>;
+              })}</div>}
+              <label htmlFor={`question-answer-${index}`} className="mt-3 block text-[10px] text-[var(--muted)]">Ta réponse</label>
+              <textarea id={`question-answer-${index}`} rows={2} value={answers[question.question] ?? ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.question]: event.target.value }))} placeholder="Écris ta réponse…" className="field mt-1.5 resize-none text-[11px] leading-4" />
+            </fieldset>
+          ))}
+        </div>
+        <button type="submit" disabled={!ready} className="mt-4 flex w-full items-center justify-between rounded-lg bg-[var(--ink)] px-3 py-2.5 text-[11px] font-semibold text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35"><span>Transmettre à Claude</span><ArrowRightIcon size={13} /></button>
+      </form>
+    </section>
+  );
+}
+
+function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void }) {
   const runningAgents = run.agents.filter((agent) => agent.status === "running");
   const [feedback, setFeedback] = useState("");
   const [queued, setQueued] = useState(false);
@@ -313,12 +362,13 @@ function ActivityPanel({ run, onFeedback }: { run: RunState; onFeedback: (body: 
   };
   return (
     <aside className="flex min-h-0 flex-col bg-[#f7f8f4]">
+      {run.pendingQuestion && <QuestionPanel key={run.pendingQuestion.id} pending={run.pendingQuestion} onAnswer={onAnswer} />}
       {run.error && <div className="m-4 flex gap-2.5 rounded-[10px] border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
       <section className="border-b border-[var(--line)] p-5">
         <div className="mb-4 flex items-center justify-between"><h2 className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
         {run.agents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>En attente de délégation</div> :
           <div className="space-y-2.5">{run.agents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
-            <div className="grid size-8 place-items-center rounded-full bg-white text-[var(--accent)] shadow-[inset_0_0_0_1px_var(--line)]">{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : <CheckIcon size={13} weight="bold" />}</div>
+            <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>
             <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsed(agent.startedAt, agent.endedAt)}</p></div>
           </div>)}</div>}
       </section>
@@ -331,7 +381,7 @@ function ActivityPanel({ run, onFeedback }: { run: RunState; onFeedback: (body: 
       </section>
       <section className="border-t border-[var(--line)] p-5">
         <div className="flex items-center justify-between text-xs"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Artefacts archivés</span><span className="font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}</span></div>
-        {(run.status === "completed" || run.status === "failed") && <div className="mt-4 border-t border-[var(--line)] pt-4">
+        {!run.id?.startsWith("demo-") && (run.status === "completed" || run.status === "failed") && <div className="mt-4 border-t border-[var(--line)] pt-4">
           <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
           <textarea id="run-feedback" value={feedback} onChange={(event) => { setFeedback(event.target.value); setQueued(false); }} rows={2} placeholder="Ce qui a ralenti, manqué ou mal fonctionné…" className="field mt-2 resize-none text-[11px] leading-4" />
           <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle RSI</button>
