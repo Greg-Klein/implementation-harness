@@ -170,3 +170,7 @@ install-remote.sh  clone ou mise à jour depuis la commande curl
 ```
 
 Selon le ticket, `/x-implement` peut aussi utiliser Playwright et Figma. Un MCP absent réduit les vérifications correspondantes mais n’empêche pas le harnais de démarrer.
+
+## Licence
+
+Implementation Harness est distribué sous [licence MIT](LICENSE). Copyright © 2026 Gregory Klein.
