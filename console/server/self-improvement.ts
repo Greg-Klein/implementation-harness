@@ -72,7 +72,7 @@ function startAutonomousImprovement(runId: string) {
     `/implementation-harness:improve ${feedbackDirectory}`,
   ], {
     cwd: pluginRoot,
-    env: { ...process.env, IMPL_SELF_IMPROVEMENT_PRIMARY_CHECKOUT: pluginRoot },
+    env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";

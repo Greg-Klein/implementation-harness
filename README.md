@@ -108,10 +108,11 @@ La politique se règle dans `.env` :
 
 ```dotenv
 IMPL_SELF_IMPROVEMENT_AUTORUN='true'
-IMPL_SELF_IMPROVEMENT_AUTO_APPLY='true'
 ```
 
-`SELF_IMPROVEMENT_AUTORUN` lance l’analyse en arrière-plan à la fin du run. `SELF_IMPROVEMENT_AUTO_APPLY` fusionne uniquement un commit validé par fast-forward dans le checkout installé. Aucun changement n’est poussé sur GitHub. Les deux options valent `false` dans `.env.example`; il faut les activer consciemment. Après une promotion, redémarrer le harnais pour charger les changements du serveur local.
+`SELF_IMPROVEMENT_AUTORUN` lance l’analyse en arrière-plan à la fin du run. L’option vaut `false` dans `.env.example`; il faut l’activer consciemment.
+
+L’agent travaille dans un worktree isolé et laisse toujours son commit sur sa branche `self-improvement-*`. Rien n’est fusionné automatiquement et rien n’est poussé sur GitHub. Le panneau de droite affiche le diff : c’est la seule porte de promotion. Après une fusion, redémarrer le harnais avec `impl restart` pour charger les changements du serveur local.
 
 ## Fonctionnement
 

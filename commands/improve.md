@@ -59,7 +59,7 @@ Review the final diff against the improvement plan. Reject scope creep and any r
 
 When validation passes, commit the source changes with a conventional `fix:`, `feat:` or `refactor:` message. Never push and never open a pull request.
 
-When `IMPL_SELF_IMPROVEMENT_AUTO_APPLY=true` and `IMPL_SELF_IMPROVEMENT_PRIMARY_CHECKOUT` names the primary checkout, promote the validated commit there with `git merge --ff-only <improvement-branch>`. Before merging, require the primary checkout to be on its protected base branch with no tracked changes. If either check fails or the merge is not a fast-forward, leave the improvement branch intact and report why promotion was skipped. Never force, rebase or discard work. With auto-apply disabled, always leave the commit on its improvement branch for manual review.
+Always leave the commit on its improvement branch. Never merge it into the primary checkout, never force, rebase or discard work: the console shows the diff and the user approves or discards it there. Promoting the branch yourself would present an already-merged change for approval, and the reject button would then revert nothing.
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 

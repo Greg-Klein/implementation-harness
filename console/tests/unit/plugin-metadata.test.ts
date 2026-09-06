@@ -32,6 +32,14 @@ describe("Claude Code plugin metadata", () => {
     expect(manifest.author).toEqual({ name: "Gregory Klein" });
   });
 
+  it("should keep every improvement on its own branch until the user approves it", () => {
+    const improve = readFileSync(path.join(pluginRoot, "commands", "improve.md"), "utf8");
+    // Le panneau de la console est la seule porte de promotion. Une commande qui
+    // fusionne elle-meme presenterait un changement deja applique a la validation,
+    // et le rejet ne reviendrait alors sur rien.
+    expect(improve).not.toMatch(/AUTO_APPLY|PRIMARY_CHECKOUT|merge --ff-only/);
+  });
+
   it("should publish its commands under the implementation-harness namespace", () => {
     const manifest = JSON.parse(readFileSync(path.join(pluginRoot, ".claude-plugin/plugin.json"), "utf8"));
     expect(manifest.name).toBe("implementation-harness");
