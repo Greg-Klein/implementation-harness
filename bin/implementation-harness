@@ -18,7 +18,43 @@ app_port="${IMPL_PORT:-3210}"
 app_url="http://127.0.0.1:$app_port"
 launch_url="$app_url"
 
+program="$(basename "$0")"
 command="${1:-}"
+
+usage() {
+  cat <<USAGE
+Usage : $program [commande]
+
+  (aucune)  démarre l'interface et ouvre le navigateur
+  demo      démarre l'interface sur un scénario simulé, sans dépôt ni ticket
+  restart   arrête le serveur en cours puis relance la version compilée
+  stop      arrête le serveur en cours
+  improve   traite les retours d'auto-amélioration avec Claude Code
+  help      affiche cette aide
+
+restart accepte le mode démo : $program restart demo
+
+Variables d'environnement :
+  IMPL_PORT      port d'écoute (défaut : $app_port)
+  IMPL_NO_OPEN=1 ne pas ouvrir le navigateur
+USAGE
+}
+
+reject() {
+  printf '%s\n\n' "$1" >&2
+  usage >&2
+  exit 1
+}
+
+case "$command" in
+  help|--help|-h) usage; exit 0 ;;
+  ""|demo|restart|stop|improve) ;;
+  *) reject "Commande inconnue : $command" ;;
+esac
+
+if [[ "$command" != "restart" && $# -gt 1 ]]; then
+  reject "Trop d'arguments : $*"
+fi
 
 if [[ "$command" == "improve" ]]; then
   mkdir -p "$console_dir/data/feedback/pending"
@@ -58,10 +94,22 @@ stop_server() {
   fi
 }
 
-if [[ "$command" == "restart" ]]; then
+if [[ "$command" == "stop" ]]; then
   stop_server
+  exit 0
+fi
+
+if [[ "$command" == "restart" ]]; then
   shift
   command="${1:-}"
+  case "$command" in
+    ""|demo) ;;
+    *) reject "restart n'accepte que le mode démo, reçu : $command" ;;
+  esac
+  if [[ $# -gt 1 ]]; then
+    reject "Trop d'arguments : $*"
+  fi
+  stop_server
 fi
 
 if [[ "$command" == "demo" ]]; then

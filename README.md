@@ -34,6 +34,17 @@ Si `~/.local/bin` n’est pas encore dans `PATH`, l’installateur affiche la li
 impl
 ```
 
+| Commande | Effet |
+|---|---|
+| `impl` | démarre l’interface et ouvre le navigateur |
+| `impl demo` | démarre l’interface sur un scénario simulé |
+| `impl restart` | arrête le serveur en cours puis relance la version compilée |
+| `impl stop` | arrête le serveur en cours |
+| `impl improve` | traite les retours d’auto-amélioration avec Claude Code |
+| `impl help` | affiche l’aide |
+
+Une commande inconnue est refusée avec l’aide et un code de sortie non nul, plutôt que de démarrer le serveur en silence.
+
 Pour découvrir l’interface sans ticket ni appel à Claude Code :
 
 ```bash
@@ -48,7 +59,7 @@ Pour redémarrer un serveur déjà lancé :
 impl restart
 ```
 
-`impl` détecte un harnais déjà en écoute et se contente d’ouvrir le navigateur. Après une recompilation de l’interface, le serveur en cours sert encore l’ancien manifeste Next.js et les feuilles de style renvoient une erreur : la page s’affiche alors sans aucun style. `impl restart` arrête le serveur du port courant, attend la libération du port et relance la version compilée. L’option se combine avec le mode démo (`impl restart demo`).
+`impl` détecte un harnais déjà en écoute et se contente d’ouvrir le navigateur. Après une recompilation de l’interface, le serveur en cours sert encore l’ancien manifeste Next.js et les feuilles de style renvoient une erreur : la page s’affiche alors sans aucun style. `impl restart` arrête le serveur du port courant, attend la libération du port et relance la version compilée. Il se combine avec le mode démo (`impl restart demo`) et n’arrête rien si son argument est invalide.
 
 Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 

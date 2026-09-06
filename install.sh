@@ -34,6 +34,7 @@ ln -sfn "$repo_root/bin/implementation-harness" "$bin_dir/impl"
 printf '\nInstallation terminée.\n'
 printf 'Lancer l’interface : impl\n'
 printf 'Traiter les retours d’auto-amélioration : impl improve\n'
+printf 'Voir toutes les commandes : impl help\n'
 if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
   printf '\nAjoute %s à PATH, puis ouvre un nouveau terminal :\n' "$bin_dir"
   printf '  export PATH="%s:$PATH"\n' "$bin_dir"
