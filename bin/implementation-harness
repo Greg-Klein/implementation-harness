@@ -29,6 +29,7 @@ Usage : $program [commande]
   demo      démarre l'interface sur un scénario simulé, sans dépôt ni ticket
   restart   arrête le serveur en cours puis relance la version compilée
   stop      arrête le serveur en cours
+  status    indique si un serveur écoute et s'il sert le build sur disque
   improve   traite les retours d'auto-amélioration avec Claude Code
   help      affiche cette aide
 
@@ -37,6 +38,9 @@ restart accepte le mode démo : $program restart demo
 Variables d'environnement :
   IMPL_PORT      port d'écoute (défaut : $app_port)
   IMPL_NO_OPEN=1 ne pas ouvrir le navigateur
+
+Codes de sortie de status : 0 en écoute et cohérent, 1 en écoute mais
+incohérent, 3 arrêté.
 USAGE
 }
 
@@ -48,7 +52,7 @@ reject() {
 
 case "$command" in
   help|--help|-h) usage; exit 0 ;;
-  ""|demo|restart|stop|improve) ;;
+  ""|demo|restart|stop|status|improve) ;;
   *) reject "Commande inconnue : $command" ;;
 esac
 
@@ -97,6 +101,67 @@ stop_server() {
 if [[ "$command" == "stop" ]]; then
   stop_server
   exit 0
+fi
+
+# Le serveur en cours sert le manifeste Next.js du build present a son
+# demarrage. Apres une recompilation, ses feuilles de style pointent vers des
+# fichiers effaces : la page s'affiche sans style. On verifie donc les
+# ressources reellement servies, pas seulement la presence d'un processus.
+status_report() {
+  local pids
+  pids="$(listening_pids)"
+  if [[ -z "$pids" ]]; then
+    printf 'Arrêté. Aucun serveur en écoute sur le port %s.\n' "$app_port"
+    return 3
+  fi
+  printf 'Serveur   : en écoute sur %s (PID %s)\n' "$app_url" "$(echo $pids)"
+
+  local build_id="(inconnu)"
+  if [[ -f "$console_dir/.next/BUILD_ID" ]]; then
+    build_id="$(cat "$console_dir/.next/BUILD_ID")"
+  fi
+  printf 'Build     : %s sur disque\n' "$build_id"
+
+  if ! command -v curl >/dev/null 2>&1; then
+    printf 'Ressources: non vérifiées, curl est absent.\n'
+    return 0
+  fi
+
+  if ! curl -fsS "$app_url/api/state" 2>/dev/null | grep -q '"state"'; then
+    printf 'API       : /api/state ne répond pas comme le harnais.\n' >&2
+    printf 'Un autre programme occupe peut-être le port %s.\n' "$app_port" >&2
+    return 1
+  fi
+  printf 'API       : répond\n'
+
+  local page assets missing=0 total=0 asset
+  page="$(curl -fsS "$app_url/" 2>/dev/null || true)"
+  assets="$(printf '%s' "$page" | grep -o '/_next/static/[^"\\]*' | sort -u || true)"
+  if [[ -z "$assets" ]]; then
+    printf 'Ressources: aucune ressource référencée, rien à vérifier.\n'
+    return 0
+  fi
+  while IFS= read -r asset; do
+    total=$((total + 1))
+    if [[ "$(curl -s -o /dev/null -w '%{http_code}' "$app_url$asset")" != "200" ]]; then
+      missing=$((missing + 1))
+    fi
+  done <<< "$assets"
+
+  if (( missing > 0 )); then
+    printf 'Ressources: %s sur %s introuvable(s).\n' "$missing" "$total" >&2
+    printf 'Le serveur sert un build plus ancien que celui sur disque.\n' >&2
+    printf 'Relance-le : %s restart\n' "$program" >&2
+    return 1
+  fi
+  printf 'Ressources: %s servies, build à jour\n' "$total"
+  return 0
+}
+
+if [[ "$command" == "status" ]]; then
+  set +e
+  status_report
+  exit $?
 fi
 
 if [[ "$command" == "restart" ]]; then

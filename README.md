@@ -40,10 +40,21 @@ impl
 | `impl demo` | démarre l’interface sur un scénario simulé |
 | `impl restart` | arrête le serveur en cours puis relance la version compilée |
 | `impl stop` | arrête le serveur en cours |
+| `impl status` | indique si un serveur écoute et s’il sert le build sur disque |
 | `impl improve` | traite les retours d’auto-amélioration avec Claude Code |
 | `impl help` | affiche l’aide |
 
 Une commande inconnue est refusée avec l’aide et un code de sortie non nul, plutôt que de démarrer le serveur en silence.
+
+`impl status` ne se contente pas de chercher un processus. Il interroge `/api/state`, puis demande au serveur chaque ressource `/_next/static/` que la page référence. Un serveur qui tourne encore sur un build précédent répond avec un manifeste dont les fichiers ont été effacés par la recompilation, et c’est ce qui produit une page sans style. Ses codes de sortie : `0` en écoute et cohérent, `1` en écoute mais incohérent, `3` arrêté.
+
+```console
+$ impl status
+Serveur   : en écoute sur http://127.0.0.1:3210 (PID 76579)
+Build     : caiz9bak8t_BsOXSZHCmN sur disque
+API       : répond
+Ressources: 11 servies, build à jour
+```
 
 Pour découvrir l’interface sans ticket ni appel à Claude Code :
 

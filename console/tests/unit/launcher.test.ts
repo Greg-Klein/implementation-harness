@@ -50,7 +50,7 @@ describe("implementation-harness launcher", () => {
   it("should document every subcommand it accepts", () => {
     const { code, stdout } = launch(["help"]);
     expect(code).toBe(0);
-    for (const subcommand of ["demo", "restart", "stop", "improve", "help"]) {
+    for (const subcommand of ["demo", "restart", "stop", "status", "improve", "help"]) {
       expect(stdout).toContain(subcommand);
     }
   });
@@ -84,7 +84,28 @@ describe("implementation-harness launcher", () => {
     expect(stdout).toContain("Aucun serveur");
   });
 
+  it("should report a stopped server with its own exit code", async () => {
+    const port = await freePort();
+    const { code, stdout } = launch(["status"], { IMPL_PORT: String(port) });
+    // 3 distingue "arrêté" d'une erreur d'usage, qui sort en 1.
+    expect(code).toBe(3);
+    expect(stdout).toContain("Arrêté");
+  });
+
   const canInspectPorts = available("lsof");
+
+  (canInspectPorts ? it : it.skip)("should fail the status when the port answers but the harness does not", async () => {
+    const port = await freePort();
+    const child = listenInChildProcess(port);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      const { code, stderr } = launch(["status"], { IMPL_PORT: String(port) });
+      expect(code).toBe(1);
+      expect(stderr).toContain("/api/state");
+    } finally {
+      child.kill("SIGKILL");
+    }
+  }, 20_000);
 
   (canInspectPorts ? it : it.skip)("should reject a bad restart argument before stopping anything", async () => {
     const port = await freePort();
