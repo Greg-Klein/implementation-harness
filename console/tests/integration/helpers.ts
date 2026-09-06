@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export async function resetRun(page: Page) {
   await page.goto("/");
@@ -16,4 +16,13 @@ export async function resetRun(page: Page) {
       }
     });
   }));
+}
+
+export async function runDemoToCompletion(page: Page) {
+  await page.goto("/?demo=1");
+  await expect(page.getByText("Décision requise")).toBeVisible();
+  await page.getByRole("button", { name: "develop" }).click();
+  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
+  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
 }
