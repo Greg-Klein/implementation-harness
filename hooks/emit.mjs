@@ -3,7 +3,7 @@ import process from "node:process";
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 
-const endpoint = process.env.X_IMPLEMENT_HARNESS_HOOK_URL;
+const endpoint = process.env.IMPL_HARNESS_HOOK_URL;
 if (!endpoint) process.exit(0);
 
 try {
@@ -13,7 +13,7 @@ try {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      runId: process.env.X_IMPLEMENT_RUN_ID,
+      runId: process.env.IMPL_RUN_ID,
       receivedAt: new Date().toISOString(),
       payload,
     }),

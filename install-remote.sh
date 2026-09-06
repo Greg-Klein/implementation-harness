@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repository="${X_IMPLEMENT_REPOSITORY:-https://github.com/Greg-Klein/implementation-harness.git}"
-install_dir="${X_IMPLEMENT_INSTALL_DIR:-$HOME/.local/share/implementation-harness}"
+repository="${IMPL_REPOSITORY:-https://github.com/Greg-Klein/implementation-harness.git}"
+install_dir="${IMPL_INSTALL_DIR:-$HOME/.local/share/implementation-harness}"
 
 if ! command -v git >/dev/null 2>&1; then
   printf 'Prérequis manquant : git\n' >&2
@@ -11,7 +11,7 @@ fi
 
 if [[ -d "$install_dir/.git" ]]; then
   printf 'Mise à jour de %s…\n' "$install_dir"
-  if [[ -n "${X_IMPLEMENT_REPOSITORY:-}" ]]; then
+  if [[ -n "${IMPL_REPOSITORY:-}" ]]; then
     git -C "$install_dir" remote set-url origin "$repository"
   fi
   git -C "$install_dir" pull --ff-only

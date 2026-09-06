@@ -1,8 +1,8 @@
 .DS_Store
 .env
 .env.local
-harness/node_modules/
-harness/.next/
-harness/data/
-harness/*.tsbuildinfo
+console/node_modules/
+console/.next/
+console/data/
+console/*.tsbuildinfo
 *.log

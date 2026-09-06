@@ -1,5 +1,5 @@
 {
-  "name": "x-implement",
+  "name": "implementation-harness",
   "version": "0.1.0",
   "description": "End-to-end GitLab ticket implementation workflow with observable hooks",
   "author": {

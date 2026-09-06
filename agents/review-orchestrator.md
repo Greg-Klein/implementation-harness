@@ -1,6 +1,6 @@
 ---
 name: review-orchestrator
-description: "Use this agent to run the review loop on an existing implementation: senior review, design review against Figma, QA validation, and rework routing back to the developer agent until only minor findings remain. Does NOT touch git and does NOT plan. Called by /x-implement or directly on a branch that already has an implementation."
+description: "Use this agent to run the review loop on an existing implementation: senior review, design review against Figma, QA validation, and rework routing back to the developer agent until only minor findings remain. Does NOT touch git and does NOT plan. Called by /implementation-harness:implement or directly on a branch that already has an implementation."
 model: sonnet
 color: orange
 ---

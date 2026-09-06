@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_path="${BASH_SOURCE[0]}"
+while [[ -L "$script_path" ]]; do
+  script_dir="$(cd -P "$(dirname "$script_path")" && pwd)"
+  link_target="$(readlink "$script_path")"
+  if [[ "$link_target" = /* ]]; then
+    script_path="$link_target"
+  else
+    script_path="$script_dir/$link_target"
+  fi
+done
+
+repo_root="$(cd -P "$(dirname "$script_path")/.." && pwd)"
+console_dir="$repo_root/console"
+app_port="${IMPL_PORT:-3210}"
+app_url="http://127.0.0.1:$app_port"
+launch_url="$app_url"
+
+command="${1:-}"
+
+if [[ "$command" == "improve" ]]; then
+  mkdir -p "$console_dir/data/feedback/pending"
+  cd "$repo_root"
+  exec claude --plugin-dir "$repo_root" --name "implementation-harness self-improvement" "/implementation-harness:improve $console_dir/data/feedback"
+fi
+
+listening_pids() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -t -nP -iTCP:"$app_port" -sTCP:LISTEN 2>/dev/null || true
+  else
+    pgrep -f "tsx server/index.ts" 2>/dev/null || true
+  fi
+}
+
+stop_server() {
+  local pids
+  pids="$(listening_pids)"
+  if [[ -z "$pids" ]]; then
+    printf 'Aucun serveur Implementation Harness en écoute sur le port %s.\n' "$app_port"
+    return 0
+  fi
+  printf 'Arrêt du serveur Implementation Harness (PID %s)…\n' "$(echo $pids)"
+  kill $pids 2>/dev/null || true
+  for _ in {1..40}; do
+    if [[ -z "$(listening_pids)" ]]; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  printf 'Arrêt forcé.\n'
+  kill -9 $(listening_pids) 2>/dev/null || true
+  sleep 0.5
+  if [[ -n "$(listening_pids)" ]]; then
+    printf 'Le port %s reste occupé. Libère-le manuellement avant de relancer.\n' "$app_port" >&2
+    exit 1
+  fi
+}
+
+if [[ "$command" == "restart" ]]; then
+  stop_server
+  shift
+  command="${1:-}"
+fi
+
+if [[ "$command" == "demo" ]]; then
+  launch_url="$app_url/?demo=1"
+fi
+
+open_app() {
+  if [[ "${IMPL_NO_OPEN:-0}" == "1" ]]; then return; fi
+  if command -v open >/dev/null 2>&1; then
+    open "$launch_url"
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$launch_url" >/dev/null 2>&1
+  fi
+}
+
+if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/state" >/dev/null 2>&1; then
+  open_app
+  printf 'Implementation Harness est déjà disponible sur %s\n' "$app_url"
+  exit 0
+fi
+
+(
+  for _ in {1..40}; do
+    if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/state" >/dev/null 2>&1; then
+      open_app
+      exit 0
+    fi
+    sleep 0.25
+  done
+) &
+
+cd "$console_dir"
+PORT="$app_port" exec npm run start
