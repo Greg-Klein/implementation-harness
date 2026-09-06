@@ -124,7 +124,7 @@ export function Harness() {
         {run.status === "idle" ? (
           <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
         ) : (
-          <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:grid-cols-[236px_minmax(0,1fr)_320px]">
+          <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:h-[calc(100dvh-106px)] lg:grid-cols-[236px_minmax(0,1fr)_320px]">
             <PhaseRail run={run} />
             <section className="min-h-135 border-y border-[var(--line)] bg-[var(--terminal)] lg:border-x lg:border-y-0">
               <div className="flex h-12 items-center justify-between border-b border-white/8 px-4 text-white">

@@ -8,6 +8,14 @@ test("should offer a simulated feedback field once the demonstration ends", asyn
 
   const field = page.getByLabel("Faire progresser le harnais");
   await expect(field).toBeVisible();
+
+  // Les cartes de fin de run se logent dans le panneau, qui absorbe le reste en
+  // comprimant le journal : la page elle-meme ne doit jamais defiler.
+  const pageOverflow = await page.evaluate(() => {
+    const root = document.documentElement;
+    return root.scrollHeight - root.clientHeight;
+  });
+  expect(pageOverflow).toBe(0);
   await field.fill("La revue de design manque une vérification de contraste.");
   await page.getByRole("button", { name: "Ajouter à la boucle d’auto-amélioration" }).click();
 
