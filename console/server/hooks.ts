@@ -1,6 +1,7 @@
 import { createsBranch, normalizeAnswers, normalizeQuestion, phaseForAgent } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
+import { followTranscript } from "./transcript.js";
 import type { HookOutput } from "./types.js";
 
 function normalizeText(value: unknown): string | undefined {
@@ -80,6 +81,7 @@ export function clearPendingQuestion() {
 export function processHook(body: Record<string, unknown>) {
   if (!ctx.state.id || body.runId !== ctx.state.id) return;
   const payload = (body.payload ?? {}) as Record<string, unknown>;
+  if (typeof payload.transcript_path === "string" && payload.transcript_path) void followTranscript(payload.transcript_path);
   const event = normalizeText(payload.hook_event_name) ?? "Hook";
   const agentName = normalizeText(payload.agent_type) ?? "agent";
   const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;

@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { ConversationMessage } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -53,6 +54,38 @@ export function gitLabProjectPath(issueUrl: string) {
   } catch {
     return undefined;
   }
+}
+
+/** Slash commands, task notifications and hook output reach the session as tagged blocks. */
+const TAGGED_INPUT = /^<[a-z][a-z-]*>/;
+
+function textOf(content: unknown) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((block): block is { type: string; text: string } => Boolean(block) && typeof block === "object" && (block as { type?: unknown }).type === "text" && typeof (block as { text?: unknown }).text === "string")
+    .map((block) => block.text)
+    .join("\n\n");
+}
+
+export function parseConversationLine(line: string): ConversationMessage | undefined {
+  let entry: Record<string, unknown>;
+  try {
+    entry = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  if (!entry || typeof entry !== "object") return undefined;
+  // Sidechains are the subagents talking to themselves, meta entries are the
+  // expanded prompt of a slash command: neither is the dialogue.
+  if (entry.isSidechain === true || entry.isMeta === true) return undefined;
+  const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
+  const id = typeof entry.uuid === "string" ? entry.uuid : undefined;
+  if (!author || !id) return undefined;
+  const message = entry.message as { content?: unknown } | undefined;
+  const text = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+  if (!text || (author === "user" && TAGGED_INPUT.test(text))) return undefined;
+  return { id, at: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(), author, text };
 }
 
 export function phaseForAgent(agentName: string) {

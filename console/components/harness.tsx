@@ -1,22 +1,24 @@
 "use client";
 
-import { CodeIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, CodeIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
+import { ConversationPanel } from "./conversation-panel";
 import { LaunchForm } from "./launch-form";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
 const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 
-const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
+const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
 
 export function Harness() {
   const [run, setRun] = useState<RunState>(initialState);
   const [connected, setConnected] = useState(false);
   const [cwd, setCwd] = useState("");
   const [issueUrl, setIssueUrl] = useState("");
+  const [tab, setTab] = useState<"conversation" | "terminal">("conversation");
   const [instruction, setInstruction] = useState("");
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
@@ -128,12 +130,23 @@ export function Harness() {
         ) : (
           <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:h-[calc(100dvh-106px)] lg:grid-cols-[236px_minmax(0,1fr)_320px]">
             <PhaseRail run={run} />
-            <section className="min-h-135 border-y border-[var(--line)] bg-[var(--terminal)] lg:border-x lg:border-y-0">
-              <div className="flex h-12 items-center justify-between border-b border-white/8 px-4 text-white">
-                <div className="flex items-center gap-2 text-xs font-medium"><TerminalWindowIcon size={16} />Claude Code</div>
-                {active && <button type="button" onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-white/55 transition hover:bg-white/8 hover:text-white active:scale-[.98]"><StopIcon size={12} weight="fill" /> Arrêter</button>}
+            <section className="flex min-h-135 flex-col border-y border-[var(--line)] bg-[var(--surface)] lg:border-x lg:border-y-0">
+              <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--line)] px-4">
+                <div role="tablist" aria-label="Vue de la session" className="flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
+                  {([["conversation", "Conversation"], ["terminal", "Terminal"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${tab === value ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+                      {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : <TerminalWindowIcon size={13} />}{label}
+                    </button>
+                  ))}
+                </div>
+                {active && <button type="button" onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>
-              <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
+              <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+                <ConversationPanel messages={run.messages} canSend={active} onSend={(text) => send({ type: "instruction.send", text })} />
+              </div>
+              <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
+                <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
+              </div>
             </section>
             <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} onSelfImprovementApprove={(worktreeName) => send({ type: "selfImprovement.approve", worktreeName })} onSelfImprovementReject={(worktreeName) => send({ type: "selfImprovement.reject", worktreeName })} />
           </div>

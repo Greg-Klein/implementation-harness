@@ -6,15 +6,17 @@ export type AgentState = { id: string; name: string; status: AgentStatus; starte
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
 export type PendingSelfImprovementReview = { worktreeName: string; runId: string };
+export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
-  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; artifacts: string[]; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
 export type ClientMessage =
   | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string }
   | { type: "terminal.input"; data: string }
+  | { type: "instruction.send"; text: string }
   | { type: "terminal.resize"; cols: number; rows: number }
   | { type: "run.stop" }
   | { type: "run.reset" }

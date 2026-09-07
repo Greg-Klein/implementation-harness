@@ -7,12 +7,13 @@ import process from "node:process";
 import next from "next";
 import * as pty from "node-pty";
 import { WebSocketServer, WebSocket } from "ws";
-import { ctx, activity, emptyState, now, publishState } from "./context.js";
+import { ctx, activity, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { terminalExitStatus } from "./domain.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
 import { closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
+import { closeTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
-import { clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
+import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, findExecutable, resolveProjectDirectory } from "./repository.js";
@@ -55,6 +56,17 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   publishState();
 }
 
+/**
+ * A harness started from inside a Claude Code session inherits markers that make
+ * the spawned session behave like a nested one, transcript saving included, and
+ * the conversation is read from that transcript.
+ */
+function sessionEnvironment() {
+  const environment = { ...process.env };
+  for (const key of Object.keys(environment)) if (key === "CLAUDECODE" || key === "CLAUDE_PID" || key.startsWith("CLAUDE_CODE_")) delete environment[key];
+  return environment;
+}
+
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
   if (terminal) throw new Error("Une session Claude Code est déjà active.");
   clearDemoTimers();
@@ -67,10 +79,11 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   activity("system", "Session créée", path.basename(cwd));
   publishState();
   await startArtifactWatcher(cwd);
+  await closeTranscript();
   const command = `/implementation-harness:implement ${ctx.state.issueUrl}${ctx.state.instruction ? ` ${ctx.state.instruction}` : ""}`;
   const runTerminal = pty.spawn(claude, ["--plugin-dir", pluginRoot, "--name", `implementation-harness ${path.basename(cwd)}`, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
-    env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: id, IMPL_HARNESS_HOOK_URL: `http://${hostname}:${port}/api/hooks` },
+    env: { ...sessionEnvironment(), TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: id, IMPL_HARNESS_HOOK_URL: `http://${hostname}:${port}/api/hooks` },
   });
   terminal = runTerminal;
   ctx.state.status = "running";
@@ -93,6 +106,19 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
     publishState();
     scheduleAutonomousReview(id);
   });
+}
+
+function sendInstruction(text: string) {
+  const instruction = text.trim();
+  if (!instruction) throw new Error("L'instruction est vide.");
+  if (!terminal && !ctx.state.id?.startsWith("demo-")) throw new Error("Aucune session Claude Code n'est active.");
+  // Bracketed paste keeps a multi-line instruction as a single prompt instead of
+  // submitting it line by line.
+  if (terminal) terminal.write(instruction.includes("\n") ? `\u001b[200~${instruction}\u001b[201~\r` : `${instruction}\r`);
+  conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction });
+  activity("system", "Instruction transmise", instruction);
+  publishState();
+  if (!terminal) acknowledgeDemoInstruction();
 }
 
 function stopRun() {
@@ -194,9 +220,10 @@ wss.on("connection", (socket) => {
       const message = JSON.parse(raw.toString()) as ClientMessage;
       if (message.type === "run.start") await startRun(message);
       if (message.type === "terminal.input") terminal?.write(message.data);
+      if (message.type === "instruction.send") sendInstruction(message.text);
       if (message.type === "terminal.resize") terminal?.resize(message.cols, message.rows);
       if (message.type === "run.stop") stopRun();
-      if (message.type === "run.reset" && !terminal) { clearDemoTimers(); ctx.state = emptyState(); ctx.terminalBuffer = ""; publishState(); }
+      if (message.type === "run.reset" && !terminal) { clearDemoTimers(); await closeTranscript(); ctx.state = emptyState(); ctx.terminalBuffer = ""; publishState(); }
       if (message.type === "demo.start") startDemoRun(terminal !== null);
       if (message.type === "feedback.submit") await saveFeedback(message.body);
       if (message.type === "question.answer") answerQuestion(message.answers, continueDemoRun);
@@ -212,6 +239,6 @@ wss.on("connection", (socket) => {
 
 server.listen(port, hostname, () => console.log(`Implementation Harness: http://${hostname}:${port}`));
 
-async function shutdown() { clearDemoTimers(); terminal?.kill(); await closeArtifactWatcher(); server.close(); }
+async function shutdown() { clearDemoTimers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
 process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));

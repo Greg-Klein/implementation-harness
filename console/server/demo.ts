@@ -1,4 +1,4 @@
-import { ctx, activity, broadcast, emptyState, now, publishState } from "./context.js";
+import { ctx, activity, broadcast, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { demoStepDuration } from "./config.js";
 
 const demoTimers = new Set<ReturnType<typeof setTimeout>>();
@@ -17,6 +17,12 @@ function demoTerminal(message: string) {
   const line = `\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`;
   ctx.terminalBuffer = (ctx.terminalBuffer + line).slice(-600_000);
   broadcast({ type: "terminal.output", data: line });
+  conversationMessage({ id: `demo-${crypto.randomUUID()}`, at: now(), author: "claude", text: message });
+  publishState();
+}
+
+export function acknowledgeDemoInstruction() {
+  demoTerminal("Instruction prise en compte. La démonstration ne modifie aucun dépôt.");
 }
 
 export function startDemoRun(isTerminalActive: boolean) {

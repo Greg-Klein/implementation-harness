@@ -2,10 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { dataRoot } from "./config.js";
-import type { Activity, HookOutput, RunState } from "./types.js";
+import type { Activity, ConversationMessage, HookOutput, RunState } from "./types.js";
 
 export function emptyState(): RunState {
-  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
+  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
 }
 
 export const ctx = {
@@ -20,6 +20,16 @@ export function now() { return new Date().toISOString(); }
 
 export function activity(kind: Activity["kind"], title: string, detail?: string) {
   ctx.state.activities = [{ id: crypto.randomUUID(), at: now(), kind, title, detail }, ...ctx.state.activities].slice(0, 80);
+}
+
+/** Late transcript reads can repeat a message the input already showed, so the local echo is replaced rather than doubled. */
+export function conversationMessage(message: ConversationMessage) {
+  const echoed = message.author === "user"
+    ? ctx.state.messages.findLast((entry) => entry.id.startsWith("local-") && entry.text === message.text)
+    : undefined;
+  ctx.state.messages = echoed
+    ? ctx.state.messages.map((entry) => (entry === echoed ? message : entry))
+    : [...ctx.state.messages, message].slice(-400);
 }
 
 export function broadcast(message: object) {
