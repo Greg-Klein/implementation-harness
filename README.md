@@ -88,6 +88,10 @@ Le panneau de progression récapitule le livrable du run : le ticket, la branche
 
 Un run dure longtemps et n’a pas à être surveillé. Le titre de l’onglet et son icône suivent l’état du run, et le navigateur envoie une notification système quand une décision attend une réponse, quand la session réclame de l’attention et quand le run se termine. La permission est demandée au premier lancement, et une notification ne part que si la page n’est pas au premier plan : tant qu’elle est visible, l’interface suffit.
 
+Le bouton haut-parleur de l’en-tête ajoute un signal sonore aux mêmes trois moments : une montée à deux notes quand quelque chose est attendu de toi, une résolution à trois notes quand le run est fini. Il est **coupé par défaut** et le réglage est mémorisé dans le navigateur. L’activer joue le signal tout de suite, pour que le réglage se prouve sans attendre un run.
+
+Le son vient de l’interface, pas du modèle, et c’est ce qui le rend juste : il part à l’instant exact où la question devient bloquante, alors qu’un son demandé au modèle arrivait en avance et pouvait être oublié. Deux réserves à connaître : un navigateur interdit à une page d’émettre du son avant une interaction, donc le tout premier signal d’une session ouverte sans un clic reste muet, et deux onglets ouverts sur le harnais sonnent deux fois.
+
 Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Les commandes et les agents restent dans le dépôt; aucun fichier n’est copié dans `~/.claude`.
 
 Quand Claude Code utilise `AskUserQuestion`, le harnais présente les décisions dans un panneau dédié : les choix suggérés peuvent remplir la réponse, qui reste éditable dans un champ de texte avant son envoi. La réponse est transmise à Claude Code par le hook en attente. Le terminal intégré reste visible et interactif pendant toute l’exécution pour les échanges libres et les commandes qui ne passent pas par ce panneau.

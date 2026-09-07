@@ -1,9 +1,10 @@
 "use client";
 
-import { ChatCircleDotsIcon, CodeIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
 import { runInProgress } from "@/lib/run-state";
+import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
@@ -25,6 +26,8 @@ export function Harness() {
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
+  // Read after mount: the server renders this page and has no localStorage.
+  const [sound, setSound] = useState(false);
   const cwdRef = useRef("");
   const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
@@ -97,9 +100,35 @@ export function Harness() {
     const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
     icon.href = faviconDataUri(faviconColor(run));
     const alert = runAlert(previous, run);
-    if (!alert || !document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!alert) return;
+    // The sound is not gated on visibility: a window sitting behind the editor
+    // is not hidden, and that is exactly when the user needs to be called back.
+    playCue(alert.cue);
+    if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
     new Notification(alert.title, { body: alert.body, tag: alert.tag });
   }, [run]);
+
+  // A page may only emit sound after a real interaction. Starting a run is the
+  // usual one, but the demonstration starts from a URL and would stay mute, so
+  // any first gesture on the page opens the channel.
+  useEffect(() => {
+    setSound(isSoundEnabled());
+    const unlock = () => unlockSound();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  /** Turning it on plays the cue straight away, so the setting proves itself. */
+  const toggleSound = () => {
+    const enabled = !sound;
+    setSoundEnabled(enabled);
+    setSound(enabled);
+    if (enabled) { unlockSound(); playCue("attention"); }
+  };
 
   const send = useCallback((message: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
@@ -120,10 +149,12 @@ export function Harness() {
     setCwd(value);
     setDetectedProject(project);
   }, []);
-  // The permission prompt only opens from a user gesture, and starting a run is
-  // the moment the user asks to be left alone.
+  // Both channels need this gesture: a browser only prompts for notifications
+  // and only lets a page emit sound from a real interaction. Starting a run is
+  // also the moment the user says they are about to walk away.
   const start = () => {
     terminalRef.current?.clear();
+    unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
     send({ type: "run.start", cwd, issueUrl, instruction });
   };
@@ -141,8 +172,11 @@ export function Harness() {
               <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">by Gregory Klein</span></p>
             </div>
           </div>
-          <div title="Connexion temps réel entre cette page et le serveur local du harnais" className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            <span className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
+          <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+            <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-white active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+              {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
+            </button>
+            <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
             <span>Serveur local</span><span aria-hidden="true" className="text-[var(--line)]">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
             {run.status !== "idle" && !active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">Nouveau run</button>}
           </div>

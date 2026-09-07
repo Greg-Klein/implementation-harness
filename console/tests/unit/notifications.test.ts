@@ -18,7 +18,16 @@ describe("run notifications", () => {
       tag: "question-q1",
       title: "Claude attend une réponse",
       body: "Le workflow attend ta décision pour continuer.",
+      cue: "attention",
     });
+  });
+
+  it("should distinguish being needed from the run being over", () => {
+    expect(runAlert(state(), state({ status: "attention", pendingQuestion: question }))?.cue).toBe("attention");
+    expect(runAlert(state(), state({ status: "attention" }))?.cue).toBe("attention");
+    expect(runAlert(state(), state({ status: "completed" }))?.cue).toBe("done");
+    // A blocked run is over too, and what happens next is the user's call.
+    expect(runAlert(state(), state({ status: "failed" }))?.cue).toBe("done");
   });
 
   it("should call back when the session waits without a structured question", () => {

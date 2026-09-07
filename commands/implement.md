@@ -400,30 +400,6 @@ Play the end-of-run sound (see "Getting the user's attention"), then print a sho
 
 ---
 
-## Getting the user's attention
-
-This workflow runs unattended for a long time, so the user may not be watching the terminal. **Every time something is expected of them, play a sound.** Two distinct sounds distinguish a question from a completed run:
-
-```bash
-afplay /System/Library/Sounds/Glass.aiff &      # I need an answer from you
-afplay /System/Library/Sounds/Hero.aiff &       # the run is over, the MR is waiting for you
-```
-
-Always in the background with `&`, so the sound never delays anything.
-
-**Glass, before asking:**
-
-- right before the step 2 interaction
-- right before any later interruption: a specification gap found during implementation, a question escalated by a developer or a reviewer, a git state you refuse to touch
-
-**Hero, once at the very end of step 10**, when the run is finished and the merge request is open and ready to read. Also on a `BLOCKED` outcome, when the draft MR is open with its blocker section: the run is over and it is his call either way.
-
-**Never** for a progress update, a committed task, or a passing review round. A sound that fires when nothing is expected of him trains him to ignore it, and then he misses the one that matters.
-
-One sound per interruption, not one per question inside the same interaction. One sound at the end, not one per closing step.
-
----
-
 ## Specification precedence
 
 When two sources of truth contradict each other, the higher one wins:
