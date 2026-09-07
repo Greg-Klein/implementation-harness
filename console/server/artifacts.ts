@@ -1,7 +1,8 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
-import { imageMimeType, phaseForArtifact, resolveArtifactPath } from "./domain.js";
+import type { Stats } from "node:fs";
+import { belongsToRun, imageMimeType, phaseForArtifact, resolveArtifactPath } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
@@ -25,8 +26,10 @@ export async function readArtifact(artifactPath: string) {
   return { path: artifactPath, kind: "text", content: buffer.toString("utf8") };
 }
 
-async function archiveArtifact(source: string) {
+async function archiveArtifact(source: string, stats?: Stats) {
   if (!ctx.state.id) return;
+  const writtenAt = stats?.mtimeMs ?? await stat(source).then(({ mtimeMs }) => mtimeMs, () => 0);
+  if (!belongsToRun(writtenAt, ctx.state.startedAt)) return;
   const taskRoot = path.join(ctx.state.cwd, ".claude", "tasks");
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
@@ -50,8 +53,8 @@ export async function startArtifactWatcher(cwd: string) {
   // has never run the workflow has no .claude/tasks to watch.
   await mkdir(taskRoot, { recursive: true });
   artifactWatcher = chokidar.watch(taskRoot, { ignoreInitial: false, awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 } });
-  artifactWatcher.on("add", (file) => void archiveArtifact(file));
-  artifactWatcher.on("change", (file) => void archiveArtifact(file));
+  artifactWatcher.on("add", (file, stats) => void archiveArtifact(file, stats));
+  artifactWatcher.on("change", (file, stats) => void archiveArtifact(file, stats));
 }
 
 export async function closeArtifactWatcher() {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { imageMimeType, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
+import { belongsToRun, imageMimeType, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -19,6 +19,13 @@ describe("artifact handling", () => {
     expect(imageMimeType("capture.PNG")).toBe("image/png");
     expect(imageMimeType("diagram.svg")).toBe("image/svg+xml");
     expect(imageMimeType("report.md")).toBeUndefined();
+  });
+
+  it("should keep the documents of the previous run out of this one", () => {
+    const startedAt = "2026-09-07T13:07:30.000Z";
+    expect(belongsToRun(Date.parse("2026-09-07T13:07:31.000Z"), startedAt)).toBe(true);
+    expect(belongsToRun(Date.parse("2026-08-27T08:37:00.000Z"), startedAt)).toBe(false);
+    expect(belongsToRun(Date.now(), null)).toBe(false);
   });
 
   it("should map generated documents to workflow phases", () => {

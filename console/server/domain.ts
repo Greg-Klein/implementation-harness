@@ -115,6 +115,11 @@ export function gitRemoteProjects(config: string): string[] {
   return [...projects];
 }
 
+/** A previous run leaves its documents in the project, and only this run's own count. */
+export function belongsToRun(writtenAt: number, startedAt: string | null) {
+  return startedAt !== null && writtenAt >= new Date(startedAt).getTime();
+}
+
 export function phaseForArtifact(relativePath: string) {
   const name = path.basename(relativePath);
   if (name === "ticket-context.md") return 1;
