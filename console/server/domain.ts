@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ConversationMessage } from "./types.js";
+import type { ConversationMessage, RunStatus } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -86,6 +86,10 @@ export function parseConversationLine(line: string): ConversationMessage | undef
   const text = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
   if (!text || (author === "user" && TAGGED_INPUT.test(text))) return undefined;
   return { id, at: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(), author, text };
+}
+
+export function runInProgress(status: RunStatus) {
+  return status === "starting" || status === "running" || status === "attention";
 }
 
 export function phaseForAgent(agentName: string) {

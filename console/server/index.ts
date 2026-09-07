@@ -8,10 +8,10 @@ import next from "next";
 import * as pty from "node-pty";
 import { WebSocketServer, WebSocket } from "ws";
 import { ctx, activity, conversationMessage, emptyState, now, publishState } from "./context.js";
-import { terminalExitStatus } from "./domain.js";
+import { runInProgress, terminalExitStatus } from "./domain.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
 import { closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
-import { closeTranscript } from "./transcript.js";
+import { closeTranscript, followTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
@@ -114,6 +114,19 @@ function sendInstruction(text: string) {
   if (!terminal) acknowledgeDemoInstruction();
 }
 
+async function resetRun() {
+  if (runInProgress(ctx.state.status)) throw new Error("Arrête la session en cours avant de démarrer un nouveau run.");
+  // The workflow can be over with the Claude Code session still open at its
+  // prompt, and a new run needs the terminal free.
+  stopRun();
+  clearDemoTimers();
+  clearImprovementWatchers();
+  await closeTranscript();
+  ctx.state = emptyState();
+  ctx.terminalBuffer = "";
+  publishState();
+}
+
 function stopRun() {
   if (ctx.state.id?.startsWith("demo-")) {
     clearDemoTimers();
@@ -130,6 +143,13 @@ function stopRun() {
   clearPendingQuestion();
   if (runId) intentionallyStoppedRuns.add(runId);
   terminal.kill(); terminal = null;
+}
+
+/** Every hook payload names the transcript of the session, which is where the dialogue is read from. */
+function followRunTranscript(body: Record<string, unknown>) {
+  const payload = body.payload as Record<string, unknown> | undefined;
+  const transcript = payload?.transcript_path;
+  if (ctx.state.id && body.runId === ctx.state.id && typeof transcript === "string" && transcript) void followTranscript(transcript);
 }
 
 function readBody(request: IncomingMessage) {
@@ -153,7 +173,9 @@ await app.prepare();
 const server = createServer(async (request, response) => {
   if (request.method === "POST" && request.url === "/api/hooks") {
     try {
-      const hookOutput = await processHook(await readBody(request));
+      const body = await readBody(request);
+      followRunTranscript(body);
+      const hookOutput = await processHook(body);
       respond(response, 200, { ok: true, hookOutput: hookOutput ?? null });
     } catch { respond(response, 400, { ok: false }); }
     return;
@@ -209,7 +231,7 @@ wss.on("connection", (socket) => {
       if (message.type === "instruction.send") sendInstruction(message.text);
       if (message.type === "terminal.resize") terminal?.resize(message.cols, message.rows);
       if (message.type === "run.stop") stopRun();
-      if (message.type === "run.reset" && !terminal) { clearDemoTimers(); await closeTranscript(); ctx.state = emptyState(); ctx.terminalBuffer = ""; publishState(); }
+      if (message.type === "run.reset") await resetRun();
       if (message.type === "demo.start") startDemoRun(terminal !== null);
       if (message.type === "feedback.submit") await saveFeedback(message.body);
       if (message.type === "question.answer") answerQuestion(message.answers, continueDemoRun);

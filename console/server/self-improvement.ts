@@ -121,6 +121,8 @@ function startAutonomousImprovement(runId: string) {
 }
 
 export function scheduleAutonomousReview(runId: string) {
+  // A demonstration run has nothing to teach the loop, like its feedback field.
+  if (runId.startsWith("demo-")) return;
   const snapshot = structuredClone(ctx.state);
   void queueAutonomousReview(runId, snapshot)
     .then(() => startAutonomousImprovement(runId))

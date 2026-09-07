@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun } from "./helpers";
+import { resetRun, runDemoToCompletion } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -28,4 +28,13 @@ test("should send a typed instruction into the conversation", async ({ page }) =
   await expect(conversation.getByText("reste sur desktop")).toBeVisible();
   await expect(conversation.getByText("Instruction prise en compte. La démonstration ne modifie aucun dépôt.")).toBeVisible();
   await expect(page.getByLabel("Instruction pour Claude")).toHaveValue("");
+});
+
+test("should hand back the launch form after a finished run", async ({ page }) => {
+  await runDemoToCompletion(page);
+
+  await page.getByRole("button", { name: "Nouveau run" }).click();
+
+  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" })).toBeHidden();
 });

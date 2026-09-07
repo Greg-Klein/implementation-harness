@@ -6,7 +6,11 @@ export async function resetRun(page: Page) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
     const timeout = window.setTimeout(() => { socket.close(); reject(new Error("Reset timeout")); }, 3_000);
-    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "run.reset" })));
+    // A run in progress is never reset from under Claude Code: it is stopped first.
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "run.stop" }));
+      socket.send(JSON.stringify({ type: "run.reset" }));
+    });
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.type === "state" && message.state.status === "idle") {
