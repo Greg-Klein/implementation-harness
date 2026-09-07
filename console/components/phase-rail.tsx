@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon } from "@phosphor-icons/react";
+import { CheckIcon, WarningIcon } from "@phosphor-icons/react";
 import { elapsedLabel } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState, Status } from "@/lib/types";
@@ -21,7 +21,7 @@ export function PhaseRail({ run }: { run: RunState }) {
 
   return (
     <aside className="p-5">
-      <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{statusLabel(run.status)}</span></div>
+      <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.status === "attention" && <WarningIcon size={10} weight="fill" />}{statusLabel(run.status)}</span></div>
       <ol>{phases.map((phase, index) => {
         const number = index + 1; const done = number < run.phase || run.phase === 10; const current = number === run.phase && run.phase < 10;
         return <li key={phase} className="relative flex min-h-10 gap-3 text-xs">
