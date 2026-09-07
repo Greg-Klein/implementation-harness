@@ -30,7 +30,9 @@ export function ConversationPanel({ messages, canSend, onSend }: { messages: Con
     const composer = composerRef.current;
     if (!composer) return;
     composer.style.height = "auto";
-    composer.style.height = `${composer.scrollHeight}px`;
+    // The field is border-box, so its borders have to be added back or the
+    // textarea ends up two pixels short and shows a scrollbar when empty.
+    composer.style.height = `${composer.scrollHeight + composer.offsetHeight - composer.clientHeight}px`;
   }, [draft]);
 
   const send = () => {
