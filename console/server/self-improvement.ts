@@ -1,9 +1,9 @@
-import { spawn as spawnChild } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
-import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
-import { findExecutable } from "./repository.js";
+import { feedbackRoot, consoleRoot } from "./config.js";
+import { normalizeText } from "./domain.js";
+import { engine } from "./engine/index.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
 import type { RunState } from "./types.js";
 
@@ -11,10 +11,6 @@ const scheduledSelfAudits = new Set<string>();
 const improvementWatchers = new Set<ReturnType<typeof setTimeout>>();
 const WATCH_INTERVAL_MS = 15_000;
 const WATCH_ATTEMPTS = 120;
-
-function normalizeText(value: unknown): string | undefined {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
-}
 
 export async function saveFeedback(body: string) {
   const feedback = body.trim();
@@ -85,22 +81,13 @@ function watchForImprovements(worktreeName: string, runId: string, attempt = 0) 
 
 function startAutonomousImprovement(runId: string) {
   if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return;
-  const claude = findExecutable("claude");
-  if (!claude) return;
   const worktreeName = `self-improvement-${runId.slice(-8)}`;
-  const feedbackDirectory = path.join(consoleRoot, "data", "feedback");
-  const child = spawnChild(claude, [
-    "--background", "--worktree", worktreeName,
-    "--add-dir", pluginRoot,
-    "--plugin-dir", pluginRoot,
-    "--permission-mode", "auto",
-    "--name", `implementation-harness self-improvement ${runId.slice(-8)}`,
-    `/implementation-harness:improve ${feedbackDirectory}`,
-  ], {
-    cwd: pluginRoot,
-    env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
+  const child = engine.startSelfImprovement({
+    worktreeName,
+    feedbackDirectory: path.join(consoleRoot, "data", "feedback"),
+    runId,
   });
+  if (!child) return;
   let output = "";
   let launchError: Error | undefined;
   child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });

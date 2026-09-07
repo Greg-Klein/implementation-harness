@@ -1,8 +1,13 @@
 import path from "node:path";
-import type { ConversationMessage, RunStatus } from "./types.js";
+import type { RunStatus } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
+
+/** One line of readable text out of anything an agent reports, short enough for the activity feed. */
+export function normalizeText(value: unknown): string | undefined {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
+}
 
 export function normalizeQuestion(value: unknown): Question | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -54,48 +59,6 @@ export function gitLabProjectPath(issueUrl: string) {
   } catch {
     return undefined;
   }
-}
-
-/** Slash commands, task notifications and hook output reach the session as tagged blocks. */
-const TAGGED_INPUT = /^<[a-z][a-z-]*>/;
-
-function textOf(content: unknown) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((block): block is { type: string; text: string } => Boolean(block) && typeof block === "object" && (block as { type?: unknown }).type === "text" && typeof (block as { text?: unknown }).text === "string")
-    .map((block) => block.text)
-    .join("\n\n");
-}
-
-export function parseConversationLine(line: string): ConversationMessage | undefined {
-  let entry: Record<string, unknown>;
-  try {
-    entry = JSON.parse(line) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-  if (!entry || typeof entry !== "object") return undefined;
-  // Sidechains are the subagents talking to themselves, meta entries are the
-  // expanded prompt of a slash command: neither is the dialogue.
-  if (entry.isSidechain === true || entry.isMeta === true) return undefined;
-  const id = typeof entry.uuid === "string" ? entry.uuid : undefined;
-  if (!id) return undefined;
-  const at = typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString();
-  // An instruction typed while Claude Code is mid-turn is recorded as a queued
-  // command instead of a user message.
-  if (entry.type === "attachment") {
-    const attachment = entry.attachment as { type?: unknown; prompt?: unknown } | undefined;
-    if (attachment?.type !== "queued_command" || typeof attachment.prompt !== "string") return undefined;
-    const queued = attachment.prompt.trim();
-    return queued ? { id, at, author: "user", text: queued } : undefined;
-  }
-  const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
-  if (!author) return undefined;
-  const message = entry.message as { content?: unknown } | undefined;
-  const text = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
-  if (!text || (author === "user" && TAGGED_INPUT.test(text))) return undefined;
-  return { id, at, author, text };
 }
 
 export function runInProgress(status: RunStatus) {

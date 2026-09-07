@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { inlineSegments, messageBlocks } from "../../lib/conversation";
-import { parseConversationLine } from "../../server/domain";
+import { claudeCode } from "../../server/engine/claude-code";
+
+/** The transcript format belongs to the agent, so the parsing is tested on its engine. */
+const parseConversationLine = claudeCode.conversationLine;
 
 const line = (entry: Record<string, unknown>) => JSON.stringify(entry);
 

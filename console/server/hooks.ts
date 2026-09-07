@@ -1,17 +1,14 @@
-import { branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeQuestion, phaseForAgent, runInProgress } from "./domain.js";
+import { branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeText, phaseForAgent, runInProgress } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
-import type { HookOutput } from "./types.js";
-
-function normalizeText(value: unknown): string | undefined {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
-}
+import { engine } from "./engine/index.js";
+import type { EngineEvent } from "./engine/index.js";
 
 function advancePhase(phase: number) {
   ctx.state.phase = Math.max(ctx.state.phase, phase);
 }
 
-/** Claude Code resumed on its own, so the call for attention no longer holds. */
+/** The agent resumed on its own, so the call for attention no longer holds. */
 function resumeFromAttention() {
   if (ctx.state.status === "attention" && !ctx.state.pendingQuestion) ctx.state.status = "running";
 }
@@ -33,29 +30,19 @@ function rememberMergeRequest(toolResponse: unknown) {
   activity("system", "Merge request ouverte", url);
 }
 
-function commandOf(payload: Record<string, unknown>) {
-  const toolInput = payload.tool_input as Record<string, unknown> | undefined;
-  return typeof toolInput?.command === "string" ? toolInput.command : undefined;
-}
-
-export function waitForQuestionAnswer(payload: Record<string, unknown>): Promise<HookOutput | undefined> | undefined {
-  const toolInput = payload.tool_input as Record<string, unknown> | undefined;
-  if (!toolInput || (toolInput.answers && typeof toolInput.answers === "object")) return undefined;
-  const questions = Array.isArray(toolInput.questions) ? toolInput.questions.flatMap((question) => {
-    const normalized = normalizeQuestion(question);
-    return normalized ? [normalized] : [];
-  }) : [];
-  if (questions.length === 0 || ctx.resolvePendingQuestion) return undefined;
-
-  ctx.pendingQuestionInput = toolInput;
-  ctx.state.pendingQuestion = {
-    id: normalizeText(payload.tool_use_id) ?? crypto.randomUUID(),
-    questions,
-  };
+/**
+ * Parks the agent until the user answers in the interface. The promise is what
+ * keeps it waiting, and resolving it is what lets it go: whichever engine is
+ * driving, it must be able to wait on this.
+ */
+function waitForQuestionAnswer(event: Extract<EngineEvent, { kind: "question" }>) {
+  if (ctx.resolvePendingQuestion) return undefined;
+  ctx.pendingQuestionInput = event.input;
+  ctx.state.pendingQuestion = { id: event.id ?? crypto.randomUUID(), questions: event.questions };
   ctx.state.status = "attention";
-  activity("attention", questions.length > 1 ? `${questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
+  activity("attention", event.questions.length > 1 ? `${event.questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
 
-  return new Promise<HookOutput | undefined>((resolve) => {
+  return new Promise<unknown>((resolve) => {
     ctx.resolvePendingQuestion = resolve;
     publishState();
   });
@@ -66,7 +53,7 @@ export function answerQuestion(answers: Record<string, string>, continueDemoRun:
   const normalizedAnswers = normalizeAnswers(ctx.state.pendingQuestion.questions, answers);
   if (!normalizedAnswers) throw new Error("Réponds à chaque question avant de continuer.");
   if (!ctx.pendingQuestionInput || !ctx.resolvePendingQuestion) {
-    if (!ctx.state.id?.startsWith("demo-")) throw new Error("Le pont de réponse avec Claude Code n'est plus actif.");
+    if (!ctx.state.id?.startsWith("demo-")) throw new Error(`Le pont de réponse avec ${engine.label} n'est plus actif.`);
     ctx.state.pendingQuestion = undefined;
     ctx.state.status = "running";
     activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
@@ -76,18 +63,12 @@ export function answerQuestion(answers: Record<string, string>, continueDemoRun:
   }
 
   const resolve = ctx.resolvePendingQuestion;
-  const output: HookOutput = {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "allow",
-      updatedInput: { ...ctx.pendingQuestionInput, answers: normalizedAnswers },
-    },
-  };
+  const output = engine.questionAnswer(ctx.pendingQuestionInput, normalizedAnswers);
   ctx.resolvePendingQuestion = null;
   ctx.pendingQuestionInput = null;
   ctx.state.pendingQuestion = undefined;
   ctx.state.status = "running";
-  activity("system", "Réponse transmise à Claude Code");
+  activity("system", `Réponse transmise à ${engine.label}`);
   publishState();
   resolve(output);
 }
@@ -99,53 +80,63 @@ export function clearPendingQuestion() {
   ctx.state.pendingQuestion = undefined;
 }
 
+function apply(event: EngineEvent) {
+  if (event.kind === "agent.start") {
+    ctx.state.agents = [{ id: event.agentId, name: event.agentName, status: "running", startedAt: now() }, ...ctx.state.agents.filter((agent) => agent.id !== event.agentId)];
+    activity("agent", `${event.agentName} démarre`);
+    advancePhase(phaseForAgent(event.agentName));
+    resumeFromAttention();
+    return undefined;
+  }
+  if (event.kind === "agent.stop") {
+    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === event.agentId || (agent.name === event.agentName && agent.status === "running") ? { ...agent, status: "completed", endedAt: now() } : agent);
+    activity("agent", `${event.agentName} termine`);
+    resumeFromAttention();
+    return undefined;
+  }
+  if (event.kind === "tool.start") {
+    activity("tool", event.tool, event.label ?? normalizeText(event.command));
+    if (createsBranch(event.command)) {
+      advancePhase(3);
+      rememberBranch(event.command);
+    }
+    resumeFromAttention();
+    return undefined;
+  }
+  if (event.kind === "tool.end") {
+    if (createsMergeRequest(event.command)) rememberMergeRequest(event.response);
+    resumeFromAttention();
+    return undefined;
+  }
+  if (event.kind === "attention") {
+    ctx.state.status = "attention";
+    activity("attention", `${engine.label} attend ton attention`, event.message);
+    return undefined;
+  }
+  // The turn ends every time the agent hands back, including while it waits for
+  // a background agent: the workflow is only over when nothing is still running.
+  if (ctx.state.agents.some((agent) => agent.status === "running")) {
+    ctx.state.status = "running";
+    activity("agent", "Tour terminé, un agent continue en tâche de fond");
+    return undefined;
+  }
+  if (ctx.state.phase >= 9) ctx.state.phase = 10;
+  ctx.state.status = ctx.state.phase >= 10 ? "completed" : "attention";
+  activity("attention", ctx.state.phase >= 10 ? "Workflow terminé" : `${engine.label} attend une réponse`);
+  if (ctx.state.phase >= 10 && ctx.state.id) scheduleAutonomousReview(ctx.state.id);
+  return undefined;
+}
+
 export function processHook(body: Record<string, unknown>) {
   if (!ctx.state.id || body.runId !== ctx.state.id) return;
-  const payload = (body.payload ?? {}) as Record<string, unknown>;
-  // A finished run keeps receiving hooks while the session sits idle at its
+  // A finished run keeps receiving events while the session sits idle at its
   // prompt, and an idle notification must not put it back in progress.
   if (!runInProgress(ctx.state.status)) return;
-  const event = normalizeText(payload.hook_event_name) ?? "Hook";
-  const agentName = normalizeText(payload.agent_type) ?? "agent";
-  const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;
-  if (event === "SubagentStart") {
-    ctx.state.agents = [{ id: agentId, name: agentName, status: "running", startedAt: now() }, ...ctx.state.agents.filter((agent) => agent.id !== agentId)];
-    activity("agent", `${agentName} démarre`);
-    advancePhase(phaseForAgent(agentName));
-    resumeFromAttention();
-  } else if (event === "SubagentStop") {
-    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === agentId || (agent.name === agentName && agent.status === "running") ? { ...agent, status: "completed", endedAt: now() } : agent);
-    activity("agent", `${agentName} termine`);
-    resumeFromAttention();
-  } else if (event === "PreToolUse") {
-    const tool = normalizeText(payload.tool_name) ?? "outil";
-    if (tool === "AskUserQuestion") return waitForQuestionAnswer(payload);
-    const toolInput = payload.tool_input as Record<string, unknown> | undefined;
-    const command = commandOf(payload);
-    activity("tool", tool, normalizeText(toolInput?.description) ?? normalizeText(command));
-    if (createsBranch(command)) {
-      advancePhase(3);
-      rememberBranch(command);
-    }
-    resumeFromAttention();
-  } else if (event === "PostToolUse") {
-    if (createsMergeRequest(commandOf(payload))) rememberMergeRequest(payload.tool_response);
-    resumeFromAttention();
-  } else if (event === "Notification") {
-    ctx.state.status = "attention";
-    activity("attention", "Claude Code attend ton attention", normalizeText(payload.message));
-  } else if (event === "Stop") {
-    // The turn ends every time Claude hands back, including while it waits for a
-    // background agent: the workflow is only over when nothing is still running.
-    if (ctx.state.agents.some((agent) => agent.status === "running")) {
-      ctx.state.status = "running";
-      activity("agent", "Tour terminé, un agent continue en tâche de fond");
-    } else {
-      if (ctx.state.phase >= 9) ctx.state.phase = 10;
-      ctx.state.status = ctx.state.phase >= 10 ? "completed" : "attention";
-      activity("attention", ctx.state.phase >= 10 ? "Workflow terminé" : "Claude Code attend une réponse");
-      if (ctx.state.phase >= 10 && ctx.state.id) scheduleAutonomousReview(ctx.state.id);
-    }
-  }
+  const event = engine.event((body.payload ?? {}) as Record<string, unknown>);
+  if (!event) return;
+  // A question publishes its own state from inside the promise it hands back,
+  // and that promise is what keeps the agent waiting.
+  if (event.kind === "question") return waitForQuestionAnswer(event);
+  apply(event);
   publishState();
 }

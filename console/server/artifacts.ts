@@ -4,6 +4,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
 import { belongsToRun, imageMimeType, phaseForArtifact, resolveArtifactPath } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
+import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
 
@@ -30,7 +31,7 @@ async function archiveArtifact(source: string, stats?: Stats) {
   if (!ctx.state.id) return;
   const writtenAt = stats?.mtimeMs ?? await stat(source).then(({ mtimeMs }) => mtimeMs, () => 0);
   if (!belongsToRun(writtenAt, ctx.state.startedAt)) return;
-  const taskRoot = path.join(ctx.state.cwd, ".claude", "tasks");
+  const taskRoot = engine.taskDirectory(ctx.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
   const target = path.join(dataRoot, ctx.state.id, "artifacts", relative);
@@ -48,9 +49,9 @@ async function archiveArtifact(source: string, stats?: Stats) {
 
 export async function startArtifactWatcher(cwd: string) {
   await artifactWatcher?.close();
-  const taskRoot = path.join(cwd, ".claude", "tasks");
+  const taskRoot = engine.taskDirectory(cwd);
   // chokidar stays inert on a path that does not exist yet, and a checkout that
-  // has never run the workflow has no .claude/tasks to watch.
+  // has never run the workflow has no task directory to watch.
   await mkdir(taskRoot, { recursive: true });
   artifactWatcher = chokidar.watch(taskRoot, { ignoreInitial: false, awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 } });
   artifactWatcher.on("add", (file, stats) => void archiveArtifact(file, stats));

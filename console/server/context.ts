@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { dataRoot } from "./config.js";
-import type { Activity, ConversationMessage, HookOutput, RunState } from "./types.js";
+import type { Activity, ConversationMessage, RunState } from "./types.js";
 
 export function emptyState(): RunState {
   return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
@@ -13,7 +13,8 @@ export const ctx = {
   terminalBuffer: "",
   sockets: new Set<WebSocket>(),
   pendingQuestionInput: null as Record<string, unknown> | null,
-  resolvePendingQuestion: null as ((output?: HookOutput) => void) | null,
+  /** Resolved with whatever the active engine expects back, which only that engine knows. */
+  resolvePendingQuestion: null as ((output?: unknown) => void) | null,
 };
 
 export function now() { return new Date().toISOString(); }

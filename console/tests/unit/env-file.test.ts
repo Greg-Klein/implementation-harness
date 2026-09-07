@@ -19,6 +19,18 @@ function edit(text: string, edits: Record<string, string>) {
   return execFileSync("node", ["--input-type=module", "-e", script], { encoding: "utf8" });
 }
 
+/**
+ * The child inherits this process's environment and process.loadEnvFile never
+ * overrides a variable that is already set. Any test importing the server
+ * modules loads the developer .env into process.env, so the settings under test
+ * are cleared here or that .env would decide what this test reads back.
+ */
+function isolatedEnvironment() {
+  const environment = { ...process.env };
+  for (const key of Object.keys(environment)) if (key.startsWith("IMPL_")) delete environment[key];
+  return environment;
+}
+
 function readBack(text: string) {
   const file = path.join(mkdtempSync(path.join(os.tmpdir(), "impl-env-")), ".env");
   writeFileSync(file, text);
@@ -30,7 +42,7 @@ function readBack(text: string) {
     const loaded = Object.fromEntries(Object.keys(parsed).map((key) => [key, process.env[key]]));
     process.stdout.write(JSON.stringify({ parsed, loaded }));
   `;
-  return JSON.parse(execFileSync("node", ["--input-type=module", "-e", script], { encoding: "utf8" }));
+  return JSON.parse(execFileSync("node", ["--input-type=module", "-e", script], { encoding: "utf8", env: isolatedEnvironment() }));
 }
 
 describe("env file writer", () => {

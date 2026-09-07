@@ -5,7 +5,6 @@ import { promisify } from "node:util";
 import path from "node:path";
 import process from "node:process";
 import next from "next";
-import * as pty from "node-pty";
 import { WebSocketServer, WebSocket } from "ws";
 import { ctx, activity, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { runInProgress, terminalExitStatus } from "./domain.js";
@@ -16,15 +15,15 @@ import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { clearImprovementWatchers, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
-import { detectProjectDirectory, discoverRepositories, findExecutable, resolveProjectDirectory } from "./repository.js";
+import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
+import { engine } from "./engine/index.js";
+import type { EngineSession } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
 
 const execFileAsync = promisify(execFile);
-let terminal: pty.IPty | null = null;
+let terminal: EngineSession | null = null;
 const intentionallyStoppedRuns = new Set<string>();
-/** Long enough for the paste to be read before the submission keystroke arrives. */
-const SUBMIT_DELAY_MS = 150;
 
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
   if (!ctx.state.pendingSelfImprovementReview || ctx.state.pendingSelfImprovementReview.worktreeName !== worktreeName)
@@ -50,24 +49,12 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   publishState();
 }
 
-/**
- * A harness started from inside a Claude Code session inherits markers that make
- * the spawned session behave like a nested one, transcript saving included, and
- * the conversation is read from that transcript.
- */
-function sessionEnvironment() {
-  const environment = { ...process.env };
-  for (const key of Object.keys(environment)) if (key === "CLAUDECODE" || key === "CLAUDE_PID" || key.startsWith("CLAUDE_CODE_")) delete environment[key];
-  return environment;
-}
-
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
-  if (terminal) throw new Error("Une session Claude Code est déjà active.");
+  if (terminal) throw new Error(`Une session ${engine.label} est déjà active.`);
   clearDemoTimers();
   clearImprovementWatchers();
   const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
-  const claude = findExecutable("claude");
-  if (!claude) throw new Error("Claude Code est introuvable dans PATH.");
+  if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
   ctx.state = { ...emptyState(), id, status: "starting", phase: 1, cwd, issueUrl: message.issueUrl.trim(), instruction: message.instruction?.trim() ?? "", startedAt: now() };
   ctx.terminalBuffer = "";
@@ -75,47 +62,39 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   publishState();
   await startArtifactWatcher(cwd);
   await closeTranscript();
-  const command = `/implementation-harness:implement ${ctx.state.issueUrl}${ctx.state.instruction ? ` ${ctx.state.instruction}` : ""}`;
-  const runTerminal = pty.spawn(claude, ["--plugin-dir", pluginRoot, "--name", `implementation-harness ${path.basename(cwd)}`, command], {
-    name: "xterm-256color", cols: 120, rows: 34, cwd,
-    env: { ...sessionEnvironment(), TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: id, IMPL_HARNESS_HOOK_URL: `http://${hostname}:${port}/api/hooks` },
+  const command = engine.command(ctx.state.issueUrl, ctx.state.instruction);
+  const runTerminal = engine.start({
+    cwd, runId: id, command,
+    hookUrl: `http://${hostname}:${port}/api/hooks`,
+    onData: (data) => {
+      ctx.terminalBuffer = (ctx.terminalBuffer + data).slice(-600_000);
+      for (const socket of ctx.sockets) if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "terminal.output", data }));
+      void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);
+    },
+    onExit: (exitCode) => {
+      const intentionallyStopped = intentionallyStoppedRuns.delete(id);
+      if (ctx.state.id !== id) return;
+      if (terminal === runTerminal) terminal = null;
+      ctx.state.status = terminalExitStatus(exitCode, intentionallyStopped);
+      clearPendingQuestion();
+      ctx.state.endedAt = now();
+      if (ctx.state.status === "failed") ctx.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
+      activity("system", intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
+      publishState();
+      scheduleAutonomousReview(id);
+    },
   });
   terminal = runTerminal;
   ctx.state.status = "running";
-  activity("system", "Claude Code démarré", command);
+  activity("system", `${engine.label} démarré`, command);
   publishState();
-  runTerminal.onData((data) => {
-    ctx.terminalBuffer = (ctx.terminalBuffer + data).slice(-600_000);
-    for (const socket of ctx.sockets) if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "terminal.output", data }));
-    void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);
-  });
-  runTerminal.onExit(({ exitCode }) => {
-    const intentionallyStopped = intentionallyStoppedRuns.delete(id);
-    if (ctx.state.id !== id) return;
-    if (terminal === runTerminal) terminal = null;
-    ctx.state.status = terminalExitStatus(exitCode, intentionallyStopped);
-    clearPendingQuestion();
-    ctx.state.endedAt = now();
-    if (ctx.state.status === "failed") ctx.state.error = `Claude Code s'est arrêté avec le code ${exitCode}.`;
-    activity("system", intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
-    publishState();
-    scheduleAutonomousReview(id);
-  });
 }
 
 function sendInstruction(text: string) {
   const instruction = text.trim();
   if (!instruction) throw new Error("L'instruction est vide.");
-  if (!terminal && !ctx.state.id?.startsWith("demo-")) throw new Error("Aucune session Claude Code n'est active.");
-  if (terminal) {
-    const session = terminal;
-    // Claude Code reads a burst of characters as a paste, and a carriage return
-    // inside that burst is pasted content: it lands as a newline in the prompt
-    // and the instruction is never submitted. The text goes as an explicit
-    // paste, the submission as a keystroke of its own.
-    session.write(`\u001b[200~${instruction}\u001b[201~`);
-    setTimeout(() => { if (terminal === session) session.write("\r"); }, SUBMIT_DELAY_MS);
-  }
+  if (!terminal && !ctx.state.id?.startsWith("demo-")) throw new Error(`Aucune session ${engine.label} n'est active.`);
+  terminal?.submit(instruction);
   conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction, pending: terminal !== null });
   activity("system", "Instruction transmise", instruction);
   publishState();
@@ -124,7 +103,7 @@ function sendInstruction(text: string) {
 
 async function resetRun() {
   if (runInProgress(ctx.state.status)) throw new Error("Arrête la session en cours avant de démarrer un nouveau run.");
-  // The workflow can be over with the Claude Code session still open at its
+  // The workflow can be over with the agent session still open at its
   // prompt, and a new run needs the terminal free.
   stopRun();
   clearDemoTimers();
@@ -153,11 +132,11 @@ function stopRun() {
   terminal.kill(); terminal = null;
 }
 
-/** Every hook payload names the transcript of the session, which is where the dialogue is read from. */
+/** Every event names the transcript of the session, which is where the dialogue is read from. */
 function followRunTranscript(body: Record<string, unknown>) {
-  const payload = body.payload as Record<string, unknown> | undefined;
-  const transcript = payload?.transcript_path;
-  if (ctx.state.id && body.runId === ctx.state.id && typeof transcript === "string" && transcript) void followTranscript(transcript);
+  if (!ctx.state.id || body.runId !== ctx.state.id) return;
+  const transcript = engine.transcriptPath(body);
+  if (transcript) void followTranscript(transcript);
 }
 
 function readBody(request: IncomingMessage) {

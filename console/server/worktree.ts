@@ -8,8 +8,10 @@ const exec = promisify(execFile);
 export type Worktree = { path: string; branch?: string };
 
 /**
- * Claude Code prefixes the branch of a --worktree session with "worktree-", so
- * the directory name is the only stable handle on the worktree.
+ * The agent is free to rename the branch it creates for a worktree, and Claude
+ * Code does exactly that by prefixing it with "worktree-". The directory name
+ * is the only handle that stays what the harness asked for, whichever engine
+ * created it.
  */
 export async function findWorktree(name: string): Promise<Worktree | undefined> {
   const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });

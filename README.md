@@ -167,6 +167,14 @@ Claude Code reste le moteur du workflow. Le harnais ajoute :
 - des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
 - une surveillance de `.claude/tasks/` pour suivre les étapes et conserver les rapports avant leur nettoyage.
 
+### La couche moteur
+
+Tout ce qui est propre à Claude Code, l’exécutable, le vocabulaire de hooks, le format du transcript, la façon de soumettre une instruction, vit dans `console/server/engine/`. Le reste du serveur raisonne en runs, phases, agents et documents, sans savoir quel agent tourne dessous.
+
+Il y a une implémentation aujourd’hui, `claude-code`, et c’est délibéré : l’intérêt de la frontière n’est pas d’en avoir deux, c’est qu’en écrire une deuxième soit un fichier et non une réécriture. Le mécanisme le plus spécifique du harnais, la question qui bloque l’agent jusqu’à la réponse de l’utilisateur, a été prouvé portable avant que cette couche soit écrite.
+
+`console/server/engine/README.md` documente le contrat membre par membre, le chemin complet d’une question bloquante, et ce qui reste couplé en dehors du serveur.
+
 Les données sont archivées dans `console/data/runs/<run-id>/` :
 
 - `run.json` contient l’état, les agents et l’activité;
@@ -219,6 +227,7 @@ commands/     commandes /implementation-harness:implement, /implementation-harne
 hooks/        événements envoyés au harnais local
 bin/          lanceur impl et commande impl config
 console/      interface Next.js et serveur PTY
+console/server/engine/  la couche qui isole l'agent piloté, une implémentation : claude-code
 install.sh    installation et création des commandes globales
 install-remote.sh  clone ou mise à jour depuis la commande curl
 ```

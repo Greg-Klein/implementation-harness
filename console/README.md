@@ -30,6 +30,20 @@ claude --plugin-dir /chemin/vers/implementation-harness "/implementation-harness
 
 La commande et les agents restent dans le dossier `implementation-harness`; rien n’est installé dans `~/.claude`.
 
+## Architecture du serveur
+
+| Module | Rôle |
+|---|---|
+| `server/index.ts` | serveur HTTP et WebSocket, cycle de vie du run |
+| `server/engine/` | **la seule partie qui sait quel agent est piloté** (voir son README) |
+| `server/hooks.ts` | applique les événements du moteur à l’état du run |
+| `server/transcript.ts` | suit le fichier de dialogue de la session |
+| `server/artifacts.ts` | archive les documents produits avant leur nettoyage |
+| `server/self-improvement.ts` | retours, auto-audit et boucle d’amélioration |
+| `server/domain.ts` | logique pure, sans agent ni système de fichiers |
+
+`server/domain.ts` et `server/engine/` sont les deux endroits testables sans rien lancer, et c’est là que vit l’essentiel de la logique.
+
 ## Copier sur une autre machine
 
 Copier ou cloner le dossier `implementation-harness` complet, puis exécuter les commandes d’installation ci-dessus dans `implementation-harness/console`. Le chemin du dépôt traité est choisi dans l’interface, il peut donc être différent sur chaque machine.

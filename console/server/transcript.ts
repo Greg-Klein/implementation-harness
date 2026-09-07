@@ -1,7 +1,7 @@
 import { open } from "node:fs/promises";
 import chokidar, { type FSWatcher } from "chokidar";
 import { ctx, conversationMessage, publishState } from "./context.js";
-import { parseConversationLine } from "./domain.js";
+import { engine } from "./engine/index.js";
 
 let watcher: FSWatcher | null = null;
 let watchedPath: string | undefined;
@@ -22,7 +22,7 @@ async function readNewMessages(file: string) {
     carry = lines.pop() ?? "";
     let published = false;
     for (const line of lines) {
-      const message = parseConversationLine(line);
+      const message = engine.conversationLine(line);
       if (!message || ctx.state.messages.some((entry) => entry.id === message.id)) continue;
       conversationMessage(message);
       published = true;
@@ -33,7 +33,7 @@ async function readNewMessages(file: string) {
   }
 }
 
-/** Claude Code appends every message of the session to this file, so it is the only faithful source for the dialogue. */
+/** The agent appends every message of the session to this file, so it is the only faithful source for the dialogue. */
 export async function followTranscript(transcriptPath: string) {
   if (watchedPath === transcriptPath) return;
   await closeTranscript();
