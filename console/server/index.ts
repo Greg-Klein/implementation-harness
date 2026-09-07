@@ -15,7 +15,7 @@ import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
-import { configuredRepositories, detectProjectDirectory, findExecutable, resolveProjectDirectory } from "./repository.js";
+import { detectProjectDirectory, discoverRepositories, findExecutable, resolveProjectDirectory } from "./repository.js";
 import type { ClientMessage } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -161,10 +161,11 @@ const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const issueUrl = requestUrl.searchParams.get("issueUrl") ?? "";
     try {
-      const detected = issueUrl ? await detectProjectDirectory(issueUrl) : undefined;
-      respond(response, 200, { repositories: configuredRepositories(), detected: detected ?? null });
+      const repositories = await discoverRepositories();
+      const detected = issueUrl ? await detectProjectDirectory(issueUrl, repositories) : undefined;
+      respond(response, 200, { repositories, detected: detected ?? null });
     } catch (error) {
-      respond(response, 500, { repositories: configuredRepositories(), detected: null, error: error instanceof Error ? error.message : "Discovery failed." });
+      respond(response, 500, { repositories: [], detected: null, error: error instanceof Error ? error.message : "Discovery failed." });
     }
     return;
   }

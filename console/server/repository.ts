@@ -3,8 +3,14 @@ import { readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { gitLabProjectPath, parseRepositoryMappings } from "./domain.js";
+import { gitLabProjectPath, gitRemoteProjects } from "./domain.js";
 import type { RepositoryOption } from "./types.js";
+
+/** A checkout nested one level below a search root, such as ~/workspace/client/app. */
+const MAX_DEPTH = 2;
+const CACHE_TTL_MS = 5_000;
+
+let cache: { at: number; repositories: RepositoryOption[] } | undefined;
 
 export function expandHome(value: string) {
   return value === "~" ? os.homedir() : value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
@@ -18,51 +24,56 @@ export function findExecutable(name: string) {
   return null;
 }
 
-export function repositoryMappings(): Record<string, string> {
-  return parseRepositoryMappings(process.env.IMPL_REPOSITORIES);
-}
-
-export function configuredRepositories(): RepositoryOption[] {
-  return Object.entries(repositoryMappings())
-    .map(([project, repositoryPath]) => {
-      const resolvedPath = path.resolve(expandHome(repositoryPath));
-      return { project, path: repositoryPath, resolvedPath, exists: existsSync(resolvedPath) };
-    })
-    .sort((left, right) => left.project.localeCompare(right.project));
-}
-
-export async function discoverProjectDirectory(project: string) {
-  const roots = (process.env.IMPL_SEARCH_ROOTS ?? "~/workspace")
+export function searchRoots() {
+  return (process.env.IMPL_SEARCH_ROOTS ?? "~/workspace")
     .split(",")
     .map((root) => root.trim())
     .filter(Boolean)
     .map((root) => path.resolve(expandHome(root)));
-  for (const root of roots) {
-    if (!existsSync(root)) continue;
-    const entries = await readdir(root, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const candidate = path.join(root, entry.name);
-      try {
-        const config = await readFile(path.join(candidate, ".git", "config"), "utf8");
-        if (config.includes(project)) return candidate;
-      } catch { /* Not a git checkout. */ }
-    }
-  }
-  return undefined;
 }
 
-export async function detectProjectDirectory(issueUrl: string) {
+async function checkoutProjects(directory: string) {
+  try {
+    return gitRemoteProjects(await readFile(path.join(directory, ".git", "config"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+async function collect(directory: string, depth: number, found: Map<string, RepositoryOption>) {
+  const projects = await checkoutProjects(directory);
+  if (projects) {
+    for (const project of projects) found.set(`${project} ${directory}`, { project, path: directory, resolvedPath: directory, exists: true });
+    return;
+  }
+  if (depth >= MAX_DEPTH) return;
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  await Promise.all(entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+    .map((entry) => collect(path.join(directory, entry.name), depth + 1, found)));
+}
+
+export async function discoverRepositories(): Promise<RepositoryOption[]> {
+  // The scan runs again on every keystroke in the project field, so a short
+  // cache keeps a deep workspace from being walked over and over.
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.repositories;
+  const found = new Map<string, RepositoryOption>();
+  await Promise.all(searchRoots().map((root) => collect(root, 0, found)));
+  const repositories = [...found.values()].sort((left, right) => left.project.localeCompare(right.project));
+  cache = { at: Date.now(), repositories };
+  return repositories;
+}
+
+export async function detectProjectDirectory(issueUrl: string, known?: RepositoryOption[]) {
   const project = gitLabProjectPath(issueUrl);
   if (!project) return undefined;
-  const mapped = repositoryMappings()[project];
-  if (mapped) {
-    const resolvedPath = path.resolve(expandHome(mapped));
-    if (existsSync(resolvedPath)) return { project, path: mapped, resolvedPath, exists: true, source: "env" as const };
-  }
-  const discovered = await discoverProjectDirectory(project);
-  if (discovered) return { project, path: discovered, resolvedPath: discovered, exists: true, source: "git" as const };
-  return undefined;
+  const match = (known ?? await discoverRepositories()).find((repository) => repository.project === project);
+  return match ? { ...match, source: "git" as const } : undefined;
 }
 
 export async function resolveProjectDirectory(input: string, issueUrl: string) {
@@ -75,5 +86,5 @@ export async function resolveProjectDirectory(input: string, issueUrl: string) {
   if (!project) throw new Error("L'URL du ticket GitLab n'est pas reconnue.");
   const detected = await detectProjectDirectory(issueUrl);
   if (detected) return detected.resolvedPath;
-  throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute-le à IMPL_REPOSITORIES.`);
+  throw new Error(`Aucun checkout trouvé pour ${project}. Renseigne son chemin ou ajoute sa racine à IMPL_SEARCH_ROOTS.`);
 }

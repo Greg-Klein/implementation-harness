@@ -1,6 +1,10 @@
 import { defineConfig } from "@playwright/test";
+import path from "node:path";
+import { checkoutsRoot, createSampleCheckout } from "./tests/fixtures";
 
 const port = 3211;
+
+createSampleCheckout();
 
 export default defineConfig({
   testDir: "./tests/integration",
@@ -20,7 +24,9 @@ export default defineConfig({
     env: {
       PORT: String(port),
       IMPL_DEMO_STEP_MS: "500",
-      IMPL_REPOSITORIES: JSON.stringify({ "group/repo": "." }),
+      IMPL_SEARCH_ROOTS: checkoutsRoot,
+      // Isolate the suite from whatever .env the developer keeps locally.
+      IMPL_ENV_FILE: path.join(checkoutsRoot, "absent.env"),
     },
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

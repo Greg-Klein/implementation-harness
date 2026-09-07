@@ -41,6 +41,7 @@ impl
 | `impl restart` | arrête le serveur en cours puis relance la version compilée |
 | `impl stop` | arrête le serveur en cours |
 | `impl status` | indique si un serveur écoute et s’il sert le build sur disque |
+| `impl config` | lit et modifie la configuration locale |
 | `impl improve` | traite les retours d’auto-amélioration avec Claude Code |
 | `impl help` | affiche l’aide |
 
@@ -89,28 +90,46 @@ Quand Claude Code utilise `AskUserQuestion`, le harnais présente les décisions
 
 ## Configuration
 
-L’installateur crée un `.env` local à partir de `.env.example`. Pour associer automatiquement les projets GitLab à leurs checkouts :
+Tout se règle avec une seule commande, sans savoir où vit le fichier :
 
-```dotenv
-IMPL_REPOSITORIES='{"groupe/projet":"~/workspace/projet"}'
-IMPL_SEARCH_ROOTS='~/workspace,~/code'
+```bash
+impl config
 ```
 
-Le mapping exact est prioritaire. Sinon, le harnais inspecte les remotes Git des dossiers situés directement dans les racines de recherche. Après collage d’un ticket, le chemin détecté remplit le champ projet s’il est vide. Ce champ reste éditable et propose les dépôts du mapping `.env` pendant la saisie. Le `.env` est ignoré par Git.
+L’assistant parcourt chaque réglage, affiche la valeur courante entre crochets, garde cette valeur si on appuie sur Entrée, refuse une saisie invalide et propose de redémarrer le serveur quand un changement l’exige. Il écrit un `.env` local, ignoré par Git.
 
-### Port et navigateur
+Pour les usages rapides ou scriptés :
 
-Changer le port par défaut :
+| Commande | Effet |
+|---|---|
+| `impl config list` | valeur effective de chaque réglage et sa provenance |
+| `impl config get CLÉ` | une valeur seule, sur la sortie standard |
+| `impl config set CLÉ=VALEUR` | écrit un réglage sans passer par l’assistant |
+| `impl config path` | chemin du `.env` |
+| `impl config edit` | ouvre le `.env` dans `$EDITOR`, puis le vérifie |
+| `impl config check` | vérifie la configuration, sort en 1 si elle est cassée |
+
+Les réglages disponibles :
+
+| Variable | Effet | Défaut |
+|---|---|---|
+| `IMPL_SEARCH_ROOTS` | racines où chercher les checkouts, séparées par des virgules | `~/workspace` |
+| `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `false` |
+| `IMPL_PORT` | port d’écoute | `3210` |
+| `IMPL_HOST` | interface d’écoute | `127.0.0.1` |
+| `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
+| `IMPL_DEMO_STEP_MS` | durée d’une étape du mode démo | `5000` |
+
+Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur le défaut. Un réglage ponctuel ne demande donc aucune écriture :
 
 ```bash
 IMPL_PORT=4321 impl
-```
-
-Lancer sans ouvrir automatiquement le navigateur :
-
-```bash
 IMPL_NO_OPEN=1 impl
 ```
+
+### Détection du projet
+
+Le harnais parcourt les racines de recherche jusqu’à deux niveaux de profondeur, lit le `.git/config` de chaque dossier et en déduit le projet GitLab. Après collage d’un ticket, le chemin détecté remplit le champ projet s’il est vide. Ce champ reste éditable et propose les checkouts découverts pendant la saisie. Un dépôt qui vit ailleurs se rend visible en ajoutant son dossier parent à `IMPL_SEARCH_ROOTS`.
 
 ## Boucle d’auto-amélioration
 
@@ -126,13 +145,13 @@ Les tickets, logs et retours bruts restent sous `console/data/` et ne sont jamai
 
 Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, documents manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité.
 
-La politique se règle dans `.env` :
+La politique se règle avec `impl config`, ou directement :
 
-```dotenv
-IMPL_SELF_IMPROVEMENT_AUTORUN='true'
+```bash
+impl config set IMPL_SELF_IMPROVEMENT_AUTORUN=true
 ```
 
-`SELF_IMPROVEMENT_AUTORUN` lance l’analyse en arrière-plan à la fin du run. L’option vaut `false` dans `.env.example`; il faut l’activer consciemment.
+Elle lance l’analyse en arrière-plan à la fin du run. L’option vaut `false` par défaut; il faut l’activer consciemment.
 
 L’agent travaille dans un worktree isolé et laisse toujours son commit sur sa branche `self-improvement-*`. Rien n’est fusionné automatiquement et rien n’est poussé sur GitHub. Le panneau de droite affiche le diff : c’est la seule porte de promotion. Après une fusion, redémarrer le harnais avec `impl restart` pour charger les changements du serveur local.
 
@@ -194,7 +213,7 @@ Le front utilise Next.js, React, TypeScript, Tailwind CSS et xterm.js. Le serveu
 agents/       sous-agents Claude Code
 commands/     commandes /implementation-harness:implement, /implementation-harness:review et /implementation-harness:improve
 hooks/        événements envoyés au harnais local
-bin/          lanceur impl
+bin/          lanceur impl et commande impl config
 console/      interface Next.js et serveur PTY
 install.sh    installation et création des commandes globales
 install-remote.sh  clone ou mise à jour depuis la commande curl

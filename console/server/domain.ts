@@ -55,14 +55,15 @@ export function gitLabProjectPath(issueUrl: string) {
   }
 }
 
-export function parseRepositoryMappings(value: string | undefined): Record<string, string> {
-  try {
-    const parsed = JSON.parse(value ?? "{}") as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
-  } catch {
-    return {};
+export function gitRemoteProjects(config: string): string[] {
+  const projects = new Set<string>();
+  for (const match of config.matchAll(/^\s*url\s*=\s*(.+)$/gm)) {
+    const url = match[1].trim().replace(/\.git$/, "");
+    const scp = url.match(/^[^/]+@[^:/]+:(.+)$/)?.[1];
+    const project = scp ?? url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]+\/(.+)$/i)?.[1];
+    if (project) projects.add(project.replace(/^\/+/, ""));
   }
+  return [...projects];
 }
 
 export function phaseForArtifact(relativePath: string) {

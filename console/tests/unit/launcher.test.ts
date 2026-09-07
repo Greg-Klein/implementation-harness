@@ -1,7 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { execFileSync, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 
@@ -50,7 +51,7 @@ describe("implementation-harness launcher", () => {
   it("should document every subcommand it accepts", () => {
     const { code, stdout } = launch(["help"]);
     expect(code).toBe(0);
-    for (const subcommand of ["demo", "restart", "stop", "status", "improve", "help"]) {
+    for (const subcommand of ["demo", "restart", "stop", "status", "config", "improve", "help"]) {
       expect(stdout).toContain(subcommand);
     }
   });
@@ -137,6 +138,68 @@ describe("implementation-harness launcher", () => {
       child.kill("SIGKILL");
     }
   }, 20_000);
+
+  function envFile(content: string) {
+    const file = path.join(mkdtempSync(path.join(os.tmpdir(), "impl-launcher-")), ".env");
+    writeFileSync(file, content);
+    return file;
+  }
+
+  it("should read the port from the .env file when the shell defines none", () => {
+    const { code, stdout } = launch(["status"], { IMPL_ENV_FILE: envFile("IMPL_PORT='4399'\n"), IMPL_PORT: "" });
+    expect(code).toBe(3);
+    expect(stdout).toContain("4399");
+  });
+
+  it("should let a shell variable win over the .env file", async () => {
+    const port = await freePort();
+    const { stdout } = launch(["status"], { IMPL_ENV_FILE: envFile("IMPL_PORT='4399'\n"), IMPL_PORT: String(port) });
+    expect(stdout).toContain(String(port));
+    expect(stdout).not.toContain("4399");
+  });
+
+  it("should ignore quotes and inline comments in the .env file", () => {
+    const { stdout } = launch(["status"], { IMPL_ENV_FILE: envFile("IMPL_PORT=4399 # le port\n"), IMPL_PORT: "" });
+    expect(stdout).toContain("4399");
+  });
+
+  it("should keep the last assignment when a key is defined twice", () => {
+    const { stdout } = launch(["status"], { IMPL_ENV_FILE: envFile("IMPL_PORT='1111'\nIMPL_PORT='4399'\n"), IMPL_PORT: "" });
+    expect(stdout).toContain("4399");
+    expect(stdout).not.toContain("1111");
+  });
+
+  it("should never execute the .env file", () => {
+    const marker = path.join(mkdtempSync(path.join(os.tmpdir(), "impl-trap-")), "executed");
+    const file = envFile(`IMPL_PORT='4399'\nPIEGE="$(touch ${marker})"\n`);
+    const { stdout } = launch(["status"], { IMPL_ENV_FILE: file, IMPL_PORT: "" });
+    expect(stdout).toContain("4399");
+    // Sourcing the file would have run the substitution and created the marker.
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("should take the listening host from the .env file", () => {
+    const { stdout } = launch(["help"], { IMPL_ENV_FILE: envFile("IMPL_HOST='0.0.0.0'\nIMPL_PORT='4399'\n"), IMPL_PORT: "", IMPL_HOST: "" });
+    expect(stdout).toContain("effective : 0.0.0.0");
+    expect(stdout).toContain("effectif : 4399");
+  });
+
+  it("should fall back to the default port when the .env file is missing", () => {
+    const { stdout } = launch(["status"], { IMPL_ENV_FILE: "/nonexistent/impl.env", IMPL_PORT: "" });
+    expect(stdout).toContain("3210");
+  });
+
+  it("should print the configuration instead of prompting when there is no terminal", () => {
+    const { code, stdout } = launch(["config"], { IMPL_ENV_FILE: envFile("IMPL_PORT='4399'\n"), IMPL_PORT: "" });
+    expect(code).toBe(0);
+    expect(stdout).toContain("IMPL_PORT");
+  });
+
+  it("should pass its own arguments through to the config command", () => {
+    const { code, stdout } = launch(["config", "get", "IMPL_PORT"], { IMPL_ENV_FILE: envFile("IMPL_PORT='4399'\n"), IMPL_PORT: "" });
+    expect(code).toBe(0);
+    expect(stdout.trim()).toBe("4399");
+  });
 
   it("should not reference the former project name", () => {
     expect(source).not.toMatch(/x-implement|ximpl|X_IMPLEMENT_/);

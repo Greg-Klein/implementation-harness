@@ -26,12 +26,17 @@ if [[ ! -f "$repo_root/.env" ]]; then
   cp "$repo_root/.env.example" "$repo_root/.env"
 fi
 
+# Une mise a jour n'ecrit jamais dans un .env deja present : on se contente de
+# signaler ce qui manque ou ce qui est invalide.
+node "$repo_root/bin/config.mjs" check --quiet || true
+
 mkdir -p "$bin_dir"
 chmod +x "$repo_root/bin/implementation-harness"
 ln -sfn "$repo_root/bin/implementation-harness" "$bin_dir/implementation-harness"
 ln -sfn "$repo_root/bin/implementation-harness" "$bin_dir/impl"
 
 printf '\nInstallation terminée.\n'
+printf 'Configurer : impl config\n'
 printf 'Lancer l’interface : impl\n'
 printf 'Traiter les retours d’auto-amélioration : impl improve\n'
 printf 'Voir toutes les commandes : impl help\n'

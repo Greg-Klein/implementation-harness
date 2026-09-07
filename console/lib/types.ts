@@ -11,6 +11,6 @@ export type RunState = {
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {
   repositories: RepositoryOption[];
-  detected: (RepositoryOption & { source: "env" | "git" }) | null;
+  detected: (RepositoryOption & { source: "git" }) | null;
 };
 export type ArtifactResponse = { path: string; kind: "text" | "image"; content: string; error?: string };
