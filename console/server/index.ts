@@ -32,17 +32,25 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     return;
   }
   const { stdout: listOut } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
-  const block = listOut.split("\n\n").find((b) => b.includes(`refs/heads/${worktreeName}`));
-  const worktreePath = block?.split("\n").find((l) => l.startsWith("worktree "))?.slice("worktree ".length);
-  if (!worktreePath) throw new Error(`Worktree "${worktreeName}" introuvable.`);
+  // Claude Code prefixes the branch of a --worktree session with "worktree-",
+  // so the directory name is the only stable handle on the worktree.
+  const worktree = listOut.split("\n\n").map((block) => {
+    const lines = block.split("\n");
+    return {
+      path: lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length),
+      branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length),
+    };
+  }).find((entry) => entry.path && path.basename(entry.path) === worktreeName);
+  if (!worktree?.path) throw new Error(`Worktree "${worktreeName}" introuvable.`);
   if (merge) {
-    await execFileAsync("git", ["-C", pluginRoot, "merge", "--no-ff", worktreeName, "-m", `self-improvement: apply improvements from ${worktreeName}`]);
+    if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
+    await execFileAsync("git", ["-C", pluginRoot, "merge", "--no-ff", worktree.branch, "-m", `self-improvement: apply improvements from ${worktreeName}`]);
     activity("system", "Améliorations fusionnées", worktreeName);
   } else {
     activity("system", "Améliorations ignorées", worktreeName);
   }
-  await execFileAsync("git", ["worktree", "remove", "--force", worktreePath], { cwd: pluginRoot });
-  await execFileAsync("git", ["-C", pluginRoot, "branch", "-D", worktreeName]).catch(() => undefined);
+  await execFileAsync("git", ["worktree", "remove", "--force", "--force", worktree.path], { cwd: pluginRoot });
+  if (worktree.branch) await execFileAsync("git", ["-C", pluginRoot, "branch", "-D", worktree.branch]).catch(() => undefined);
   ctx.state.pendingSelfImprovementReview = undefined;
   publishState();
 }
