@@ -15,8 +15,9 @@ import { closeTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
+import { clearImprovementWatchers, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, findExecutable, resolveProjectDirectory } from "./repository.js";
+import { findWorktree, worktreeDiff } from "./worktree.js";
 import type { ClientMessage } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -32,17 +33,8 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     publishState();
     return;
   }
-  const { stdout: listOut } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
-  // Claude Code prefixes the branch of a --worktree session with "worktree-",
-  // so the directory name is the only stable handle on the worktree.
-  const worktree = listOut.split("\n\n").map((block) => {
-    const lines = block.split("\n");
-    return {
-      path: lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length),
-      branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length),
-    };
-  }).find((entry) => entry.path && path.basename(entry.path) === worktreeName);
-  if (!worktree?.path) throw new Error(`Worktree "${worktreeName}" introuvable.`);
+  const worktree = await findWorktree(worktreeName);
+  if (!worktree) throw new Error(`Worktree "${worktreeName}" introuvable.`);
   if (merge) {
     if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
     await execFileAsync("git", ["-C", pluginRoot, "merge", "--no-ff", worktree.branch, "-m", `self-improvement: apply improvements from ${worktreeName}`]);
@@ -70,6 +62,7 @@ function sessionEnvironment() {
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
   if (terminal) throw new Error("Une session Claude Code est déjà active.");
   clearDemoTimers();
+  clearImprovementWatchers();
   const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
   const claude = findExecutable("claude");
   if (!claude) throw new Error("Claude Code est introuvable dans PATH.");
@@ -177,16 +170,9 @@ const server = createServer(async (request, response) => {
     if (!worktreeName || !/^[a-z0-9-]+$/i.test(worktreeName)) { respond(response, 400, { error: "Nom de worktree invalide." }); return; }
     if (worktreeName.startsWith("demo-")) { respond(response, 200, { diff: demoSelfImprovementDiff }); return; }
     try {
-      const exec = promisify(execFile);
-      const { stdout: listOut } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
-      const worktreePath = listOut.split("\n\n").flatMap((block) => {
-        const pathLine = block.split("\n").find((l) => l.startsWith("worktree "));
-        const branchLine = block.split("\n").find((l) => l.startsWith("branch "));
-        if (pathLine && branchLine?.includes(worktreeName)) return [pathLine.slice("worktree ".length)];
-        return [];
-      })[0];
-      if (!worktreePath) { respond(response, 404, { error: "Worktree introuvable." }); return; }
-      const { stdout: diff } = await exec("git", ["diff", "HEAD"], { cwd: worktreePath, maxBuffer: 2 * 1024 * 1024 });
+      const worktree = await findWorktree(worktreeName);
+      if (!worktree) { respond(response, 404, { error: "Worktree introuvable." }); return; }
+      const diff = await worktreeDiff(worktree);
       respond(response, 200, { diff: diff || "(aucune modification détectée)" });
     } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Erreur git." }); }
     return;

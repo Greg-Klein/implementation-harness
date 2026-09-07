@@ -4,9 +4,13 @@ import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
 import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
 import { findExecutable } from "./repository.js";
+import { findWorktree, worktreeDiff } from "./worktree.js";
 import type { RunState } from "./types.js";
 
 const scheduledSelfAudits = new Set<string>();
+const improvementWatchers = new Set<ReturnType<typeof setTimeout>>();
+const WATCH_INTERVAL_MS = 15_000;
+const WATCH_ATTEMPTS = 120;
 
 function normalizeText(value: unknown): string | undefined {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
@@ -57,6 +61,28 @@ async function queueAutonomousReview(runId: string, snapshot: RunState) {
   }
 }
 
+export function clearImprovementWatchers() {
+  for (const timer of improvementWatchers) clearTimeout(timer);
+  improvementWatchers.clear();
+}
+
+function watchForImprovements(worktreeName: string, runId: string, attempt = 0) {
+  const timer = setTimeout(async () => {
+    improvementWatchers.delete(timer);
+    if (ctx.state.id !== runId || ctx.state.pendingSelfImprovementReview) return;
+    const worktree = await findWorktree(worktreeName).catch(() => undefined);
+    const diff = worktree ? await worktreeDiff(worktree).catch(() => "") : "";
+    if (diff.trim()) {
+      ctx.state.pendingSelfImprovementReview = { worktreeName, runId };
+      activity("agent", "Améliorations prêtes — en attente de validation", worktreeName);
+      publishState();
+      return;
+    }
+    if (attempt + 1 < WATCH_ATTEMPTS) watchForImprovements(worktreeName, runId, attempt + 1);
+  }, WATCH_INTERVAL_MS);
+  improvementWatchers.add(timer);
+}
+
 function startAutonomousImprovement(runId: string) {
   if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return;
   const claude = findExecutable("claude");
@@ -83,8 +109,10 @@ function startAutonomousImprovement(runId: string) {
   child.on("close", (code) => {
     if (ctx.state.id !== runId) return;
     if (code === 0 && !launchError) {
-      ctx.state.pendingSelfImprovementReview = { worktreeName, runId };
-      activity("agent", "Améliorations prêtes — en attente de validation");
+      // The launcher returns as soon as the background session exists, so the
+      // review is only offered once that session has actually written something.
+      watchForImprovements(worktreeName, runId);
+      activity("agent", "Auto-amélioration lancée en tâche de fond", worktreeName);
     } else {
       activity("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));
     }

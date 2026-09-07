@@ -106,10 +106,17 @@ export function processHook(body: Record<string, unknown>) {
     ctx.state.status = "attention";
     activity("attention", "Claude Code attend ton attention", normalizeText(payload.message));
   } else if (event === "Stop") {
-    if (ctx.state.phase >= 8) ctx.state.phase = 10;
-    ctx.state.status = ctx.state.phase >= 10 ? "completed" : "attention";
-    activity("attention", ctx.state.phase >= 10 ? "Workflow terminé" : "Claude Code attend une réponse");
-    if (ctx.state.phase >= 10 && ctx.state.id) scheduleAutonomousReview(ctx.state.id);
+    // The turn ends every time Claude hands back, including while it waits for a
+    // background agent: the workflow is only over when nothing is still running.
+    if (ctx.state.agents.some((agent) => agent.status === "running")) {
+      ctx.state.status = "running";
+      activity("agent", "Tour terminé, un agent continue en tâche de fond");
+    } else {
+      if (ctx.state.phase >= 9) ctx.state.phase = 10;
+      ctx.state.status = ctx.state.phase >= 10 ? "completed" : "attention";
+      activity("attention", ctx.state.phase >= 10 ? "Workflow terminé" : "Claude Code attend une réponse");
+      if (ctx.state.phase >= 10 && ctx.state.id) scheduleAutonomousReview(ctx.state.id);
+    }
   }
   publishState();
 }
