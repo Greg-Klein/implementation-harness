@@ -18,3 +18,10 @@ test("should detect and fill a repository from the GitLab issue URL", async ({ p
     repositories: expect.arrayContaining([expect.objectContaining({ project: sampleProject, path: sampleCheckout, exists: true })]),
   });
 });
+
+test("should detect a repository from the work item form of the ticket URL", async ({ page }) => {
+  await page.getByLabel("Ticket GitLab").fill(`https://gitlab.com/${sampleProject}/-/work_items/42`);
+
+  await expect(page.getByLabel(/Répertoire du projet/)).toHaveValue(sampleCheckout);
+  await expect(page.getByText(`Projet · ${sampleProject}`)).toBeVisible();
+});

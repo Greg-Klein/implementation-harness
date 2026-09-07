@@ -8,6 +8,8 @@ import { LaunchForm } from "./launch-form";
 import { PhaseRail } from "./phase-rail";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
+const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
+
 const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], artifacts: [] };
 
 export function Harness() {
@@ -57,7 +59,7 @@ export function Harness() {
   }, []);
 
   useEffect(() => {
-    if (!issueUrl.includes("/-/issues/") || cwdRef.current.trim()) {
+    if (!TICKET_URL.test(issueUrl) || cwdRef.current.trim()) {
       setDetectingProject(false);
       return;
     }

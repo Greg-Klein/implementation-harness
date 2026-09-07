@@ -49,7 +49,7 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
 export function gitLabProjectPath(issueUrl: string) {
   try {
     const url = new URL(issueUrl);
-    return url.pathname.match(/^\/(.+?)\/-\/issues\/\d+/)?.[1];
+    return url.pathname.match(/^\/(.+?)\/-\/(?:issues|work_items)\/\d+/)?.[1];
   } catch {
     return undefined;
   }

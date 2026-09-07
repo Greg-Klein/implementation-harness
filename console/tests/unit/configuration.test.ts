@@ -10,6 +10,7 @@ describe("harness configuration", () => {
 
   it("should extract nested GitLab project paths from issue URLs", () => {
     expect(gitLabProjectPath("https://gitlab.com/group/platform/repo/-/issues/42")).toBe("group/platform/repo");
+    expect(gitLabProjectPath("https://gitlab.com/group/platform/repo/-/work_items/42")).toBe("group/platform/repo");
     expect(gitLabProjectPath("https://gitlab.com/group/repo/-/merge_requests/42")).toBeUndefined();
     expect(gitLabProjectPath("not-a-url")).toBeUndefined();
   });
