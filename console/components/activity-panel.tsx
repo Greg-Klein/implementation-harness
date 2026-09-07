@@ -2,21 +2,16 @@
 
 import { ArrowRightIcon, CheckIcon, CircleNotchIcon, FileTextIcon, RobotIcon, WarningIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { activeAgents, isDemoRun } from "@/lib/run-state";
+import { activeAgents, elapsedLabel, isDemoRun } from "@/lib/run-state";
+import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 import { DocumentViewer } from "./document-viewer";
 import { QuestionPanel } from "./question-panel";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 
-function elapsed(start: string, end?: string) {
-  const milliseconds = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
-  const minutes = Math.floor(milliseconds / 60_000);
-  const seconds = Math.floor((milliseconds % 60_000) / 1_000);
-  return minutes ? `${minutes} min ${seconds.toString().padStart(2, "0")} s` : `${seconds} s`;
-}
-
 export function ActivityPanel({ run, onFeedback, onAnswer, onSelfImprovementApprove, onSelfImprovementReject }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void; onSelfImprovementApprove: (worktreeName: string) => void; onSelfImprovementReject: (worktreeName: string) => void }) {
   const runningAgents = activeAgents(run.agents);
+  const now = useNow(runningAgents.length > 0);
   const [feedback, setFeedback] = useState("");
   const [queued, setQueued] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
@@ -49,7 +44,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer, onSelfImprovementAppr
         {runningAgents.length === 0 ? <div className="flex items-center gap-3 py-2 text-xs text-[var(--muted)]"><div className="grid size-8 place-items-center rounded-full border border-dashed border-[var(--line)]"><RobotIcon size={14} /></div>Aucun agent actif</div> :
           <div className="space-y-2.5">{runningAgents.slice(0, 5).map((agent, index) => <div key={agent.id} className="reveal flex items-center gap-3" style={{ animationDelay: `${index * 55}ms` }}>
             <div className={`grid size-8 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_var(--line)] ${agent.status === "failed" ? "text-amber-600" : "text-[var(--accent)]"}`}>{agent.status === "running" ? <CircleNotchIcon className="animate-spin" size={14} /> : agent.status === "failed" ? <WarningIcon size={14} weight="fill" /> : <CheckIcon size={13} weight="bold" />}</div>
-            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsed(agent.startedAt, agent.endedAt)}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{agent.name}</p><p className="mt-0.5 font-mono text-[9px] text-[var(--muted)]">{elapsedLabel(agent.startedAt, agent.endedAt, now)}</p></div>
           </div>)}</div>}
       </section>}
       <section className="flex min-h-56 flex-1 flex-col p-5">

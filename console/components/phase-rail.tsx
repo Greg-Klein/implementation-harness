@@ -1,6 +1,8 @@
 "use client";
 
 import { CheckIcon } from "@phosphor-icons/react";
+import { elapsedLabel } from "@/lib/run-state";
+import { useNow } from "@/lib/use-now";
 import type { RunState, Status } from "@/lib/types";
 
 const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
@@ -14,14 +16,9 @@ function statusLabel(status: Status) {
   return "Disponible";
 }
 
-function elapsed(start: string, end?: string) {
-  const milliseconds = new Date(end ?? Date.now()).getTime() - new Date(start).getTime();
-  const minutes = Math.floor(milliseconds / 60_000);
-  const seconds = Math.floor((milliseconds % 60_000) / 1_000);
-  return minutes ? `${minutes} min ${seconds.toString().padStart(2, "0")} s` : `${seconds} s`;
-}
-
 export function PhaseRail({ run }: { run: RunState }) {
+  const now = useNow(Boolean(run.startedAt) && !run.endedAt);
+
   return (
     <aside className="p-5">
       <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{statusLabel(run.status)}</span></div>
@@ -33,7 +30,7 @@ export function PhaseRail({ run }: { run: RunState }) {
           <span className={`pt-0.5 ${current ? "font-semibold text-[var(--ink)]" : done ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>{phase}</span>
         </li>;
       })}</ol>
-      <div className="mt-6 border-t border-[var(--line)] pt-4"><p className="truncate font-mono text-[10px] text-[var(--muted)]" title={run.cwd}>{run.cwd}</p>{run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsed(run.startedAt, run.endedAt ?? undefined)}</p>}</div>
+      <div className="mt-6 border-t border-[var(--line)] pt-4"><p className="truncate font-mono text-[10px] text-[var(--muted)]" title={run.cwd}>{run.cwd}</p>{run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}</div>
     </aside>
   );
 }
