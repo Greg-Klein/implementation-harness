@@ -2,6 +2,8 @@
 
 import { ChatCircleDotsIcon, CodeIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
+import { runInProgress } from "@/lib/run-state";
 import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
@@ -27,6 +29,7 @@ export function Harness() {
   const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
+  const previousRunRef = useRef<RunState | null>(null);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -84,6 +87,20 @@ export function Harness() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [issueUrl]);
 
+  // A notification is only useful for what the window cannot show: the tab keeps
+  // the state readable when it is visible, the system notification calls back
+  // when it is not.
+  useEffect(() => {
+    const previous = previousRunRef.current;
+    previousRunRef.current = run;
+    document.title = documentTitle(run);
+    const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
+    icon.href = faviconDataUri(faviconColor(run));
+    const alert = runAlert(previous, run);
+    if (!alert || !document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    new Notification(alert.title, { body: alert.body, tag: alert.tag });
+  }, [run]);
+
   const send = useCallback((message: object) => {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify(message));
   }, []);
@@ -103,8 +120,14 @@ export function Harness() {
     setCwd(value);
     setDetectedProject(project);
   }, []);
-  const start = () => { terminalRef.current?.clear(); send({ type: "run.start", cwd, issueUrl, instruction }); };
-  const active = run.status === "starting" || run.status === "running" || run.status === "attention";
+  // The permission prompt only opens from a user gesture, and starting a run is
+  // the moment the user asks to be left alone.
+  const start = () => {
+    terminalRef.current?.clear();
+    if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
+    send({ type: "run.start", cwd, issueUrl, instruction });
+  };
+  const active = runInProgress(run.status);
   const canStart = connected && !active && issueUrl.trim().length > 0;
 
   return (

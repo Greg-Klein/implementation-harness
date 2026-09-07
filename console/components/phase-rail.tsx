@@ -1,11 +1,29 @@
 "use client";
 
-import { CheckIcon, WarningIcon } from "@phosphor-icons/react";
+import { ArrowSquareOutIcon, CheckIcon, GitBranchIcon, GitPullRequestIcon, TicketIcon, WarningIcon } from "@phosphor-icons/react";
 import { elapsedLabel } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState, Status } from "@/lib/types";
 
 const phases = ["Lire le ticket", "Clarifier", "Créer la branche", "Planifier", "Implémenter", "Vérifier", "Revoir", "Ouvrir la MR", "Publier la revue", "Terminer"];
+
+/** The demonstration ticket has no address to open, and neither has a malformed one. */
+function externalHref(value: string) {
+  return /^https?:\/\//.test(value) ? value : undefined;
+}
+
+/** The rail is 236px wide and the project already shows below, so only the number is worth the room. The full address stays in the tooltip. */
+function reference(url: string, prefix: string) {
+  const last = url.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  return last ? `${prefix}${last}` : url;
+}
+
+function Deliverable({ icon, label, title, href }: { icon: React.ReactNode; label: string; title: string; href?: string }) {
+  const body = <><span className="shrink-0 text-[var(--muted)]">{icon}</span><span className="truncate font-mono text-[10px]">{label}</span>{href && <ArrowSquareOutIcon size={10} className="shrink-0 text-[var(--muted)]" />}</>;
+  return href
+    ? <a href={href} target="_blank" rel="noreferrer" title={title} className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[var(--ink)] transition hover:bg-[var(--paper)]">{body}</a>
+    : <p title={title} className="flex items-center gap-1.5 px-1.5 py-1 text-[var(--ink)]">{body}</p>;
+}
 
 function statusLabel(status: Status) {
   if (status === "starting") return "Démarrage";
@@ -21,7 +39,7 @@ export function PhaseRail({ run }: { run: RunState }) {
   const finished = run.status === "completed";
 
   return (
-    <aside className="p-5">
+    <aside className="scrollbar-thin min-h-0 p-5 lg:overflow-y-auto">
       <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.status === "attention" && <WarningIcon size={10} weight="fill" />}{statusLabel(run.status)}</span></div>
       <ol>{phases.map((phase, index) => {
         // The last step is only ticked when the run itself is over, never just
@@ -33,6 +51,14 @@ export function PhaseRail({ run }: { run: RunState }) {
           <span className={`pt-0.5 ${current ? "font-semibold text-[var(--ink)]" : done ? "text-[var(--ink)]" : "text-[var(--muted)]"}`}>{phase}</span>
         </li>;
       })}</ol>
+      {(run.issueUrl || run.branch || run.mergeRequestUrl) && (
+        <div className="mt-6 border-t border-[var(--line)] pt-4">
+          <p className="mb-1.5 px-1.5 text-[10px] font-semibold text-[var(--muted)]">Livrable</p>
+          {run.issueUrl && <Deliverable icon={<TicketIcon size={12} />} label={reference(run.issueUrl, "#")} title={run.issueUrl} href={externalHref(run.issueUrl)} />}
+          {run.branch && <Deliverable icon={<GitBranchIcon size={12} />} label={run.branch} title={run.branch} />}
+          {run.mergeRequestUrl && <Deliverable icon={<GitPullRequestIcon size={12} />} label={reference(run.mergeRequestUrl, "!")} title={run.mergeRequestUrl} href={externalHref(run.mergeRequestUrl)} />}
+        </div>
+      )}
       <div className="mt-6 border-t border-[var(--line)] pt-4"><p className="truncate font-mono text-[10px] text-[var(--muted)]" title={run.cwd}>{run.cwd}</p>{run.startedAt && <p className="mt-2 font-mono text-[10px] text-[var(--muted)]">{elapsedLabel(run.startedAt, run.endedAt ?? undefined, now)}</p>}</div>
     </aside>
   );

@@ -79,6 +79,7 @@ export function startDemoRun(isTerminalActive: boolean) {
 export function continueDemoRun() {
   scheduleDemo(0, () => {
     ctx.state.phase = 3;
+    ctx.state.branch = "feat/ih-42-notification-preferences";
     activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
     publishState();
     demoTerminal("Branche et plan de travail préparés.");
@@ -152,6 +153,8 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 9, () => {
     ctx.state.phase = 9;
+    ctx.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
+    activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
     activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
     publishState();
     demoTerminal("Rapport final publié dans la merge request simulée.");

@@ -1,9 +1,15 @@
+import type { Status } from "./types";
+
 export function activeAgents<T extends { status: string }>(agents: T[]) {
   return agents.filter((agent) => agent.status === "running");
 }
 
 export function isDemoRun(id?: string | null) {
   return typeof id === "string" && id.startsWith("demo-");
+}
+
+export function runInProgress(status: Status) {
+  return status === "starting" || status === "running" || status === "attention";
 }
 
 export function pendingAnswerLabel(count: number) {

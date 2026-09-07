@@ -1,0 +1,52 @@
+import { expect, test } from "@playwright/test";
+import { resetRun, runDemoToCompletion } from "./helpers";
+
+test.beforeEach(async ({ page }) => resetRun(page));
+
+test("should name the branch and the merge request the run produced", async ({ page }) => {
+  await page.goto("/?demo=1");
+
+  // The ticket is known from the first second, the branch only once the workflow
+  // creates it, and the merge request only once it is opened.
+  await expect(page.getByTitle("ticket-simule://IH-42")).toBeVisible();
+  await expect(page.getByTitle("feat/ih-42-notification-preferences")).toHaveCount(0);
+
+  await expect(page.getByText("Décision requise")).toBeVisible();
+  await page.getByRole("button", { name: "develop" }).click();
+  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
+  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+
+  await expect(page.getByTitle("feat/ih-42-notification-preferences")).toBeVisible();
+  const mergeRequest = page.getByTitle("ticket-simule://acme-dashboard/-/merge_requests/128");
+  await expect(mergeRequest).toBeVisible();
+  await expect(mergeRequest).toHaveText("!128");
+});
+
+test("should carry the state of the run into the tab title", async ({ page }) => {
+  await page.goto("/?demo=1");
+
+  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page).toHaveTitle("● Claude attend 2 réponses · Implementation Harness");
+
+  await page.getByRole("button", { name: "develop" }).click();
+  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
+  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+
+  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expect(page).toHaveTitle("✓ Terminé · Implementation Harness");
+});
+
+test("should leave the tab title alone while no run is going on", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle("Implementation Harness");
+});
+
+test("should show no deliverable block before a run starts", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Livrable")).toHaveCount(0);
+});
+
+test("should reach completion with the deliverable still readable", async ({ page }) => {
+  await runDemoToCompletion(page);
+  await expect(page.getByText("Livrable")).toBeVisible();
+});

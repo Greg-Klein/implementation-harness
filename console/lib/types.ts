@@ -7,7 +7,7 @@ export type PendingSelfImprovementReview = { worktreeName: string; runId: string
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;
-  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {

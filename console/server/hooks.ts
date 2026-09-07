@@ -1,4 +1,4 @@
-import { createsBranch, normalizeAnswers, normalizeQuestion, phaseForAgent, runInProgress } from "./domain.js";
+import { branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeQuestion, phaseForAgent, runInProgress } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import type { HookOutput } from "./types.js";
@@ -14,6 +14,28 @@ function advancePhase(phase: number) {
 /** Claude Code resumed on its own, so the call for attention no longer holds. */
 function resumeFromAttention() {
   if (ctx.state.status === "attention" && !ctx.state.pendingQuestion) ctx.state.status = "running";
+}
+
+function rememberBranch(command: string | undefined) {
+  const branch = branchFromCommand(command);
+  if (!branch || ctx.state.branch === branch) return;
+  ctx.state.branch = branch;
+  activity("system", "Branche de travail", branch);
+}
+
+/** The merge request is the deliverable of the run, and its address exists nowhere but in the output of the command that opened it. */
+function rememberMergeRequest(toolResponse: unknown) {
+  if (ctx.state.mergeRequestUrl) return;
+  const url = mergeRequestUrl(toolResponse);
+  if (!url) return;
+  ctx.state.mergeRequestUrl = url;
+  advancePhase(9);
+  activity("system", "Merge request ouverte", url);
+}
+
+function commandOf(payload: Record<string, unknown>) {
+  const toolInput = payload.tool_input as Record<string, unknown> | undefined;
+  return typeof toolInput?.command === "string" ? toolInput.command : undefined;
 }
 
 export function waitForQuestionAnswer(payload: Record<string, unknown>): Promise<HookOutput | undefined> | undefined {
@@ -99,9 +121,15 @@ export function processHook(body: Record<string, unknown>) {
     const tool = normalizeText(payload.tool_name) ?? "outil";
     if (tool === "AskUserQuestion") return waitForQuestionAnswer(payload);
     const toolInput = payload.tool_input as Record<string, unknown> | undefined;
-    const command = typeof toolInput?.command === "string" ? toolInput.command : undefined;
+    const command = commandOf(payload);
     activity("tool", tool, normalizeText(toolInput?.description) ?? normalizeText(command));
-    if (createsBranch(command)) advancePhase(3);
+    if (createsBranch(command)) {
+      advancePhase(3);
+      rememberBranch(command);
+    }
+    resumeFromAttention();
+  } else if (event === "PostToolUse") {
+    if (createsMergeRequest(commandOf(payload))) rememberMergeRequest(payload.tool_response);
     resumeFromAttention();
   } else if (event === "Notification") {
     ctx.state.status = "attention";

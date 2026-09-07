@@ -114,6 +114,31 @@ export function createsBranch(command: string | undefined) {
   return command !== undefined && /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/.test(command);
 }
 
+const BRANCH_NAME = /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))\s+(?:--\s+)?("[^"]+"|'[^']+'|[^\s;&|]+)/;
+
+/** The branch the workflow works on, read from the command that creates it. */
+export function branchFromCommand(command: string | undefined) {
+  const name = command?.match(BRANCH_NAME)?.[1];
+  return name ? name.replace(/^["']|["']$/g, "") : undefined;
+}
+
+export function createsMergeRequest(command: string | undefined) {
+  return command !== undefined && /\b(?:glab|gh)\b[^;&|]*?\b(?:mr|pr)\s+create\b/.test(command);
+}
+
+const MERGE_REQUEST_URL = /https?:\/\/[^\s"'<>()\\]*?\/(?:-\/merge_requests|merge_requests|pull)\/\d+/;
+
+/**
+ * The created merge request only ever names itself in the output of the command
+ * that opened it, and that output reaches the harness as a PostToolUse response
+ * whose shape depends on the tool.
+ */
+export function mergeRequestUrl(toolResponse: unknown) {
+  if (toolResponse === undefined || toolResponse === null) return undefined;
+  const text = typeof toolResponse === "string" ? toolResponse : JSON.stringify(toolResponse);
+  return text?.match(MERGE_REQUEST_URL)?.[0];
+}
+
 export function gitRemoteProjects(config: string): string[] {
   const projects = new Set<string>();
   for (const match of config.matchAll(/^\s*url\s*=\s*(.+)$/gm)) {
