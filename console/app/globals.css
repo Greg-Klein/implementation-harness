@@ -20,7 +20,11 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-button, input, textarea { font: inherit; }
+/* Tailwind keeps its utilities in a layer, and unlayered rules win over any
+   layer, so this reset has to be layered or it overrides every text-* size. */
+@layer base {
+  button, input, textarea { font: inherit; }
+}
 button { cursor: pointer; }
 .field {
   width: 100%;

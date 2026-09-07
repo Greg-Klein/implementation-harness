@@ -81,7 +81,7 @@ export function ConversationPanel({ messages, canSend, onSend }: { messages: Con
             rows={1}
             disabled={!canSend}
             placeholder={canSend ? "Transmettre une instruction à Claude…" : "Aucune session active."}
-            className="field max-h-32 resize-none text-sm leading-5 disabled:opacity-50"
+            className="field max-h-32 resize-none text-[12.5px] leading-5 disabled:opacity-50"
           />
           <button type="submit" disabled={!draft.trim() || !canSend} aria-label="Envoyer l’instruction" className="grid size-11 shrink-0 place-items-center rounded-[11px] bg-[var(--ink)] text-white transition hover:bg-[#2a322e] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">
             <PaperPlaneTiltIcon size={16} weight="fill" />
