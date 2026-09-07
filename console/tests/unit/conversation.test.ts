@@ -19,6 +19,13 @@ describe("conversation extraction", () => {
     }))?.author).toBe("user");
   });
 
+  it("should keep an instruction queued while Claude Code was mid-turn", () => {
+    expect(parseConversationLine(line({
+      type: "attachment", uuid: "u5", timestamp: "2026-09-07T12:16:55.223Z", isSidechain: false,
+      attachment: { type: "queued_command", prompt: "reste sur desktop", commandMode: "prompt", origin: { kind: "human" } },
+    }))).toEqual({ id: "u5", at: "2026-09-07T12:16:55.223Z", author: "user", text: "reste sur desktop" });
+  });
+
   it("should drop everything that is not the dialogue", () => {
     const technical = [
       { type: "assistant", uuid: "t1", message: { content: [{ type: "tool_use", name: "Bash", input: {} }] } },
@@ -29,6 +36,7 @@ describe("conversation extraction", () => {
       { type: "user", uuid: "t6", isMeta: true, message: { content: [{ type: "text", text: "Implement ticket: …" }] } },
       { type: "user", uuid: "t7", message: { content: "<task-notification>\n<status>completed</status>\n</task-notification>" } },
       { type: "attachment", uuid: "t8" },
+      { type: "attachment", uuid: "t9", attachment: { type: "environment", snapshot: {} } },
     ];
     expect(technical.map((entry) => parseConversationLine(line(entry)))).toEqual(technical.map(() => undefined));
   });

@@ -23,6 +23,8 @@ import type { ClientMessage } from "./types.js";
 const execFileAsync = promisify(execFile);
 let terminal: pty.IPty | null = null;
 const intentionallyStoppedRuns = new Set<string>();
+/** Long enough for the paste to be read before the submission keystroke arrives. */
+const SUBMIT_DELAY_MS = 150;
 
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
   if (!ctx.state.pendingSelfImprovementReview || ctx.state.pendingSelfImprovementReview.worktreeName !== worktreeName)
@@ -105,10 +107,16 @@ function sendInstruction(text: string) {
   const instruction = text.trim();
   if (!instruction) throw new Error("L'instruction est vide.");
   if (!terminal && !ctx.state.id?.startsWith("demo-")) throw new Error("Aucune session Claude Code n'est active.");
-  // Bracketed paste keeps a multi-line instruction as a single prompt instead of
-  // submitting it line by line.
-  if (terminal) terminal.write(instruction.includes("\n") ? `\u001b[200~${instruction}\u001b[201~\r` : `${instruction}\r`);
-  conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction });
+  if (terminal) {
+    const session = terminal;
+    // Claude Code reads a burst of characters as a paste, and a carriage return
+    // inside that burst is pasted content: it lands as a newline in the prompt
+    // and the instruction is never submitted. The text goes as an explicit
+    // paste, the submission as a keystroke of its own.
+    session.write(`\u001b[200~${instruction}\u001b[201~`);
+    setTimeout(() => { if (terminal === session) session.write("\r"); }, SUBMIT_DELAY_MS);
+  }
+  conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction, pending: terminal !== null });
   activity("system", "Instruction transmise", instruction);
   publishState();
   if (!terminal) acknowledgeDemoInstruction();

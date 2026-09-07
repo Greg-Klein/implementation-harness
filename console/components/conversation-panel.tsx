@@ -61,6 +61,7 @@ export function ConversationPanel({ messages, canSend, onSend }: { messages: Con
               <span>{message.author === "claude" ? "Claude" : "Toi"}</span>
               <span aria-hidden="true">·</span>
               <span>{new Date(message.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+              {message.pending && <span title="Claude prendra cette instruction à la fin de son tour" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">en attente</span>}
             </div>
             <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-white shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
               <MessageBody text={message.text} />

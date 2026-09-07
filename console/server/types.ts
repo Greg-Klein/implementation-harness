@@ -6,7 +6,7 @@ export type AgentState = { id: string; name: string; status: AgentStatus; starte
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
 export type PendingSelfImprovementReview = { worktreeName: string; runId: string };
-export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string };
+export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;

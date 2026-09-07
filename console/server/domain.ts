@@ -79,13 +79,23 @@ export function parseConversationLine(line: string): ConversationMessage | undef
   // Sidechains are the subagents talking to themselves, meta entries are the
   // expanded prompt of a slash command: neither is the dialogue.
   if (entry.isSidechain === true || entry.isMeta === true) return undefined;
-  const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
   const id = typeof entry.uuid === "string" ? entry.uuid : undefined;
-  if (!author || !id) return undefined;
+  if (!id) return undefined;
+  const at = typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString();
+  // An instruction typed while Claude Code is mid-turn is recorded as a queued
+  // command instead of a user message.
+  if (entry.type === "attachment") {
+    const attachment = entry.attachment as { type?: unknown; prompt?: unknown } | undefined;
+    if (attachment?.type !== "queued_command" || typeof attachment.prompt !== "string") return undefined;
+    const queued = attachment.prompt.trim();
+    return queued ? { id, at, author: "user", text: queued } : undefined;
+  }
+  const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
+  if (!author) return undefined;
   const message = entry.message as { content?: unknown } | undefined;
   const text = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
   if (!text || (author === "user" && TAGGED_INPUT.test(text))) return undefined;
-  return { id, at: typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString(), author, text };
+  return { id, at, author, text };
 }
 
 export function runInProgress(status: RunStatus) {
