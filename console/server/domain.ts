@@ -55,6 +55,18 @@ export function gitLabProjectPath(issueUrl: string) {
   }
 }
 
+export function phaseForAgent(agentName: string) {
+  const name = agentName.slice(agentName.lastIndexOf(":") + 1);
+  if (name === "ticket-planner") return 4;
+  if (name === "developer") return 5;
+  if (name.endsWith("-reviewer") || name === "review-orchestrator") return 6;
+  return 0;
+}
+
+export function createsBranch(command: string | undefined) {
+  return command !== undefined && /\bgit\b[^;&|]*?\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/.test(command);
+}
+
 export function gitRemoteProjects(config: string): string[] {
   const projects = new Set<string>();
   for (const match of config.matchAll(/^\s*url\s*=\s*(.+)$/gm)) {

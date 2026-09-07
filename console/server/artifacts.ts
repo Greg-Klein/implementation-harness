@@ -37,7 +37,9 @@ async function archiveArtifact(source: string) {
     ctx.state.artifacts = [...ctx.state.artifacts, relative];
     activity("artifact", "Nouvel artefact", relative);
   }
-  ctx.state.phase = Math.max(ctx.state.phase, phaseForArtifact(relative));
+  // A document is the output of its step, so its arrival opens the next one.
+  const completedPhase = phaseForArtifact(relative);
+  if (completedPhase) ctx.state.phase = Math.max(ctx.state.phase, completedPhase + 1);
   publishState();
 }
 

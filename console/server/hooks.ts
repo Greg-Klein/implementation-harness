@@ -1,10 +1,19 @@
-import { normalizeAnswers, normalizeQuestion } from "./domain.js";
+import { createsBranch, normalizeAnswers, normalizeQuestion, phaseForAgent } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import type { HookOutput } from "./types.js";
 
 function normalizeText(value: unknown): string | undefined {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
+}
+
+function advancePhase(phase: number) {
+  ctx.state.phase = Math.max(ctx.state.phase, phase);
+}
+
+/** Claude Code resumed on its own, so the call for attention no longer holds. */
+function resumeFromAttention() {
+  if (ctx.state.status === "attention" && !ctx.state.pendingQuestion) ctx.state.status = "running";
 }
 
 export function waitForQuestionAnswer(payload: Record<string, unknown>): Promise<HookOutput | undefined> | undefined {
@@ -77,14 +86,20 @@ export function processHook(body: Record<string, unknown>) {
   if (event === "SubagentStart") {
     ctx.state.agents = [{ id: agentId, name: agentName, status: "running", startedAt: now() }, ...ctx.state.agents.filter((agent) => agent.id !== agentId)];
     activity("agent", `${agentName} démarre`);
+    advancePhase(phaseForAgent(agentName));
+    resumeFromAttention();
   } else if (event === "SubagentStop") {
     ctx.state.agents = ctx.state.agents.map((agent) => agent.id === agentId || (agent.name === agentName && agent.status === "running") ? { ...agent, status: "completed", endedAt: now() } : agent);
     activity("agent", `${agentName} termine`);
+    resumeFromAttention();
   } else if (event === "PreToolUse") {
     const tool = normalizeText(payload.tool_name) ?? "outil";
     if (tool === "AskUserQuestion") return waitForQuestionAnswer(payload);
     const toolInput = payload.tool_input as Record<string, unknown> | undefined;
-    activity("tool", tool, normalizeText(toolInput?.description) ?? normalizeText(toolInput?.command));
+    const command = typeof toolInput?.command === "string" ? toolInput.command : undefined;
+    activity("tool", tool, normalizeText(toolInput?.description) ?? normalizeText(command));
+    if (createsBranch(command)) advancePhase(3);
+    resumeFromAttention();
   } else if (event === "Notification") {
     ctx.state.status = "attention";
     activity("attention", "Claude Code attend ton attention", normalizeText(payload.message));

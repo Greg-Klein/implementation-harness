@@ -62,7 +62,7 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   const claude = findExecutable("claude");
   if (!claude) throw new Error("Claude Code est introuvable dans PATH.");
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
-  ctx.state = { ...emptyState(), id, status: "starting", cwd, issueUrl: message.issueUrl.trim(), instruction: message.instruction?.trim() ?? "", startedAt: now() };
+  ctx.state = { ...emptyState(), id, status: "starting", phase: 1, cwd, issueUrl: message.issueUrl.trim(), instruction: message.instruction?.trim() ?? "", startedAt: now() };
   ctx.terminalBuffer = "";
   activity("system", "Session créée", path.basename(cwd));
   publishState();
