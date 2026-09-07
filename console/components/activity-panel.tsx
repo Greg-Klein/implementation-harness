@@ -6,6 +6,7 @@ import { activeAgents, elapsedLabel, isDemoRun } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 import { DocumentViewer } from "./document-viewer";
+import { InlineText } from "./inline-text";
 import { QuestionPanel } from "./question-panel";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 
@@ -51,11 +52,14 @@ export function ActivityPanel({ run, onFeedback, onAnswer, onSelfImprovementAppr
         <div className="mb-4 flex shrink-0 items-center justify-between"><h2 className="text-xs font-semibold">Activité</h2><span className="font-mono text-[10px] text-[var(--muted)]">LIVE</span></div>
         <div className="scrollbar-thin max-h-[38vh] min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 lg:max-h-none">{run.activities.map((item, index) => {
           const waiting = item.kind === "attention";
+          const generated = item.kind === "artifact";
           return <div key={item.id} className="reveal grid grid-cols-[8px_1fr] gap-2.5" style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
             {waiting
               ? <WarningIcon size={11} weight="fill" className="mt-1 text-amber-500" />
-              : <span className={`mt-1.5 size-1.5 rounded-full ${item.kind === "artifact" ? "bg-[var(--accent)]" : "bg-[#aeb5b0]"}`} />}
-            <div className={`min-w-0 ${waiting ? "rounded-2.5 border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-900" : ""}`}><p className="text-[11px] font-semibold leading-4">{item.title}</p>{item.detail && <p className={`mt-0.5 line-clamp-2 font-mono text-[9px] leading-4 ${waiting ? "text-amber-800/80" : "text-[var(--muted)]"}`}>{item.detail}</p>}<p className={`mt-1 font-mono text-[9px] ${waiting ? "text-amber-700/80" : "text-[#9aa19c]"}`}>{new Date(item.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p></div>
+              : generated
+                ? <FileTextIcon size={11} className="mt-1 text-[var(--doc)]" />
+                : <span className="mt-1.5 size-1.5 rounded-full bg-[#aeb5b0]" />}
+            <div className={`min-w-0 ${waiting ? "rounded-2.5 border border-amber-200 bg-amber-50 px-2.5 py-2 text-amber-900" : ""}`}><p className={`text-[11px] font-semibold leading-4 ${generated ? "text-[var(--doc)]" : ""}`}>{item.title}</p>{item.detail && <p className={`mt-0.5 line-clamp-2 font-mono text-[9px] leading-4 ${waiting ? "text-amber-800/80" : generated ? "text-[#6b8ba1]" : "text-[var(--muted)]"}`}><InlineText text={item.detail} /></p>}<p className={`mt-1 font-mono text-[9px] ${waiting ? "text-amber-700/80" : "text-[#9aa19c]"}`}>{new Date(item.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</p></div>
           </div>;
         })}</div>
       </section>

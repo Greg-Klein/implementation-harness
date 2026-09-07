@@ -81,4 +81,17 @@ describe("light message rendering", () => {
     ]);
     expect(inlineSegments("rien à formater")).toEqual([{ kind: "plain", value: "rien à formater" }]);
   });
+
+  it("should turn the URLs of a message into links", () => {
+    expect(inlineSegments("MR ouverte : https://gitlab.com/group/repo/-/merge_requests/266.")).toEqual([
+      { kind: "plain", value: "MR ouverte : " },
+      { kind: "link", value: "https://gitlab.com/group/repo/-/merge_requests/266", href: "https://gitlab.com/group/repo/-/merge_requests/266" },
+      { kind: "plain", value: "." },
+    ]);
+    expect(inlineSegments("voir [le ticket 258](https://gitlab.com/group/repo/-/work_items/258)")).toEqual([
+      { kind: "plain", value: "voir " },
+      { kind: "link", value: "le ticket 258", href: "https://gitlab.com/group/repo/-/work_items/258" },
+    ]);
+    expect(inlineSegments("pas de lien ici : gitlab.com/group")).toEqual([{ kind: "plain", value: "pas de lien ici : gitlab.com/group" }]);
+  });
 });

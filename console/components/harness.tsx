@@ -121,7 +121,7 @@ export function Harness() {
           <div title="Connexion temps réel entre cette page et le serveur local du harnais" className="flex items-center gap-2 text-xs text-[var(--muted)]">
             <span className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
             <span>Serveur local</span><span aria-hidden="true" className="text-[var(--line)]">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
-            {run.status !== "idle" && !active && <button type="button" onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Nouveau run</button>}
+            {run.status !== "idle" && !active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">Nouveau run</button>}
           </div>
         </header>
 
@@ -139,10 +139,10 @@ export function Harness() {
                     </button>
                   ))}
                 </div>
-                {active && <button type="button" onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px"><StopIcon size={12} weight="fill" /> Arrêter</button>}
+                {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>
               <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <ConversationPanel messages={run.messages} canSend={active} onSend={(text) => send({ type: "instruction.send", text })} />
+                <ConversationPanel messages={run.messages} canSend={active && connected} onSend={(text) => send({ type: "instruction.send", text })} />
               </div>
               <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />

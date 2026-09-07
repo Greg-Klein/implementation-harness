@@ -2,17 +2,14 @@
 
 import { ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
-import { inlineSegments, messageBlocks } from "@/lib/conversation";
+import { messageBlocks } from "@/lib/conversation";
 import type { ConversationMessage } from "@/lib/types";
+import { InlineText } from "./inline-text";
 
 function MessageBody({ text }: { text: string }) {
   return <>{messageBlocks(text).map((block, index) => block.kind === "code"
     ? <pre key={index} className="scrollbar-thin mt-2 overflow-x-auto rounded-2.5 border border-[var(--line)] bg-[#f1f3ee] p-3 font-mono text-[10px] leading-4 first:mt-0">{block.content}</pre>
-    : <p key={index} className="mt-2 whitespace-pre-wrap text-[12.5px] leading-5 first:mt-0">{inlineSegments(block.content).map((segment, position) => segment.kind === "strong"
-      ? <strong key={position} className="font-semibold">{segment.value}</strong>
-      : segment.kind === "code"
-        ? <code key={position} className="rounded bg-[var(--accent-soft)] px-1 py-0.5 font-mono text-[11px]">{segment.value}</code>
-        : <span key={position}>{segment.value}</span>)}</p>)}</>;
+    : <p key={index} className="mt-2 whitespace-pre-wrap text-[12.5px] leading-5 first:mt-0"><InlineText text={block.content} /></p>)}</>;
 }
 
 export function ConversationPanel({ messages, canSend, onSend }: { messages: ConversationMessage[]; canSend: boolean; onSend: (text: string) => void }) {
