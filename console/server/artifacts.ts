@@ -46,6 +46,9 @@ async function archiveArtifact(source: string) {
 export async function startArtifactWatcher(cwd: string) {
   await artifactWatcher?.close();
   const taskRoot = path.join(cwd, ".claude", "tasks");
+  // chokidar stays inert on a path that does not exist yet, and a checkout that
+  // has never run the workflow has no .claude/tasks to watch.
+  await mkdir(taskRoot, { recursive: true });
   artifactWatcher = chokidar.watch(taskRoot, { ignoreInitial: false, awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 } });
   artifactWatcher.on("add", (file) => void archiveArtifact(file));
   artifactWatcher.on("change", (file) => void archiveArtifact(file));
