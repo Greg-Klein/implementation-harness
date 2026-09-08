@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, CodeIcon, TrashIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, CodeIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { PendingSelfImprovementReview } from "@/lib/types";
 
@@ -48,6 +48,12 @@ export function SelfImprovementReviewPanel({ review, onApprove, onReject }: { re
       <div className="m-4 rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
         <p className="mb-1 text-[11px] font-semibold text-[var(--accent)]">Améliorations prêtes</p>
         <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName}</p>
+        {review.mergesCleanly === false && (
+          <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-4 text-red-700">
+            <WarningIcon size={13} className="mt-px shrink-0" />
+            Le harnais a avancé depuis : la fusion entrera en conflit et sera annulée. À reprendre à la main.
+          </p>
+        )}
         <button type="button" onClick={() => setDiffOpen(true)} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">
           <CodeIcon size={13} /> Voir les changements
         </button>

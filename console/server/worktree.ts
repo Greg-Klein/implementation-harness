@@ -7,6 +7,17 @@ const exec = promisify(execFile);
 
 export type Worktree = { path: string; branch?: string };
 
+/** Every worktree registered against the harness checkout, the primary one included. */
+export async function listWorktrees(): Promise<Worktree[]> {
+  const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
+  return stdout.split("\n\n").flatMap((block) => {
+    const lines = block.split("\n");
+    const worktreePath = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
+    if (!worktreePath) return [];
+    return [{ path: worktreePath, branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length) }];
+  });
+}
+
 /**
  * The agent is free to rename the branch it creates for a worktree, and Claude
  * Code does exactly that by prefixing it with "worktree-". The directory name
@@ -14,13 +25,7 @@ export type Worktree = { path: string; branch?: string };
  * created it.
  */
 export async function findWorktree(name: string): Promise<Worktree | undefined> {
-  const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd: pluginRoot });
-  return stdout.split("\n\n").flatMap((block) => {
-    const lines = block.split("\n");
-    const worktreePath = lines.find((line) => line.startsWith("worktree "))?.slice("worktree ".length);
-    if (!worktreePath || path.basename(worktreePath) !== name) return [];
-    return [{ path: worktreePath, branch: lines.find((line) => line.startsWith("branch refs/heads/"))?.slice("branch refs/heads/".length) }];
-  })[0];
+  return (await listWorktrees()).find((worktree) => path.basename(worktree.path) === name);
 }
 
 /** The point where the worktree left the branch the harness itself runs on. */
@@ -46,6 +51,42 @@ export async function worktreeCommitCount(worktree: Worktree) {
   const base = await mergeBase(worktree);
   const { stdout } = await exec("git", ["rev-list", "--count", `${base}..HEAD`], { cwd: worktree.path });
   return Number(stdout.trim()) || 0;
+}
+
+/**
+ * Whether the checkout already contains every commit of the branch. A commit is
+ * its own ancestor, so a branch the improvement agent never committed to answers
+ * yes as well: this says the branch has nothing left to give, never that it once
+ * gave something. Pair it with `worktreeIsClean` before destroying anything.
+ */
+export async function branchIsMerged(repository: string, branch: string) {
+  return await exec("git", ["-C", repository, "merge-base", "--is-ancestor", branch, "HEAD"]).then(() => true, () => false);
+}
+
+/**
+ * No uncommitted change in the worktree. /implementation-harness:improve leaves
+ * its branch uncommitted when its own validation fails, and that diagnosis is the
+ * only copy: nothing may be removed while it is still on disk.
+ */
+export async function worktreeIsClean(worktree: Worktree) {
+  const { stdout } = await exec("git", ["status", "--porcelain"], { cwd: worktree.path });
+  return stdout.trim() === "";
+}
+
+/**
+ * Simulates the merge without touching the checkout: `merge-tree --write-tree`
+ * exits 0 on a clean merge and 1 on a conflict, and writes only to the object
+ * database. Asked before the buttons open, so a promotion is never announced as
+ * one click when the user would discover the conflict by clicking.
+ */
+export async function branchMergesCleanly(repository: string, branch: string) {
+  return await exec("git", ["-C", repository, "merge-tree", "--write-tree", "HEAD", branch], { maxBuffer: 8 * 1024 * 1024 }).then(() => true, () => false);
+}
+
+/** Drops the worktree and the branch it was on, once its fate is settled. */
+export async function removeWorktree(repository: string, worktree: Worktree) {
+  await exec("git", ["worktree", "remove", "--force", "--force", worktree.path], { cwd: repository });
+  if (worktree.branch) await exec("git", ["-C", repository, "branch", "-D", worktree.branch]).catch(() => undefined);
 }
 
 /**

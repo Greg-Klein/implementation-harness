@@ -74,6 +74,24 @@ export function hasAuditableEvidence(snapshot: Pick<RunState, "status" | "agents
   return snapshot.status === "failed" || snapshot.agents.length > 0 || snapshot.artifacts.length > 0;
 }
 
+const IMPROVEMENT_WORKTREE_PREFIX = "self-improvement-";
+
+export function improvementWorktreeName(runId: string) {
+  return `${IMPROVEMENT_WORKTREE_PREFIX}${runId.slice(-8)}`;
+}
+
+/**
+ * The improvement worktree already in flight, out of every worktree registered
+ * against the harness. One undecided branch at a time is the whole point: the
+ * loop opened eleven in a day on 7 September, four of them conflicting with each
+ * other, and each rotted as the harness branch moved on. A branch nobody has
+ * ruled on is also the branch the next iteration would be diagnosed against, so
+ * the loop waits for a verdict instead of stacking.
+ */
+export function improvementWorktreeInFlight(worktreePaths: string[]) {
+  return worktreePaths.find((worktreePath) => path.basename(worktreePath).startsWith(IMPROVEMENT_WORKTREE_PREFIX));
+}
+
 // The console is itself a Next server, and Next writes its bundler choice and
 // NODE_ENV into the environment. Handing those down to an agent that runs a
 // build makes it abort on conflicting bundler flags, whatever the code checked.

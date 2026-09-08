@@ -5,7 +5,8 @@ export type AgentStatus = "running" | "completed" | "failed";
 export type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
-export type PendingSelfImprovementReview = { worktreeName: string; runId: string };
+/** `mergesCleanly` is false when the branch no longer merges into the harness: the promotion is not one click. */
+export type PendingSelfImprovementReview = { worktreeName: string; runId: string; mergesCleanly?: boolean };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;

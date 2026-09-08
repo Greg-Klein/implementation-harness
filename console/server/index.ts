@@ -1,7 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { appendFile, mkdir } from "node:fs/promises";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import path from "node:path";
 import process from "node:process";
 import next from "next";
@@ -16,12 +14,11 @@ import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemo
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { clearImprovementWatchers, forgetImprovementReview, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
-import { findWorktree, mergeBranch, worktreeDiff } from "./worktree.js";
+import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { engine } from "./engine/index.js";
 import type { EngineSession } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
 
-const execFileAsync = promisify(execFile);
 let terminal: EngineSession | null = null;
 const intentionallyStoppedRuns = new Set<string>();
 
@@ -50,13 +47,20 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     // before the checkout actually moved.
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
       .catch((error) => { throw new Error(`La fusion de ${worktreeName} a échoué et a été annulée, le worktree est conservé : ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
-    if (!merged) throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
-    activity("system", "Améliorations fusionnées", worktreeName);
+    // Git brings nothing in two cases its exit code cannot tell apart: a branch
+    // whose commits the harness already contains, and one that holds no commit at
+    // all. The first is work landed by hand, and refusing to clean it up left no
+    // honest way out — merging said nothing was merged, discarding recorded as
+    // ignored what had in fact been kept. The second may still be an agent
+    // mid-write, so the worktree only goes when it has nothing uncommitted either.
+    const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
+    if (!merged && !spent)
+      throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
+    activity("system", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
   } else {
     activity("system", "Améliorations ignorées", worktreeName);
   }
-  await execFileAsync("git", ["worktree", "remove", "--force", "--force", worktree.path], { cwd: pluginRoot });
-  if (worktree.branch) await execFileAsync("git", ["-C", pluginRoot, "branch", "-D", worktree.branch]).catch(() => undefined);
+  await removeWorktree(pluginRoot, worktree);
   ctx.state.pendingSelfImprovementReview = undefined;
   publishState();
 }

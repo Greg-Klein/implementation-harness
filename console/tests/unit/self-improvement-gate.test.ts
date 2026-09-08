@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { hasAuditableEvidence, withoutBundlerVariables } from "../../server/domain";
+import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -17,6 +17,30 @@ describe("autonomous audit evidence", () => {
   it("should skip a session stopped before it did anything", () => {
     expect(hasAuditableEvidence({ status: "completed", agents: [], artifacts: [] })).toBe(false);
     expect(hasAuditableEvidence({ status: "idle", agents: [], artifacts: [] })).toBe(false);
+  });
+});
+
+// The defect this guards: the loop opened eleven improvement branches on
+// 7 September, four of them conflicting, none promoted through the console.
+describe("one improvement in flight at a time", () => {
+  const harness = "/Users/x/implementation-harness";
+
+  it("should find nothing in flight when only the harness checkout is registered", () => {
+    expect(improvementWorktreeInFlight([harness])).toBeUndefined();
+  });
+
+  it("should find the undecided improvement worktree", () => {
+    const pending = `${harness}/.claude/worktrees/self-improvement-025063c3`;
+    expect(improvementWorktreeInFlight([harness, pending])).toBe(pending);
+  });
+
+  // A branch the user works on themselves is not the loop's business to wait on.
+  it("should ignore a worktree that is not an improvement one", () => {
+    expect(improvementWorktreeInFlight([harness, `${harness}/.claude/worktrees/feat-259-composer`])).toBeUndefined();
+  });
+
+  it("should name a worktree after the run it audits", () => {
+    expect(improvementWorktreeName("2026-09-08T12-49-02-961Z-025063c3")).toBe("self-improvement-025063c3");
   });
 });
 

@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
-import { feedbackRoot, consoleRoot } from "./config.js";
-import { hasAuditableEvidence, normalizeText } from "./domain.js";
+import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
+import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { findWorktree, worktreeCommitCount } from "./worktree.js";
+import { branchMergesCleanly, findWorktree, listWorktrees, worktreeCommitCount } from "./worktree.js";
 import type { RunState } from "./types.js";
 
 const auditedRuns = new Set<string>();
@@ -78,21 +78,32 @@ function watchForImprovements(worktreeName: string, runId: string, attempt = 0) 
     const worktree = await findWorktree(worktreeName).catch(() => undefined);
     const commits = worktree ? await worktreeCommitCount(worktree).catch(() => 0) : 0;
     if (commits > 0) {
-      ctx.state.pendingSelfImprovementReview = { worktreeName, runId };
+      const mergesCleanly = worktree?.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
+      ctx.state.pendingSelfImprovementReview = { worktreeName, runId, mergesCleanly };
       activity("agent", "Améliorations prêtes — en attente de validation", `${commits} commit${commits > 1 ? "s" : ""} sur ${worktreeName}`);
       publishState();
       return;
     }
     if (attempt + 1 < WATCH_ATTEMPTS) { watchForImprovements(worktreeName, runId, attempt + 1); return; }
-    activity("attention", "Auto-amélioration sans commit", `Le worktree ${worktreeName} reste à inspecter à la main.`);
+    activity("attention", "Auto-amélioration sans commit", `Le worktree ${worktreeName} reste à inspecter à la main, et la boucle reste en pause tant qu'il existe.`);
     publishState();
   }, WATCH_INTERVAL_MS);
   improvementWatchers.add(timer);
 }
 
-function startAutonomousImprovement(runId: string) {
+async function startAutonomousImprovement(runId: string) {
   if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return;
-  const worktreeName = `self-improvement-${runId.slice(-8)}`;
+  const worktrees = await listWorktrees().catch(() => []);
+  const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
+  if (inFlight) {
+    // The audit stays in pending/, where the next iteration reads it: nothing is
+    // lost by waiting, and evidence gathered over two runs is worth more than one
+    // branch per run.
+    activity("system", "Auto-amélioration en attente", `${path.basename(inFlight)} n'est pas encore tranché. Fusionne-le ou ignore-le pour libérer la boucle.`);
+    publishState();
+    return;
+  }
+  const worktreeName = improvementWorktreeName(runId);
   const child = engine.startSelfImprovement({
     worktreeName,
     feedbackDirectory: path.join(consoleRoot, "data", "feedback"),
