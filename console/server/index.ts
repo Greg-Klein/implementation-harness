@@ -14,7 +14,7 @@ import { closeTranscript, followTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { clearImprovementWatchers, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
+import { clearImprovementWatchers, forgetImprovementReview, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
 import { engine } from "./engine/index.js";
@@ -26,8 +26,10 @@ let terminal: EngineSession | null = null;
 const intentionallyStoppedRuns = new Set<string>();
 
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
-  if (!ctx.state.pendingSelfImprovementReview || ctx.state.pendingSelfImprovementReview.worktreeName !== worktreeName)
+  const pending = ctx.state.pendingSelfImprovementReview;
+  if (!pending || pending.worktreeName !== worktreeName)
     throw new Error("Aucune révision d’auto-amélioration en attente pour ce worktree.");
+  forgetImprovementReview(pending.runId);
   if (worktreeName.startsWith("demo-")) {
     activity("system", merge ? "Améliorations fusionnées (démo)" : "Améliorations ignorées (démo)", worktreeName);
     ctx.state.pendingSelfImprovementReview = undefined;
@@ -35,7 +37,13 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     return;
   }
   const worktree = await findWorktree(worktreeName);
-  if (!worktree) throw new Error(`Worktree "${worktreeName}" introuvable.`);
+  if (!worktree) {
+    // Nothing left to rule on, and keeping the review pending would leave a panel no answer can close.
+    activity("system", "Révision d’auto-amélioration abandonnée", `Worktree "${worktreeName}" introuvable.`);
+    ctx.state.pendingSelfImprovementReview = undefined;
+    publishState();
+    return;
+  }
   if (merge) {
     if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
     await execFileAsync("git", ["-C", pluginRoot, "merge", "--no-ff", worktree.branch, "-m", `self-improvement: apply improvements from ${worktreeName}`]);

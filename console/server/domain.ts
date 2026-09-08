@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { RunStatus } from "./types.js";
+import type { RunState, RunStatus } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -50,6 +50,16 @@ export function positiveDuration(value: string | undefined, fallback: number) {
 
 export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean) {
   return intentionallyStopped || exitCode === 0 ? "completed" as const : "failed" as const;
+}
+
+/**
+ * The autonomous loop only has something to learn from a run that left a trace:
+ * a delegated agent, a produced document, or an unexpected exit. A session
+ * stopped before any of that happened would otherwise spend a full improvement
+ * cycle on empty signals.
+ */
+export function hasAuditableEvidence(snapshot: Pick<RunState, "status" | "agents" | "artifacts">) {
+  return snapshot.status === "failed" || snapshot.agents.length > 0 || snapshot.artifacts.length > 0;
 }
 
 export function gitLabProjectPath(issueUrl: string) {

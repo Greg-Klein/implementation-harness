@@ -2,12 +2,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
 import { feedbackRoot, consoleRoot } from "./config.js";
-import { normalizeText } from "./domain.js";
+import { hasAuditableEvidence, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { findWorktree, worktreeDiff } from "./worktree.js";
 import type { RunState } from "./types.js";
 
-const scheduledSelfAudits = new Set<string>();
+const auditedRuns = new Set<string>();
+const decidedImprovementReviews = new Set<string>();
 const improvementWatchers = new Set<ReturnType<typeof setTimeout>>();
 const WATCH_INTERVAL_MS = 15_000;
 const WATCH_ATTEMPTS = 120;
@@ -29,28 +30,21 @@ export async function saveFeedback(body: string) {
 }
 
 async function queueAutonomousReview(runId: string, snapshot: RunState) {
-  if (scheduledSelfAudits.has(runId)) return;
-  scheduledSelfAudits.add(runId);
   const id = `self-audit-${runId}`;
-  try {
-    await mkdir(feedbackRoot, { recursive: true });
-    await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
-      id, runId, createdAt: now(), status: "pending", source: "autonomous",
-      objective: "Find durable improvements from observable friction, failures, repeated review findings and missing verification in this run.",
-      signals: {
-        finalStatus: snapshot.status,
-        finalPhase: snapshot.phase,
-        elapsedMs: snapshot.startedAt ? Date.now() - new Date(snapshot.startedAt).getTime() : null,
-        agents: snapshot.agents.map((agent) => ({ name: agent.name, status: agent.status })),
-        artifacts: snapshot.artifacts,
-        attentionEvents: snapshot.activities.filter((item) => item.kind === "attention").map((item) => item.title),
-        error: snapshot.error,
-      },
-    }, null, 2));
-  } catch (error) {
-    scheduledSelfAudits.delete(runId);
-    throw error;
-  }
+  await mkdir(feedbackRoot, { recursive: true });
+  await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
+    id, runId, createdAt: now(), status: "pending", source: "autonomous",
+    objective: "Find durable improvements from observable friction, failures, repeated review findings and missing verification in this run.",
+    signals: {
+      finalStatus: snapshot.status,
+      finalPhase: snapshot.phase,
+      elapsedMs: snapshot.startedAt ? Date.now() - new Date(snapshot.startedAt).getTime() : null,
+      agents: snapshot.agents.map((agent) => ({ name: agent.name, status: agent.status })),
+      artifacts: snapshot.artifacts,
+      attentionEvents: snapshot.activities.filter((item) => item.kind === "attention").map((item) => item.title),
+      error: snapshot.error,
+    },
+  }, null, 2));
   if (ctx.state.id === runId) {
     activity("artifact", "Auto-audit mis en file", `${id}.json`);
     publishState();
@@ -62,10 +56,16 @@ export function clearImprovementWatchers() {
   improvementWatchers.clear();
 }
 
+/** The user merged or discarded these improvements: the watcher must never raise that review again. */
+export function forgetImprovementReview(runId: string) {
+  decidedImprovementReviews.add(runId);
+  clearImprovementWatchers();
+}
+
 function watchForImprovements(worktreeName: string, runId: string, attempt = 0) {
   const timer = setTimeout(async () => {
     improvementWatchers.delete(timer);
-    if (ctx.state.id !== runId || ctx.state.pendingSelfImprovementReview) return;
+    if (ctx.state.id !== runId || ctx.state.pendingSelfImprovementReview || decidedImprovementReviews.has(runId)) return;
     const worktree = await findWorktree(worktreeName).catch(() => undefined);
     const diff = worktree ? await worktreeDiff(worktree).catch(() => "") : "";
     if (diff.trim()) {
@@ -107,10 +107,25 @@ function startAutonomousImprovement(runId: string) {
   });
 }
 
+/**
+ * The Stop hook fires on every idle turn once the workflow reaches its last phase,
+ * and the terminal exit fires once more. The decision therefore has to be taken
+ * once per run and kept: a second launch races the first one over the same
+ * worktree, and one of them destroys the other's work.
+ */
 export function scheduleAutonomousReview(runId: string) {
   // A demonstration run has nothing to teach the loop, like its feedback field.
   if (runId.startsWith("demo-")) return;
+  if (auditedRuns.has(runId)) return;
+  auditedRuns.add(runId);
   const snapshot = structuredClone(ctx.state);
+  if (!hasAuditableEvidence(snapshot)) {
+    if (ctx.state.id === runId) {
+      activity("system", "Auto-audit sans objet", "Cette exécution n'a produit ni agent, ni document, ni échec à analyser.");
+      publishState();
+    }
+    return;
+  }
   void queueAutonomousReview(runId, snapshot)
     .then(() => startAutonomousImprovement(runId))
     .catch((error) => {
