@@ -44,7 +44,7 @@ How to read each kind of resource:
 | Resource | How |
 |---|---|
 | Figma | See "Reading a Figma design" below |
-| GitLab uploads | `curl -sL -H "PRIVATE-TOKEN: $(glab auth token)" "<upload-url>" -o .claude/tasks/assets/<name>` then `Read` the file to actually look at it |
+| GitLab uploads | `glab api "projects/<url-encoded-project-path>/uploads/<secret>/<filename>" > .claude/tasks/assets/<name>` then `Read` the file to actually look at it. The secret and the filename are the two segments of the upload URL itself (`/uploads/<secret>/<filename>`), and the project path is URL encoded (`group%2Fproject`). Never rebuild the request by hand with `curl` and a token read from `glab`: `glab auth token` is not a subcommand, it prints its own help page on standard output and exits `0`, so the header carries help text instead of a credential and the failure looks like a network error. Name each file after what it shows and confirm it by reading the file, never by trusting the order of the downloads |
 | Epic / linked issues | `glab issue view`, `glab api groups/<group>/epics/<iid>` |
 | Anything with no API and no MCP (Notion, Docs, random web page) | **Playwright**: `browser_navigate` + `browser_snapshot` + `browser_take_screenshot`. This is the default fallback, never WebFetch |
 
@@ -170,7 +170,7 @@ Each `developer` invocation must receive:
 > - Strictly no scope creep. Spotted an unrelated problem? Report it, do not fix it.
 > - **When two specifications contradict each other, apply the precedence order: PRD, then design, then ticket.** The PRD wins over the Figma design, the design wins over the ticket description, acceptance criteria and comments. The lower source is outdated, not a refinement. Exception: an explicit later decision (a comment saying the PRD is wrong on this point, an answer given by the user) wins over everything. Silence at a higher level is not a contradiction: a design detailing what the PRD leaves open is normal. Report every contradiction you arbitrated at the top of your report, never resolve one silently.
 > - **Never invent what the specification does not say.** Obvious interaction behaviour can be deduced (a close button closes the modal, `Escape` closes an overlay, a spinner shows while loading): implement it and note the deduction. Anything that is a decision (a product rule, a user facing string, a limit, a data source, a permission, an error behaviour) is not yours to choose. Stop that part, report the question at the top of your report, and implement everything else. Never invent copy, never invent an endpoint, never bury a `// TODO: confirm` in the diff.
-> - Before finishing: run lint, typecheck and tests, and check the change in the browser with Playwright when it is visible. Report failures you could not fix instead of hiding them.
+> - Before finishing: run lint, typecheck and tests, and check the change in the browser with Playwright when it is visible. Report failures you could not fix instead of hiding them, and report them as failures: a red check is never turned green by attributing it to the environment, to the past or to a passing CI. If you had to prefix the project's documented command with anything to get it green, that prefix is itself a finding, and the red result of the documented command is what goes in your report.
 
 If a `developer` comes back with a specification question instead of a guess, it did the right thing. Check first whether the codebase, the design or an obvious convention answers it. If not, ask the user (this is a legitimate interruption, see "Never invent"), record the answer in `.claude/tasks/open-questions.md`, and relaunch the task with the answer. Never answer a product question on the user's behalf.
 
@@ -252,7 +252,12 @@ Loop exit criteria, enforced by the orchestrator:
 - `P2` findings may remain: they are reported, not fixed
 - **at most two rework rounds**, and the time bound above applies over them. A third round means the implementation or the plan is wrong, not that another pass is needed: stop, and say so in the report
 
-When it returns, read `.claude/tasks/review-summary.md`, then commit any code the reviewers changed with a `fix(...)` or `refactor(...)` commit. Git stays your responsibility, never theirs.
+When the review phase is over, read what the tier you picked actually produced, and never a file that tier cannot write:
+
+- **tier 2**, the only tier with an orchestrator: `.claude/tasks/review-summary.md`, which the orchestrator writes.
+- **tier 0 and tier 1**, where you sequence the reviewers yourself: their own artifacts, `.claude/tasks/senior-review.md`, `.claude/tasks/qa-report.md`, and `.claude/tasks/designer-review.md` when a design review ran. There is no summary file on these tiers, so consolidate them yourself. Waiting for `review-summary.md` here is waiting for a file nobody writes.
+
+Then commit any code the reviewers changed with a `fix(...)` or `refactor(...)` commit. Version control stays your responsibility, never theirs.
 
 If it comes back blocked (loop limit reached, `P0` still open), do not throw the work away: still push the branch and still open the merge request, but as a **draft**, with a `## Blocked` section at the top listing what remains open and what was tried. A draft MR with an honest blocker section is more useful than a lost branch.
 
@@ -327,7 +332,7 @@ All of that either belongs in the review comment of step 9, or nowhere. The desc
 
 Once the loop is over and only minor findings remain, publish the consolidated review as a comment on the merge request. This is mandatory, on a `READY` verdict as well as on a `BLOCKED` one.
 
-Build it from `.claude/tasks/review-summary.md` and the per round reviewer artifacts, write it to `.claude/tasks/mr-review-comment.md`, then post it:
+Build it from the sources step 7 named for your tier (`review-summary.md` at tier 2, the reviewers' own artifacts below it) plus the per round archives, write it to `.claude/tasks/mr-review-comment.md`, then post it:
 
 ```bash
 glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
@@ -431,6 +436,24 @@ A specification gap is never filled by imagination. Three ways out, in this orde
 Most gaps surface in step 1 and are asked in step 2. A gap that only surfaces during implementation is the one legitimate reason to interrupt again: ask it, then resume. `developer` and reviewer agents must escalate such a gap to you rather than decide it themselves.
 
 Every deduction and every answered question ends up in the merge request description, so the user can see what was assumed and what was decided.
+
+---
+
+## A red check is never a pass
+
+A check is red or it is green. Nothing about where the failure comes from changes that, and none of these makes it green: a passing CI on the base branch, the same failure existing before the change, an environment that resolves a dependency differently, a machine-specific setup. Those explain a red check. They do not convert it.
+
+This is the one place where reclassification is the failure mode rather than the fix, so the rule is mechanical.
+
+- **Run the command the project documents**, the one in its `README`, its `CLAUDE.md` or its CI configuration. That command's result is the result. Discovering a variant that passes is useful and gets reported, but it never replaces the documented command's outcome.
+- **If a prefix, a flag or an exported variable was needed to get green, the prefix is itself a finding.** Report it as "the documented command is red, this variant is green, here is the difference", never as "the suite passes". A suite that only passes under an undocumented incantation is a defect of the project or of the harness, and it is reported as one.
+- **Name the cause down to the mechanism, or say you did not find it.** "Environmental", "local resolution problem", "pre-existing" are categories, not causes. A cause is the version, the module, the resolution path, the config key. An unproven cause written as a fact is worse than an honest "cause not found": it gets recorded, it gets trusted, and the next run stops looking.
+- **Never write a diagnosis into project memory, a report or an MR without the evidence that proves it.** A wrong diagnosis recorded as settled costs more than the red check it was meant to excuse.
+- **A failure that comes from the harness itself is reported as a harness defect**, in the final report, so it can reach the improvement loop instead of being absorbed run after run.
+
+What this rule does **not** do: it does not turn a pre-existing failure into something you must fix. A red check that predates the change, is named, and is reported, is out of scope and stays out of scope. Scope is unchanged; only the wording is constrained. What is forbidden is exactly one thing: calling it a success.
+
+The same applies to a check that was not re-run. "Not re-run" is a third result alongside pass and fail, and it is written as such. Taking a check on another agent's word is not a result, and a report that presents it as one is wrong even when the underlying claim happens to be true.
 
 ---
 
@@ -561,6 +584,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - Only you touch git: branches, commits, push, MR
 - The ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8
+- A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"
 - The review is sized to the diff (step 7 tiers). Every diff gets reviewed; what changes with the tier is how wide the mandate is, never whether someone else looks at the code
 - At tier 0 the review is correctness only, and returning nothing is the expected outcome, not a failed review
 - The review never outlasts the implementation, and no single reviewer is waited on for more than about 15 minutes

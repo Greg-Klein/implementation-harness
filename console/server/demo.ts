@@ -139,7 +139,7 @@ export function continueDemoRun() {
   scheduleDemo(demoStepDuration * 7, () => {
     ctx.state.phase = 7;
     ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.json"];
+    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.md"];
     activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
     publishState();
     demoTerminal("Review 2/2 : approuvée. Les retours ont bien été pris en compte.");

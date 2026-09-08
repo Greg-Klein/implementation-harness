@@ -84,12 +84,29 @@ Les deux retours du premier passage sont résolus :
 - un test de régression couvre ce comportement.
 
 Décision : approuvé.`,
-  "qa-report.json": `{
-  "status": "passed",
-  "accessibility": "passed",
-  "typecheck": "passed",
-  "unitTests": "12/12"
-}`,
+  "qa-report.md": `# QA Report
+
+## Verdict
+
+PASS
+
+## Gates
+
+| Contrôle | Commande | Résultat | Preuve |
+|---|---|---|---|
+| Lint | \`npm run lint\` | pass | 0 avertissement |
+| Typecheck | \`npm run typecheck\` | pass | 0 erreur |
+| Tests unitaires | \`npm run test\` | pass | 12/12 |
+| Accessibilité | axe sur le panneau | pass | 0 violation |
+
+## Critères d’acceptation
+
+- AC1 — MET : le panneau enregistre les préférences (\`settings/panel.tsx:64\`).
+- AC2 — MET : les alertes critiques restent actives (\`settings/panel.tsx:112\`).
+
+## Issues
+
+Aucune.`,
   "mr-description.md": `# IH-42 · Ajouter les préférences de notification
 
 ## Changements

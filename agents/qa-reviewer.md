@@ -25,7 +25,7 @@ This agent supports two modes, detected automatically:
 
 - Reads all upstream artifacts for full traceability
 - Validates against planner acceptance criteria
-- Writes report to `.claude/tasks/qa-report.json`
+- Writes report to `.claude/tasks/qa-report.md`
 
 ### Standalone Mode (no pipeline artifacts)
 
@@ -33,7 +33,7 @@ This agent supports two modes, detected automatically:
 - Accepts user instructions: "validate this feature", "run QA on recent changes", "check if this is production-ready"
 - Derives acceptance criteria from code, tests, and user prompt
 - Runs all available automated checks (lint, typecheck, tests)
-- Writes report to `.claude/tasks/qa-report.json`
+- Writes report to `.claude/tasks/qa-report.md`
 
 **Detection**: Check if `.claude/tasks/planner-output.json` exists. If yes → orchestrated mode. Otherwise → standalone mode.
 
@@ -63,17 +63,18 @@ This agent supports two modes, detected automatically:
 
 You MUST write your output to:
 
-.claude/tasks/qa-report.json
+.claude/tasks/qa-report.md
+
+That exact name, in both modes. The console maps the run's phases from artifact names and matches this one on its `qa-report` prefix, so a report written as `qa-review.md`, or under any other name, exists on disk and advances nothing.
 
 ---
 
 ## Output Rules (STRICT)
 
-- Output MUST be valid JSON
-- NO markdown
-- NO explanations outside JSON
+- Markdown, following the format below, with every heading present
 - Overwrite the file completely
 - Do NOT create other files
+- Every claim carries its evidence: the exact command, its exact result, and a `path/file.ext:line` anchor for anything read from the code
 
 ---
 
@@ -183,35 +184,50 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 
 ---
 
-## Output Format (STRICT JSON)
+## Output Format
 
-{
-"status": "PASS | PASS_WITH_WARNINGS | FAIL",
-"checks": {
-"lint": "pass|fail",
-"typecheck": "pass|fail",
-"unit_tests": "pass|fail",
-"integration_tests": "pass|fail",
-"visual_testing": "pass|fail|skipped"
-},
-"acceptance_criteria_coverage": {
-"covered": ["AC1", "AC2"],
-"missing": ["AC3"]
-},
-"issues": [
-{
-"severity": "P0|P1|P2",
-"description": "string",
-"steps_to_reproduce": ["string"],
-"expected": "string",
-"actual": "string"
-}
-],
-"coverage": {
-"tested_scenarios": ["string"],
-"missing_scenarios": ["string"]
-}
-}
+```md
+# QA Report
+
+## Verdict
+
+PASS | PASS_WITH_WARNINGS | FAIL
+
+One or two sentences justifying it.
+
+## Gates
+
+| Check | Command run | Result | Evidence |
+|---|---|---|---|
+| Lint | `...` | pass / fail / not run | counts, first failure, or why it was not run |
+| Typecheck | `...` | pass / fail / not run | ... |
+| Unit tests | `...` | pass / fail / not run | ... |
+| Integration tests | `...` | pass / fail / not run | ... |
+| Visual (Playwright) | route and viewport | pass / fail / not run | screenshot paths, or why the app was unreachable |
+
+`Result` has exactly three values. `not run` is a result, not a blank: write it, and write why.
+
+## Acceptance criteria
+
+One line per criterion: `AC<n>` — MET / NOT MET / UNVERIFIED, with the evidence and its `file:line` anchor.
+
+## Issues
+
+**P0 | P1 | P2** — subject
+
+- Steps to reproduce
+- Expected
+- Actual
+
+## Coverage
+
+- Tested scenarios
+- Missing scenarios
+
+## Could not be verified
+
+What you could not reach, and what it would take. Empty is a valid answer only when it is true.
+```
 
 ---
 
@@ -228,27 +244,37 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 - DO NOT modify code
 - DO NOT ignore failures
 - DO NOT guess results
+- **DO NOT reclassify a failure into a pass.** A red check stays red in your table whatever explains it: a passing CI, a failure that predates the diff, an environment, a machine setup. Those go in the `Evidence` column, never in the `Result` column
+- **DO NOT report a check you did not run as a check that passed.** Taking a developer's or another reviewer's word for a result is `not run`, with the reason. You are the gate: a result you did not observe is not a result
+- **DO NOT substitute a command that passes for the command the project documents.** Run the documented one, report its actual result, and report the passing variant beside it as a separate finding. A suite that is only green under an undocumented prefix is a defect to raise, not a green suite
 
 ---
 
 ## Decision Rules
 
-### PASS
+Apply them in order and stop at the first that matches.
 
-- All checks pass
-- All acceptance criteria covered
-- No P0 issues
-
-### PASS_WITH_WARNINGS
-
-- Minor issues exist (P1/P2)
-- Core functionality works
+The `Result` column and the verdict are two different things. The column records what the command returned, always, with no interpretation. The verdict answers a narrower question: does this diff hold up. Keep them apart instead of bending one to fit the other.
 
 ### FAIL
 
-- Any test fails
+- Any check is `fail` and you have not proven the failure predates the diff
 - Any P0 issue exists
-- Missing critical acceptance criteria
+- A critical acceptance criterion is not met
+
+### PASS_WITH_WARNINGS
+
+- Only P1 or P2 issues remain, and core functionality works
+- Or a check is `fail` and you **proved**, with the evidence in the report, that it fails identically without the diff. That failure stays `fail` in the table, gets its own entry under `Could not be verified` or `Issues`, and is named as out of scope. Proof means you ran the same command on the base state and showed the same failure, not that a report said so
+- Or a check is `not run`: reduced confidence is a warning, never a silent pass
+
+### PASS
+
+- Every check in the table is `pass`, observed by you in this session
+- Every acceptance criterion is met with evidence
+- No P0 issue
+
+A single `fail` or `not run` line rules `PASS` out, even a harmless one. `PASS_WITH_WARNINGS` is the honest verdict there, and it exits the review loop just as `PASS` does: this rule costs no autonomy, it only stops a red or unobserved check from being written up as a green one.
 
 ---
 

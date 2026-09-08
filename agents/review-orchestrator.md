@@ -44,7 +44,7 @@ Sub agents keep writing their own artifacts:
 
 - `.claude/tasks/senior-review.md`
 - `.claude/tasks/designer-review.md`
-- `.claude/tasks/qa-report.json`
+- `.claude/tasks/qa-report.md`
 
 Archive each artifact per round: after round N, copy it to `<name>-round<N>.<ext>`, because every reviewer overwrites its own file.
 
