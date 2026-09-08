@@ -30,6 +30,7 @@ Expected from the caller, in the prompt:
 - `.claude/tasks/planner-output.json` and `.claude/tasks/developer-report.md`
 - `.claude/tasks/ticket-context.md`
 - app URL and the route to reach the feature, plus test credentials if any
+- the developer's browser evidence: the `## Browser Evidence` rows of its report and the screenshots under `.claude/tasks/assets/`
 - Figma links, or an explicit statement that there is no design
 
 Missing input is not a reason to stop. Record what is missing, downgrade confidence, and run what you can.
@@ -72,7 +73,7 @@ Two hard constraints shape the order:
 Round N:
 
 1. **senior-reviewer**. It reads code and opens no browser, so it may run **alongside** the design review to save wall-clock time, **but only if it holds its fixes until the design review is finished**. If it applies them live, the design review measures a moving target and its findings become unreliable. When you cannot guarantee that, run it first and alone.
-2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, and the viewports. It must not read source code.
+2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, and the viewports. It must not read source code. When the app is out of reach, skip it and hand the developer's browser evidence to `qa-reviewer` instead, so the visible criteria still get a verdict each rather than a single skipped line.
 3. **qa-reviewer** last, so it validates the final state of the round, fixes included.
 
 When in doubt, sequential. A faster loop that returns wrong findings costs more than the minutes it saves.
@@ -144,6 +145,7 @@ READY | BLOCKED
 - Tests: run / partially run / not run
 - Live app: inspected via Playwright / not reachable and why
 - Figma: compared / no design provided
+- Visible criteria, one line each: measured live / confirmed from the developer's evidence (with the screenshot path) / unverified (with what was missing). An unreachable app is a reason to fall back on the developer's evidence, never a reason to leave a criterion unexamined
 - Anything that could not be verified
 ```
 

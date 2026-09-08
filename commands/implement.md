@@ -145,7 +145,7 @@ Each `developer` invocation must receive:
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the Figma node URLs when the task is UI, plus the "Reading a Figma design" procedure below
-- the explicit instruction to **verify its own work in the browser with Playwright** when the change is visible, and to attach screenshots paths to its report
+- the explicit instruction to **verify its own work in the browser with Playwright** when the change is visible, and to fill the `## Browser Evidence` table of its report: one row per visible criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
 - the implementation brief below, verbatim
 
@@ -192,6 +192,8 @@ Before the review phase, if the change is visible in the UI:
 
 If the app cannot be started, say so explicitly: the design review will be skipped and QA confidence drops. Do not pretend a visual review happened.
 
+**An unreachable app does not make the visual criteria unverifiable.** The developer measured them and left screenshots and numbers behind, so collect the `## Browser Evidence` rows from `.claude/tasks/developer-report.md` and the files under `.claude/tasks/assets/`, and pass both on with the reason the app is out of reach. That evidence becomes the reviewers' reference: they confirm each criterion against it, or name it unverified. What must never happen again is a reviewer writing "browser check not run" while the measurement it needed sat in `.claude/tasks/assets/`.
+
 ---
 
 ## Step 7 - Challenge the implementation
@@ -217,9 +219,9 @@ Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with w
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
-Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths, app URL and route, Figma links, whether a design is available, and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
+Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths, app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Browser Evidence` rows and the screenshot paths from step 6), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
 
-Whatever the tier, scope every reviewer to **the diff**, never to the repository: name the files and say explicitly that untouched code is out of scope. An unbounded reviewer will audit whatever it finds, and that is where the hour goes.
+Whatever the tier, scope every reviewer to **the diff**, never to the repository: name the files and say explicitly that untouched code is out of scope. An unbounded reviewer will audit whatever it finds, and that is where the hour goes. And whatever the tier, the browser evidence from step 6 travels with the scope, orchestrator or not: on tiers 0 and 1 you hand it to the reviewer yourself.
 
 It runs the review loop (`senior-reviewer`, `designer-reviewer` when a design exists, `qa-reviewer`), routes findings back to `developer`, and stops when only minor findings remain.
 

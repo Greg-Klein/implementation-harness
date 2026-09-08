@@ -157,6 +157,8 @@ Before finishing:
 - Run typecheck
 - Run tests
 - Validate acceptance criteria coverage
+- Measure every visible acceptance criterion in the browser with Playwright, and leave the evidence behind: screenshots under `.claude/tasks/assets/`, values read from the live DOM with `getComputedStyle` / `getBoundingClientRect`. The reviewers may not be able to reach the app themselves, so this evidence is what they will judge against. Report it, never a claim without a number.
+- If reaching the feature took a temporary harness (a fixture route, a measurement page, a seeded state), keep it out of the diff but write down in the report how to rebuild it. A measurement nobody can redo is a measurement the reviewer has to record as unverified.
 
 ---
 
@@ -191,6 +193,17 @@ Write to `.claude/tasks/developer-report.md`:
 ## Tests Added / Updated
 
 - ...
+
+## Browser Evidence
+
+One row per visible acceptance criterion. Omit the section only when nothing in
+the change is visible, and say so in one line instead.
+
+| Criterion | Measured value | Reference | Screenshot | How to reproduce |
+| --- | --- | --- | --- | --- |
+| ... | value read from the live DOM | Figma node, ticket, or the design's value | `.claude/tasks/assets/<name>.png` | route, viewport, and the temporary harness to rebuild if there was one |
+
+- Criteria you could not measure, and why (app unreachable, no credentials, state not attainable)
 
 ## Known Limitations
 

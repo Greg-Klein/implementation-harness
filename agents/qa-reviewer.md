@@ -171,8 +171,21 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 #### If no URL is available
 
 - Check if a dev server can be started (look for `package.json` scripts)
-- If not possible, note it in the report and rely on automated tests only
+- Read the developer's `## Browser Evidence` table and open every screenshot it names under `.claude/tasks/assets/`. The developer reached the feature before you and left measured values behind, sometimes through a temporary harness whose rebuild recipe is in the same table. Confirming a criterion from that evidence is a real verification; ignoring it and calling the criterion unverified is not
+- If the evidence is missing or does not cover a criterion, say which one and why, and rely on automated tests for the rest
 - This reduces confidence — flag it clearly
+
+#### Verdict per visible criterion
+
+Never write "browser check not run" as a whole. Each visible acceptance criterion gets exactly one of three verdicts, and the report says which:
+
+- **measured live** — you drove the app yourself and read the value
+- **confirmed from the developer's evidence** — cite the screenshot path and the value you checked
+- **unverified** — nothing let you reach it: say what was missing (no URL, no credentials, state unattainable, evidence absent) and what it would take
+
+A criterion carrying a number the design specifies stays `unverified` until some measurement backs it, yours or the developer's. Reasoning from the source code is not a measurement.
+
+Carry one entry per visible criterion in the report, whatever shape the report format below takes: the criterion, its verdict, the value you read or the value the developer's evidence reads, and the evidence itself — a screenshot path, or why nothing could back it.
 
 ---
 
@@ -206,6 +219,15 @@ One or two sentences justifying it.
 | Visual (Playwright) | route and viewport | pass / fail / not run | screenshot paths, or why the app was unreachable |
 
 `Result` has exactly three values. `not run` is a result, not a blank: write it, and write why.
+
+## Visible criteria
+
+| Criterion | Verdict | Value read | Evidence |
+|---|---|---|---|
+| ... | measured live / confirmed from the developer's evidence / unverified | the value you or the developer's evidence read | screenshot path, or what was missing |
+
+One row per visible criterion. A single "browser check not run" covering all of
+them is not an answer.
 
 ## Acceptance criteria
 
