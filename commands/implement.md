@@ -69,7 +69,7 @@ An obvious behaviour is not a gap. A close button closes the modal, a cancel but
 
 ## Step 2 - Ask the user (ONLY interactive step)
 
-Play the attention sound first (see "Getting the user's attention" below), then a single interaction with **AskUserQuestion**, carrying everything you will ever need:
+A single interaction with **AskUserQuestion**, carrying everything you will ever need:
 
 1. **Base branch.** `git fetch`, then list candidates: current branch, `develop`, `main`/`master`, plus any existing branch related to the ticket or its epic. Recommend `develop` when it exists, always allow a custom answer.
 2. **The blocking questions from step 1**, up to three per batch. Phrase each one as a real decision with concrete options, never as an open essay question. Give a recommended option first when you have a defensible one, and say what it implies.
@@ -384,7 +384,7 @@ Rules for this comment:
 
 ## Step 10 - Final report
 
-Play the end-of-run sound (see "Getting the user's attention"), then print a short summary in chat:
+Print a short summary in chat:
 
 - ticket, branch, base branch, MR URL
 - tasks implemented
@@ -428,7 +428,7 @@ A specification gap is never filled by imagination. Three ways out, in this orde
 2. **Ask, when the answer is a decision.** A product rule, a user facing string, a limit or threshold, a data source, a permission, an error behaviour, a scope boundary, a state the ticket never mentions. These are not yours to choose, whatever the cost in autonomy.
 3. **Never guess in silence.** No plausible placeholder copy, no invented endpoint, no arbitrary limit, no `// TODO: confirm with product` buried in a diff.
 
-Most gaps surface in step 1 and are asked in step 2. A gap that only surfaces during implementation is the one legitimate reason to interrupt again: play the attention sound, ask it, then resume. `developer` and reviewer agents must escalate such a gap to you rather than decide it themselves.
+Most gaps surface in step 1 and are asked in step 2. A gap that only surfaces during implementation is the one legitimate reason to interrupt again: ask it, then resume. `developer` and reviewer agents must escalate such a gap to you rather than decide it themselves.
 
 Every deduction and every answered question ends up in the merge request description, so the user can see what was assumed and what was decided.
 
