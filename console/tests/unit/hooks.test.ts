@@ -44,6 +44,21 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(ctx.state).toMatchObject({ status: "completed", phase: 10 });
   });
 
+  it("should date the end of the run from the workflow, not from the session", () => {
+    ctx.state.phase = 9;
+    expect(ctx.state.endedAt).toBeNull();
+    hook({ hook_event_name: "Stop" });
+    expect(ctx.state).toMatchObject({ status: "completed", phase: 10 });
+    // The session then sits idle at its prompt and may be killed much later.
+    expect(ctx.state.endedAt).not.toBeNull();
+  });
+
+  it("should not date the end of a run that is only waiting for an answer", () => {
+    ctx.state.phase = 5;
+    hook({ hook_event_name: "Stop" });
+    expect(ctx.state).toMatchObject({ status: "attention", endedAt: null });
+  });
+
   it("should leave a finished run alone when the idle session keeps notifying", () => {
     ctx.state = { ...ctx.state, status: "completed", phase: 10 };
     hook({ hook_event_name: "Notification", message: "Claude is waiting for your input" });

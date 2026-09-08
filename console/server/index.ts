@@ -87,10 +87,14 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
       const intentionallyStopped = intentionallyStoppedRuns.delete(id);
       if (ctx.state.id !== id) return;
       if (terminal === runTerminal) terminal = null;
-      ctx.state.status = terminalExitStatus(exitCode, intentionallyStopped);
       clearPendingQuestion();
-      ctx.state.endedAt = now();
-      if (ctx.state.status === "failed") ctx.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
+      // The workflow can already have closed the run, and how its idle session
+      // then ends says nothing about the outcome it reached.
+      if (runInProgress(ctx.state.status)) {
+        ctx.state.status = terminalExitStatus(exitCode, intentionallyStopped);
+        ctx.state.endedAt = now();
+        if (ctx.state.status === "failed") ctx.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
+      }
       activity("system", intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
       publishState();
       scheduleAutonomousReview(id);

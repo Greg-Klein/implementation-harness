@@ -122,6 +122,9 @@ function apply(event: EngineEvent) {
   }
   if (ctx.state.phase >= 9) ctx.state.phase = 10;
   ctx.state.status = ctx.state.phase >= 10 ? "completed" : "attention";
+  // The workflow, not the session, decides when the run ended: the session then
+  // sits idle at its prompt and may be killed much later.
+  if (ctx.state.status === "completed") ctx.state.endedAt = now();
   activity("attention", ctx.state.phase >= 10 ? "Workflow terminé" : `${engine.label} attend une réponse`);
   if (ctx.state.phase >= 10 && ctx.state.id) scheduleAutonomousReview(ctx.state.id);
   return undefined;
