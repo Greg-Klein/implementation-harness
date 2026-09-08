@@ -24,7 +24,18 @@ Ignore vague preferences that have no observable outcome. Merge duplicate feedba
 
 One explicit user report can justify a change when the evidence confirms it. A self-generated observation requires the same pattern in at least two independent runs, unless it exposes a deterministic bug, a violated invariant, a failing test or a security defect. Defer everything else and preserve it for comparison with later runs. Never optimize a metric by weakening the workflow's quality gates.
 
-Write the diagnosis to `console/data/feedback/improvement-plan.md`, with the feedback IDs, evidence, intended behavior, affected files, validation, and anything deliberately rejected.
+Improvement branches the user has not yet accepted or discarded are evidence too, and several iterations of this loop run at the same time. Before choosing what to implement, read what is already proposed and what is in flight:
+
+```bash
+git branch --list 'worktree-self-improvement-*'
+git worktree list
+git diff --stat main..<branch>
+git -C <worktree> status --short
+```
+
+Read the full diff of every branch that touches a file you were about to change. Never reimplement a fix a pending branch already carries: name that branch in your report and move on. Treat a file another worktree holds uncommitted as taken, and narrow your scope to files nobody else holds rather than opening a competing branch on the same file. If everything the evidence supports is already carried or taken, change nothing and report that.
+
+Write the diagnosis to `console/data/feedback/improvement-plan-<slug>.md`, where `<slug>` is your improvement branch without its `worktree-self-improvement-` prefix, with the feedback IDs, evidence, intended behavior, affected files, validation, and anything deliberately rejected. Never write to a shared `improvement-plan.md`: concurrent iterations would silently overwrite each other's diagnosis, and a run identifier does not separate them because one finished run can start several iterations.
 
 ## 2. Protect the current version
 
@@ -63,10 +74,11 @@ Always leave the commit on its improvement branch. Never merge it into the prima
 
 Move processed feedback files from `pending/` to `processed/` and add `status`, `branch`, `commit`, `decision`, and `processedAt`. These files remain ignored runtime data.
 
-Write `console/data/feedback/improvement-report.md` with:
+Write `console/data/feedback/improvement-report-<slug>.md`, with the same slug as the plan, containing:
 
 - branch and commit;
 - feedback accepted, combined or rejected;
+- the pending improvement branches you read, and what you left to them;
 - exact behavior changed;
 - checks run and their results;
 - risks, whether it was auto-applied, and how to undo the change;

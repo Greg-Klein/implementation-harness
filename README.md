@@ -149,6 +149,8 @@ impl improve
 
 Cette commande lance Claude Code sur `/implementation-harness:improve`. Il regroupe les retours en attente, vérifie les preuves du run, crée une branche `self-improvement-*`, applique la plus petite amélioration durable, exécute les vérifications et crée un commit local. Il ne pousse rien et ne fusionne rien : le résultat reste inspectable et réversible.
 
+Avant de choisir quoi corriger, il lit aussi les branches `self-improvement-*` que l’utilisateur n’a pas encore acceptées ou écartées, ainsi que les worktrees en cours. Il ne réimplémente pas un correctif déjà porté par une branche en attente : il nomme cette branche dans son rapport. Comme plusieurs itérations peuvent tourner en parallèle, son diagnostic et son rapport portent le nom de sa propre branche, `improvement-plan-<slug>.md` et `improvement-report-<slug>.md`, pour qu’aucune itération n’écrase le travail d’une autre.
+
 Les tickets, logs et retours bruts restent sous `console/data/` et ne sont jamais ajoutés au commit d’amélioration.
 
 Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, documents manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité. La décision est prise une seule fois par run, et seulement si le run a laissé quelque chose à analyser : un agent délégué, un document produit ou une sortie inattendue. Une session arrêtée avant ça est écartée, avec une ligne dans le fil d’activité.
