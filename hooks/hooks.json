@@ -30,7 +30,7 @@
         ]
       },
       {
-        "matcher": "Agent|Bash|Write|Edit",
+        "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.mjs\"" }
         ]
@@ -38,7 +38,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Agent|Bash|Write|Edit",
+        "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/emit.mjs\"" }
         ]

@@ -30,6 +30,14 @@ claude --plugin-dir /chemin/vers/implementation-harness "/implementation-harness
 
 La commande et les agents restent dans le dossier `implementation-harness`; rien n’est installé dans `~/.claude`.
 
+## Ce que montrent les panneaux
+
+Le panneau de discussion est lu dans le transcript de la session, et Claude Code n’y écrit un message qu’une fois revenue l’action qui l’a suivi. Un paragraphe peut donc y arriver avec une minute de retard sur le terminal, qui est la seule vue vraiment live. Tant que la session produit de la sortie, le panneau affiche « Claude écrit… » pour dire que le dernier message visible n’est pas le dernier état du run.
+
+Le flux d’activité ne garde que les jalons du workflow : agents, documents, branche, merge request, décisions attendues. Le détail des commandes reste dans le terminal.
+
+Le harnais ne réclame l’attention que quand il est vraiment arrêté : une décision attendue, une demande de permission, un tour terminé sans agent en cours, la fin ou l’échec du run.
+
 ## Architecture du serveur
 
 | Module | Rôle |
@@ -54,6 +62,6 @@ Chaque exécution est conservée dans `console/data/runs/<run-id>/` :
 
 - `run.json` contient l’état, les agents et le journal d’activité;
 - `terminal.log` contient la sortie brute du terminal;
-- `artifacts/` reçoit une copie des rapports produits dans `.claude/tasks/` avant leur nettoyage.
+- `artifacts/` reçoit une copie des documents produits dans `.claude/tasks/` avant leur nettoyage. Seuls les documents lisibles y sont copiés : les captures et les assets téléchargés restent dans le dépôt, sous `.claude/tasks/assets/`.
 
 Le dossier `data/` est ignoré par Git.

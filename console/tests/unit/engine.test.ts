@@ -34,17 +34,16 @@ describe("engine event translation", () => {
       .toEqual({ kind: "agent.stop", agentId: "a1", agentName: "implementation-harness:developer" });
   });
 
-  it("should pass the command whole while shortening what is displayed", () => {
+  it("should pass the command whole, since it is matched against and never shown", () => {
     const command = `git commit -m "${"x".repeat(400)}"`;
-    const event = claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command } });
-    expect(event).toMatchObject({ kind: "tool.start", tool: "Bash" });
-    // The activity feed gets a short label, the matchers get the real command.
-    expect(event && "command" in event && event.command).toBe(command);
+    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command, description: "Commit" } }))
+      .toEqual({ kind: "tool.start", command });
   });
 
-  it("should prefer the description of a tool call over its command", () => {
-    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm test", description: "Lance les tests" } }))
-      .toMatchObject({ label: "Lance les tests" });
+  it("should drop the notification that only says the session went quiet", () => {
+    expect(claudeCode.event({ hook_event_name: "Notification", message: "Claude is waiting for your input" })).toBeUndefined();
+    expect(claudeCode.event({ hook_event_name: "Notification", message: "Claude needs your permission to use Bash" }))
+      .toEqual({ kind: "attention", message: "Claude needs your permission to use Bash" });
   });
 
   it("should carry a tool response back for the merge request to be found in", () => {

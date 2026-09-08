@@ -1,4 +1,4 @@
-import { agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeText, phaseForAgent, runInProgress } from "./domain.js";
+import { agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { engine } from "./engine/index.js";
@@ -99,8 +99,10 @@ function apply(event: EngineEvent) {
     resumeFromAttention();
     return undefined;
   }
+  // A tool call is not a milestone: two hundred of them in a run bury the dozen
+  // events that tell what the workflow did. The terminal panel keeps the detail;
+  // what the feed takes from a tool call is the branch it creates.
   if (event.kind === "tool.start") {
-    activity("tool", event.tool, event.label ?? normalizeText(event.command));
     if (createsBranch(event.command)) {
       advancePhase(3);
       rememberBranch(event.command);

@@ -43,9 +43,16 @@ export function normalizeAnswers(questions: Question[], answers: Record<string, 
   return Object.values(normalized).every(Boolean) ? normalized : undefined;
 }
 
-export function imageMimeType(filePath: string) {
-  const types: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml" };
-  return types[path.extname(filePath).toLowerCase()];
+const DOCUMENT_EXTENSIONS = new Set([".md", ".json", ".txt"]);
+
+/**
+ * An artifact of the run is a document the workflow wrote to be read. The
+ * screenshots and the downloaded design assets are the agents' working
+ * material: they live in the repository, where the agents write them and read
+ * them back, and listing them alongside the reports only buries the reports.
+ */
+export function isRunDocument(relativePath: string) {
+  return DOCUMENT_EXTENSIONS.has(path.extname(relativePath).toLowerCase());
 }
 
 export function positiveDuration(value: string | undefined, fallback: number) {

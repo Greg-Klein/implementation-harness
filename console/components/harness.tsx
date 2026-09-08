@@ -3,7 +3,7 @@
 import { ChatCircleDotsIcon, CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
-import { runInProgress } from "@/lib/run-state";
+import { isWriting, runInProgress } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
@@ -28,7 +28,9 @@ export function Harness() {
   const [detectingProject, setDetectingProject] = useState(false);
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
+  const [writing, setWriting] = useState(false);
   const cwdRef = useRef("");
+  const lastOutputRef = useRef(0);
   const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
@@ -45,7 +47,12 @@ export function Harness() {
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data) as { type: string; state?: RunState; data?: string };
         if (message.type === "state" && message.state) setRun(message.state);
-        if (message.type === "terminal.output" && message.data) terminalRef.current?.write(message.data);
+        if (message.type === "terminal.output" && message.data) {
+          // Output arrives in bursts, so it stays out of the React state: only
+          // the interval below turns it into a boolean, and only when it flips.
+          lastOutputRef.current = Date.now();
+          terminalRef.current?.write(message.data);
+        }
       };
       socket.onclose = () => {
         if (socketRef.current !== socket) return;
@@ -107,6 +114,15 @@ export function Harness() {
     if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
     new Notification(alert.title, { body: alert.body, tag: alert.tag });
   }, [run]);
+
+  // Nothing here can make the dialogue arrive sooner, so it says that it is
+  // late: the flow of terminal output is the only live proof that the last
+  // message shown is not the last one Claude wrote.
+  useEffect(() => {
+    if (!runInProgress(run.status)) { setWriting(false); return; }
+    const timer = window.setInterval(() => setWriting(isWriting(run.status, lastOutputRef.current, Date.now())), 500);
+    return () => window.clearInterval(timer);
+  }, [run.status]);
 
   // A page may only emit sound after a real interaction. Starting a run is the
   // usual one, but the demonstration starts from a URL and would stay mute, so
@@ -199,7 +215,7 @@ export function Harness() {
                 {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>
               <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <ConversationPanel messages={run.messages} canSend={active && connected} onSend={(text) => send({ type: "instruction.send", text })} />
+                <ConversationPanel messages={run.messages} writing={writing} canSend={active && connected} onSend={(text) => send({ type: "instruction.send", text })} />
               </div>
               <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />

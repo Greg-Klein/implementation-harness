@@ -12,6 +12,19 @@ export function runInProgress(status: Status) {
   return status === "starting" || status === "running" || status === "attention";
 }
 
+/** Long enough to bridge two bursts of terminal output, short enough to fall silent as soon as the session does. */
+const OUTPUT_IDLE_MS = 1_500;
+
+/**
+ * Claude Code writes a paragraph to its transcript only once the action that
+ * followed it has returned, so the conversation can be a minute behind the
+ * terminal. The output of the session is the only live signal that the message
+ * on screen is not the last one, and saying so beats looking frozen.
+ */
+export function isWriting(status: Status, lastOutputAt: number, now: number) {
+  return runInProgress(status) && now - lastOutputAt < OUTPUT_IDLE_MS;
+}
+
 export function pendingAnswerLabel(count: number) {
   return count === 1 ? "Claude attend une réponse" : `Claude attend ${count} réponses`;
 }

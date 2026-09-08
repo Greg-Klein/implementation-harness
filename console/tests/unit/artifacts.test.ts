@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { belongsToRun, imageMimeType, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
+import { belongsToRun, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -15,10 +15,11 @@ describe("artifact handling", () => {
     expect(resolveArtifactPath(root, "../../artifacts-copy/secret.txt")).toBeUndefined();
   });
 
-  it("should recognize previewable image formats", () => {
-    expect(imageMimeType("capture.PNG")).toBe("image/png");
-    expect(imageMimeType("diagram.svg")).toBe("image/svg+xml");
-    expect(imageMimeType("report.md")).toBeUndefined();
+  it("should keep the working material of the agents out of the documents", () => {
+    expect(isRunDocument("developer-report.md")).toBe(true);
+    expect(isRunDocument("planner-output.JSON")).toBe(true);
+    expect(isRunDocument("assets/live-desktop-1728-toggle-inactive.png")).toBe(false);
+    expect(isRunDocument("assets/icon-tooltip-arrow.svg")).toBe(false);
   });
 
   it("should keep the documents of the previous run out of this one", () => {

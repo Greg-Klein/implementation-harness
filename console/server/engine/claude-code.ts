@@ -26,6 +26,13 @@ function sessionEnvironment() {
 /** Slash commands, task notifications and hook output reach the session as tagged blocks. */
 const TAGGED_INPUT = /^<[a-z][a-z-]*>/;
 
+/**
+ * The idle notification, matched on rather than matched away: should Claude Code
+ * ever reword it, the harness falls back to calling the user too often, never to
+ * leaving a blocked run silent.
+ */
+const IDLE_NOTIFICATION = /waiting for your input/i;
+
 function textOf(content: unknown) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -91,16 +98,23 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
     const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;
     return { kind: name === "SubagentStart" ? "agent.start" : "agent.stop", agentId, agentName };
   }
-  if (name === "Notification") return { kind: "attention", message: normalizeText(payload.message) };
+  if (name === "Notification") {
+    const message = normalizeText(payload.message);
+    // Claude Code notifies a minute after the session last printed, background
+    // agent still working or not, so this one repeats what the Stop event
+    // already said, later and less accurately. Every other notification, a
+    // permission request first of all, really does block on the user.
+    if (message && IDLE_NOTIFICATION.test(message)) return undefined;
+    return { kind: "attention", message };
+  }
   if (name === "Stop") return { kind: "turn.end" };
   const input = payload.tool_input as Record<string, unknown> | undefined;
   // The command is passed whole: what is shown gets shortened, what is matched
   // against must not be.
   const command = typeof input?.command === "string" ? input.command : undefined;
   if (name === "PreToolUse") {
-    const tool = normalizeText(payload.tool_name) ?? "outil";
-    if (tool === "AskUserQuestion") return questionEvent(payload);
-    return { kind: "tool.start", tool, label: normalizeText(input?.description), command };
+    if (normalizeText(payload.tool_name) === "AskUserQuestion") return questionEvent(payload);
+    return { kind: "tool.start", command };
   }
   if (name === "PostToolUse") return { kind: "tool.end", command, response: payload.tool_response };
   return undefined;

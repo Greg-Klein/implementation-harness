@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
-import { belongsToRun, imageMimeType, phaseForArtifact, resolveArtifactPath } from "./domain.js";
+import { belongsToRun, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
@@ -15,16 +15,14 @@ export async function readArtifact(artifactPath: string) {
   if (ctx.state.id.startsWith("demo-")) {
     const content = demoArtifactContents[artifactPath];
     if (content === undefined) throw new Error("Document de démonstration introuvable.");
-    return { path: artifactPath, kind: "text", content };
+    return { path: artifactPath, content };
   }
   const root = path.resolve(dataRoot, ctx.state.id, "artifacts");
   const target = resolveArtifactPath(root, artifactPath);
   if (!target) throw new Error("Chemin de document invalide.");
   const buffer = await readFile(target);
   if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
-  const imageType = imageMimeType(target);
-  if (imageType) return { path: artifactPath, kind: "image", content: `data:${imageType};base64,${buffer.toString("base64")}` };
-  return { path: artifactPath, kind: "text", content: buffer.toString("utf8") };
+  return { path: artifactPath, content: buffer.toString("utf8") };
 }
 
 async function archiveArtifact(source: string, stats?: Stats) {
@@ -34,6 +32,7 @@ async function archiveArtifact(source: string, stats?: Stats) {
   const taskRoot = engine.taskDirectory(ctx.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
+  if (!isRunDocument(relative)) return;
   const target = path.join(dataRoot, ctx.state.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(source, target);

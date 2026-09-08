@@ -14,4 +14,4 @@ export type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "git" }) | null;
 };
-export type ArtifactResponse = { path: string; kind: "text" | "image"; content: string; error?: string };
+export type ArtifactResponse = { path: string; content: string; error?: string };

@@ -25,6 +25,22 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(ctx.state.phase).toBe(3);
   });
 
+  it("should keep tool calls out of the feed, and still read the branch from them", () => {
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm test" } });
+    expect(ctx.state.activities).toEqual([]);
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "git switch -c fix-258" } });
+    expect(ctx.state.activities).toEqual([expect.objectContaining({ title: "Branche de travail", detail: "fix-258" })]);
+  });
+
+  it("should stay quiet when the session goes idle while a background agent works", () => {
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook({ hook_event_name: "Stop" });
+    const announced = ctx.state.activities.length;
+    hook({ hook_event_name: "Notification", message: "Claude is waiting for your input" });
+    expect(ctx.state.status).toBe("running");
+    expect(ctx.state.activities).toHaveLength(announced);
+  });
+
   it("should drop the call for attention as soon as Claude Code resumes", () => {
     hook({ hook_event_name: "Notification", message: "Claude needs your permission" });
     expect(ctx.state.status).toBe("attention");

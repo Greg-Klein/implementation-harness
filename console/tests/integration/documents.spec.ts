@@ -50,7 +50,6 @@ test("should expose only generated documents from the current run", async ({ pag
   expect(response.ok()).toBe(true);
   await expect(response.json()).resolves.toMatchObject({
     path: "ticket-context.md",
-    kind: "text",
     content: expect.stringContaining("Critères d’acceptation"),
   });
   expect((await request.get("/api/artifacts?path=not-generated.md")).status()).toBe(404);
