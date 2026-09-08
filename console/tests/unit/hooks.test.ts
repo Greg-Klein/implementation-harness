@@ -44,6 +44,25 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(ctx.state).toMatchObject({ status: "completed", phase: 10 });
   });
 
+  it("should ignore an agent event that names no agent", () => {
+    hook({ hook_event_name: "SubagentStart", agent_type: "  ", agent_id: "a1" });
+    expect(ctx.state.agents).toEqual([]);
+    expect(ctx.state.activities).toEqual([]);
+  });
+
+  it("should not announce a stop it cannot attribute to a running agent", () => {
+    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    expect(ctx.state.agents).toEqual([]);
+    expect(ctx.state.activities).toEqual([]);
+  });
+
+  it("should close an agent that reported no id, by its name", () => {
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer" });
+    hook({ hook_event_name: "SubagentStop", agent_type: "implementation-harness:developer" });
+    expect(ctx.state.agents).toHaveLength(1);
+    expect(ctx.state.agents[0]).toMatchObject({ name: "implementation-harness:developer", status: "completed" });
+  });
+
   it("should date the end of the run from the workflow, not from the session", () => {
     ctx.state.phase = 9;
     expect(ctx.state.endedAt).toBeNull();

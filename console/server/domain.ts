@@ -1,12 +1,17 @@
 import path from "node:path";
-import type { RunState, RunStatus } from "./types.js";
+import type { AgentState, RunState, RunStatus } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
 
-/** One line of readable text out of anything an agent reports, short enough for the activity feed. */
+/**
+ * One line of readable text out of anything an agent reports, short enough for
+ * the activity feed. A blank field carries no more information than a missing
+ * one, so it comes back undefined and callers can fall back on it with `??`.
+ */
 export function normalizeText(value: unknown): string | undefined {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, 180) : undefined;
+  if (typeof value !== "string") return undefined;
+  return value.replace(/\s+/g, " ").trim().slice(0, 180) || undefined;
 }
 
 export function normalizeQuestion(value: unknown): Question | undefined {
@@ -80,6 +85,12 @@ export function gitLabProjectPath(issueUrl: string) {
   } catch {
     return undefined;
   }
+}
+
+/** The agent a stop event closes: by id, or by name for one that reported no id. */
+export function agentStopTarget(agents: AgentState[], agentId: string, agentName: string) {
+  return agents.find((agent) => agent.id === agentId)
+    ?? agents.find((agent) => agent.name === agentName && agent.status === "running");
 }
 
 export function runInProgress(status: RunStatus) {

@@ -82,10 +82,15 @@ function questionEvent(payload: Record<string, unknown>): EngineEvent | undefine
 
 function event(payload: Record<string, unknown>): EngineEvent | undefined {
   const name = normalizeText(payload.hook_event_name) ?? "Hook";
-  const agentName = normalizeText(payload.agent_type) ?? "agent";
-  const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;
-  if (name === "SubagentStart") return { kind: "agent.start", agentId, agentName };
-  if (name === "SubagentStop") return { kind: "agent.stop", agentId, agentName };
+  if (name === "SubagentStart" || name === "SubagentStop") {
+    // A payload that names no agent describes nothing the interface could show,
+    // and an agent entered under an empty name would never be closed by its own
+    // stop event.
+    const agentName = normalizeText(payload.agent_type);
+    if (!agentName) return undefined;
+    const agentId = normalizeText(payload.agent_id) ?? `${agentName}-${Date.now()}`;
+    return { kind: name === "SubagentStart" ? "agent.start" : "agent.stop", agentId, agentName };
+  }
   if (name === "Notification") return { kind: "attention", message: normalizeText(payload.message) };
   if (name === "Stop") return { kind: "turn.end" };
   const input = payload.tool_input as Record<string, unknown> | undefined;

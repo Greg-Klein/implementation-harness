@@ -83,3 +83,15 @@ describe("engine event translation", () => {
     });
   });
 });
+
+describe("engine event translation of a malformed agent payload", () => {
+  it("should refuse an agent event without an agent type", () => {
+    expect(claudeCode.event({ hook_event_name: "SubagentStart", agent_id: "a1" })).toBeUndefined();
+    expect(claudeCode.event({ hook_event_name: "SubagentStop", agent_type: "" })).toBeUndefined();
+  });
+
+  it("should key an agent that reported no id on its name", () => {
+    expect(claudeCode.event({ hook_event_name: "SubagentStart", agent_type: "developer" }))
+      .toMatchObject({ kind: "agent.start", agentName: "developer" });
+  });
+});

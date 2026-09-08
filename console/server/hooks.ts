@@ -1,4 +1,4 @@
-import { branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeText, phaseForAgent, runInProgress } from "./domain.js";
+import { agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, normalizeText, phaseForAgent, runInProgress } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { engine } from "./engine/index.js";
@@ -89,8 +89,13 @@ function apply(event: EngineEvent) {
     return undefined;
   }
   if (event.kind === "agent.stop") {
-    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === event.agentId || (agent.name === event.agentName && agent.status === "running") ? { ...agent, status: "completed", endedAt: now() } : agent);
-    activity("agent", `${event.agentName} termine`);
+    const stopped = agentStopTarget(ctx.state.agents, event.agentId, event.agentName);
+    // The session is alive either way, but an unattributable stop must not
+    // announce an agent finishing that the feed never saw start.
+    if (stopped) {
+      ctx.state.agents = ctx.state.agents.map((agent) => agent.id === stopped.id ? { ...agent, status: "completed", endedAt: now() } : agent);
+      activity("agent", `${stopped.name} termine`);
+    }
     resumeFromAttention();
     return undefined;
   }
