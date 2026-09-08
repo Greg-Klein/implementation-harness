@@ -196,8 +196,9 @@ Write to `.claude/tasks/developer-report.md`:
 
 ## Browser Evidence
 
-One row per visible acceptance criterion. Omit the section only when nothing in
-the change is visible, and say so in one line instead.
+One row per observable acceptance criterion, whether it renders pixels or only
+changes what the app sends, stores or hides. Omit the section only when nothing
+in the change is observable in a running app, and say so in one line instead.
 
 | Criterion | Measured value | Reference | Screenshot | How to reproduce |
 | --- | --- | --- | --- | --- |

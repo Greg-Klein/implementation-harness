@@ -74,6 +74,7 @@ A single interaction with **AskUserQuestion**, carrying everything you will ever
 1. **Base branch.** `git fetch`, then list candidates: current branch, `develop`, `main`/`master`, plus any existing branch related to the ticket or its epic. Recommend `develop` when it exists, always allow a custom answer.
 2. **The blocking questions from step 1**, up to three per batch. Phrase each one as a real decision with concrete options, never as an open essay question. Give a recommended option first when you have a defensible one, and say what it implies.
 3. **Repository path**, if the checkout could not be resolved in step 1.
+4. **How to exercise the change at runtime**, whenever something outside the repository decides whether step 6 can measure anything: a backend flag that has to be on, a test account, which environment the local app talks to, the exact input that triggers the server side branch you are touching. Read the repository's local runtime configuration first (see step 6) and ask only what it leaves open. This is the last moment the run can ask, and a verification ruled impossible for want of one sentence is a verification nobody does.
 
 Never ask what the run instruction already settles. Asking the user something they just wrote in the command is the fastest way to make the interruption feel useless.
 
@@ -145,7 +146,7 @@ Each `developer` invocation must receive:
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the Figma node URLs when the task is UI, plus the "Reading a Figma design" procedure below
-- the explicit instruction to **verify its own work in the browser with Playwright** when the change is visible, and to fill the `## Browser Evidence` table of its report: one row per visible criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
+- the explicit instruction to **verify its own work in the browser with Playwright** when the change is observable in the running app, and to fill the `## Browser Evidence` table of its report: one row per observable criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
 - the implementation brief below, verbatim
 
@@ -170,7 +171,7 @@ Each `developer` invocation must receive:
 > - Strictly no scope creep. Spotted an unrelated problem? Report it, do not fix it.
 > - **When two specifications contradict each other, apply the precedence order: PRD, then design, then ticket.** The PRD wins over the Figma design, the design wins over the ticket description, acceptance criteria and comments. The lower source is outdated, not a refinement. Exception: an explicit later decision (a comment saying the PRD is wrong on this point, an answer given by the user) wins over everything. Silence at a higher level is not a contradiction: a design detailing what the PRD leaves open is normal. Report every contradiction you arbitrated at the top of your report, never resolve one silently.
 > - **Never invent what the specification does not say.** Obvious interaction behaviour can be deduced (a close button closes the modal, `Escape` closes an overlay, a spinner shows while loading): implement it and note the deduction. Anything that is a decision (a product rule, a user facing string, a limit, a data source, a permission, an error behaviour) is not yours to choose. Stop that part, report the question at the top of your report, and implement everything else. Never invent copy, never invent an endpoint, never bury a `// TODO: confirm` in the diff.
-> - Before finishing: run lint, typecheck and tests, and check the change in the browser with Playwright when it is visible. Report failures you could not fix instead of hiding them, and report them as failures: a red check is never turned green by attributing it to the environment, to the past or to a passing CI. If you had to prefix the project's documented command with anything to get it green, that prefix is itself a finding, and the red result of the documented command is what goes in your report.
+> - Before finishing: run lint, typecheck and tests, and check the change in the browser with Playwright whenever it is observable in the running app, which includes a change that renders nothing but alters what the app sends, stores or hides. Report failures you could not fix instead of hiding them, and report them as failures: a red check is never turned green by attributing it to the environment, to the past or to a passing CI. If you had to prefix the project's documented command with anything to get it green, that prefix is itself a finding, and the red result of the documented command is what goes in your report.
 
 If a `developer` comes back with a specification question instead of a guess, it did the right thing. Check first whether the codebase, the design or an obvious convention answers it. If not, ask the user (this is a legitimate interruption, see "Never invent"), record the answer in `.claude/tasks/open-questions.md`, and relaunch the task with the answer. Never answer a product question on the user's behalf.
 
@@ -183,14 +184,20 @@ When all tasks are done, concatenate the per-task reports back into `.claude/tas
 
 ---
 
-## Step 6 - Make the app reachable for visual reviews
+## Step 6 - Make the app reachable and measure the change in it
 
-Before the review phase, if the change is visible in the UI:
+Before the review phase, if the change is observable in a running app:
 
 - Use the `run` skill (or the repository's documented dev command) to start the app and get a URL.
 - Note the URL, the route to reach the feature, and any test credentials in `.claude/tasks/state.json`.
 
-If the app cannot be started, say so explicitly: the design review will be skipped and QA confidence drops. Do not pretend a visual review happened.
+**Observable is wider than visible, and this is where runs lose their best evidence.** A change that renders nothing is still observable when it changes what the app does: a request body or a header, an id chained from one call to the next, a tracking event, a redirect, a cache or storage write, a bubble that must now stay absent. Those are read in the browser, from the network panel and the live DOM, and nothing else proves them: a unit test proves the code's own contract, never what the running app sends over the wire. "The ticket adds no pixel" settles whether a design review runs. It does not settle whether a measurement runs.
+
+**Establish that a verification is impossible, never assume it.** Before writing that the change cannot be exercised, read the repository's local runtime configuration and report what you found: which backend the dev server or the Storybook actually talks to (endpoint files, proxy setup, `.env.example`, docker-compose, seeds, fixtures), and whether the state you need is reachable from there. A local app pointed at a shared test environment already has that environment's flags and data. Name the files that carry your conclusion. A feasibility claim with no file behind it is a guess, and a guess here costs the run its only live evidence. If the answer depends on something the repository does not hold, that question belonged in the step 2 batch, where it is still askable.
+
+**Measure here, on the committed code, before the review phase opens.** Step 7 runs agents that edit files, and a measurement taken while the code moves under it is worth nothing (see the ordering constraints there).
+
+If the app really cannot be started, say so explicitly with the reason you established: the design review will be skipped and QA confidence drops. Do not pretend a visual review happened.
 
 **An unreachable app does not make the visual criteria unverifiable.** The developer measured them and left screenshots and numbers behind, so collect the `## Browser Evidence` rows from `.claude/tasks/developer-report.md` and the files under `.claude/tasks/assets/`, and pass both on with the reason the app is out of reach. That evidence becomes the reviewers' reference: they confirm each criterion against it, or name it unverified. What must never happen again is a reviewer writing "browser check not run" while the measurement it needed sat in `.claude/tasks/assets/`.
 
@@ -228,8 +235,9 @@ It runs the review loop (`senior-reviewer`, `designer-reviewer` when a design ex
 **Ordering, which is a real constraint and not a preference:**
 
 - `designer-reviewer` and `qa-reviewer` **never run at the same time**: they share a single browser.
-- `senior-reviewer` reads code and never opens a browser, so it **may run alongside the design review**, on one condition: it must hold its fixes until the design review is done. A senior reviewer editing files while the design review measures the running app moves the ground under it, since the dev server hot-reloads. Either it reports and the fixes land after, or it runs on its own before.
-- When in doubt, sequential. The design review has already produced false findings from a moving target; a faster loop that returns wrong findings costs more than the minutes it saves.
+- **No agent that edits files runs while any browser measurement is in flight**, and that covers your own step 6 measurement, a `qa-reviewer` driving the app and a design review alike. The dev server hot-reloads, so a fix landing mid-measurement replaces the code under test and the numbers describe a build that no longer exists. `senior-reviewer` reads code and never opens a browser, so it **may run alongside a measurement**, on one condition: it must hold its fixes until that measurement is done. Either it reports and the fixes land after, or it runs on its own before.
+- A measurement whose code moved under it is **reported non conclusive and redone on the frozen code**, or carried to step 9 as unverified. It is never presented as a result, and the run never simply forgets it: an abandoned measurement that nobody redoes is how a feature ships with no live evidence at all.
+- When in doubt, sequential. A browser review has already produced false findings from a moving target; a faster loop that returns wrong findings costs more than the minutes it saves.
 
 Instructions to pass on to the design review every time, because every one of these failures has already happened:
 
@@ -584,6 +592,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - The MR always targets the branch chosen in step 1
 - Developers run sequentially, never in parallel
 - Reviewers that drive Playwright run one at a time: a single browser is shared
+- A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
 - Only you touch git: branches, commits, push, MR
 - The ticket status is moved twice, by you: `In progress` at step 3, `In progress - Merge request` at step 8
 - A red check is never reported as a pass, whatever explains it: not a passing CI, not a pre-existing failure, not an environment. A prefix added to the documented command is itself a finding, a cause is named down to the mechanism or declared not found, and "not re-run" is written as "not re-run"

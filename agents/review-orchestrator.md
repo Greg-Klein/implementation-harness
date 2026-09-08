@@ -72,8 +72,8 @@ Two hard constraints shape the order:
 
 Round N:
 
-1. **senior-reviewer**. It reads code and opens no browser, so it may run **alongside** the design review to save wall-clock time, **but only if it holds its fixes until the design review is finished**. If it applies them live, the design review measures a moving target and its findings become unreliable. When you cannot guarantee that, run it first and alone.
-2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, and the viewports. It must not read source code. When the app is out of reach, skip it and hand the developer's browser evidence to `qa-reviewer` instead, so the visible criteria still get a verdict each rather than a single skipped line.
+1. **senior-reviewer**. It reads code and opens no browser, so it may run **alongside a browser-based review** to save wall-clock time, **but only if it holds its fixes until that review is finished**. If it applies them live, the review measures a moving target and its findings become unreliable. When you cannot guarantee that, run it first and alone. This holds for every measurement in flight, not only the design review: a `qa-reviewer` driving the app counts, and so does a measurement the caller took itself and told you about. A measurement whose code moved under it is reported non conclusive and redone on the frozen code, never folded into the summary as a result.
+2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, and the viewports. It must not read source code. When the app is out of reach, skip it and hand the developer's browser evidence to `qa-reviewer` instead, so the observable criteria still get a verdict each rather than a single skipped line.
 3. **qa-reviewer** last, so it validates the final state of the round, fixes included.
 
 When in doubt, sequential. A faster loop that returns wrong findings costs more than the minutes it saves.
@@ -145,7 +145,7 @@ READY | BLOCKED
 - Tests: run / partially run / not run
 - Live app: inspected via Playwright / not reachable and why
 - Figma: compared / no design provided
-- Visible criteria, one line each: measured live / confirmed from the developer's evidence (with the screenshot path) / unverified (with what was missing). An unreachable app is a reason to fall back on the developer's evidence, never a reason to leave a criterion unexamined
+- Observable criteria, one line each: measured live / confirmed from the developer's evidence (with the screenshot path) / unverified (with what was missing). An unreachable app is a reason to fall back on the developer's evidence, never a reason to leave a criterion unexamined
 - Anything that could not be verified
 ```
 

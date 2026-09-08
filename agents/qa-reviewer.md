@@ -175,9 +175,9 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 - If the evidence is missing or does not cover a criterion, say which one and why, and rely on automated tests for the rest
 - This reduces confidence — flag it clearly
 
-#### Verdict per visible criterion
+#### Verdict per observable criterion
 
-Never write "browser check not run" as a whole. Each visible acceptance criterion gets exactly one of three verdicts, and the report says which:
+Never write "browser check not run" as a whole. Each observable acceptance criterion gets exactly one of three verdicts, and the report says which:
 
 - **measured live** — you drove the app yourself and read the value
 - **confirmed from the developer's evidence** — cite the screenshot path and the value you checked
@@ -185,7 +185,7 @@ Never write "browser check not run" as a whole. Each visible acceptance criterio
 
 A criterion carrying a number the design specifies stays `unverified` until some measurement backs it, yours or the developer's. Reasoning from the source code is not a measurement.
 
-Carry one entry per visible criterion in the report, whatever shape the report format below takes: the criterion, its verdict, the value you read or the value the developer's evidence reads, and the evidence itself — a screenshot path, or why nothing could back it.
+Carry one entry per observable criterion in the report, whatever shape the report format below takes: the criterion, its verdict, the value you read or the value the developer's evidence reads, and the evidence itself — a screenshot path, or why nothing could back it.
 
 ---
 
@@ -220,14 +220,14 @@ One or two sentences justifying it.
 
 `Result` has exactly three values. `not run` is a result, not a blank: write it, and write why.
 
-## Visible criteria
+## Observable criteria
 
 | Criterion | Verdict | Value read | Evidence |
 |---|---|---|---|
 | ... | measured live / confirmed from the developer's evidence / unverified | the value you or the developer's evidence read | screenshot path, or what was missing |
 
-One row per visible criterion. A single "browser check not run" covering all of
-them is not an answer.
+One row per observable criterion. A single "browser check not run" covering all
+of them is not an answer.
 
 ## Acceptance criteria
 
