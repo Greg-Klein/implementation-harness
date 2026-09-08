@@ -16,7 +16,7 @@ import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemo
 import { demoSelfImprovementDiff } from "./demo-data.js";
 import { clearImprovementWatchers, forgetImprovementReview, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
-import { findWorktree, worktreeDiff } from "./worktree.js";
+import { findWorktree, mergeBranch, worktreeDiff } from "./worktree.js";
 import { engine } from "./engine/index.js";
 import type { EngineSession } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
@@ -46,7 +46,11 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   }
   if (merge) {
     if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
-    await execFileAsync("git", ["-C", pluginRoot, "merge", "--no-ff", worktree.branch, "-m", `self-improvement: apply improvements from ${worktreeName}`]);
+    // A worktree is destroyed just below, so nothing may be announced as merged
+    // before the checkout actually moved.
+    const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
+      .catch((error) => { throw new Error(`La fusion de ${worktreeName} a échoué et a été annulée, le worktree est conservé : ${error instanceof Error ? error.message.split("\n")[0] : error}`); });
+    if (!merged) throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
     activity("system", "Améliorations fusionnées", worktreeName);
   } else {
     activity("system", "Améliorations ignorées", worktreeName);
@@ -219,8 +223,9 @@ wss.on("connection", (socket) => {
   socket.send(JSON.stringify({ type: "state", state: ctx.state }));
   if (ctx.terminalBuffer) socket.send(JSON.stringify({ type: "terminal.output", data: ctx.terminalBuffer }));
   socket.on("message", async (raw) => {
+    let message: ClientMessage | undefined;
     try {
-      const message = JSON.parse(raw.toString()) as ClientMessage;
+      message = JSON.parse(raw.toString()) as ClientMessage;
       if (message.type === "run.start") await startRun(message);
       if (message.type === "terminal.input") terminal?.write(message.data);
       if (message.type === "instruction.send") sendInstruction(message.text);
@@ -233,7 +238,11 @@ wss.on("connection", (socket) => {
       if (message.type === "selfImprovement.approve") await applySelfImprovementReview(message.worktreeName, true);
       if (message.type === "selfImprovement.reject") await applySelfImprovementReview(message.worktreeName, false);
     } catch (error) {
-      ctx.state.status = "failed"; ctx.state.error = error instanceof Error ? error.message : "Impossible d'exécuter cette action.";
+      ctx.state.error = error instanceof Error ? error.message : "Impossible d'exécuter cette action.";
+      // Only a failed launch is the run's own failure. A panel action that fails
+      // must not rewrite the status of a run that already ended cleanly, nor be
+      // archived as its verdict.
+      if (message?.type === "run.start") { ctx.state.status = "failed"; ctx.state.endedAt = now(); }
       activity("system", "Erreur", ctx.state.error); publishState();
     }
   });
@@ -242,6 +251,6 @@ wss.on("connection", (socket) => {
 
 server.listen(port, hostname, () => console.log(`Implementation Harness: http://${hostname}:${port}`));
 
-async function shutdown() { clearDemoTimers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
+async function shutdown() { clearDemoTimers(); clearImprovementWatchers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
 process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));

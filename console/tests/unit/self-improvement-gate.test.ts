@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { hasAuditableEvidence } from "../../server/domain";
+import { hasAuditableEvidence, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -20,3 +20,14 @@ describe("autonomous audit evidence", () => {
   });
 });
 
+describe("environment handed to the improvement agent", () => {
+  it("should drop the bundler variables the console itself runs with", () => {
+    const cleaned = withoutBundlerVariables({ NODE_ENV: "development", TURBOPACK: "1", __NEXT_PRIVATE_ORIGIN: "http://localhost", NEXT_DEPLOYMENT_ID: "x", PATH: "/usr/bin" });
+    expect(cleaned).toEqual({ PATH: "/usr/bin" });
+  });
+
+  it("should leave the harness configuration alone", () => {
+    const cleaned = withoutBundlerVariables({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
+    expect(cleaned).toEqual({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
+  });
+});

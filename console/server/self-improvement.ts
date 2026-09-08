@@ -4,14 +4,17 @@ import { ctx, activity, now, publishState } from "./context.js";
 import { feedbackRoot, consoleRoot } from "./config.js";
 import { hasAuditableEvidence, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { findWorktree, worktreeDiff } from "./worktree.js";
+import { findWorktree, worktreeCommitCount } from "./worktree.js";
 import type { RunState } from "./types.js";
 
 const auditedRuns = new Set<string>();
 const decidedImprovementReviews = new Set<string>();
 const improvementWatchers = new Set<ReturnType<typeof setTimeout>>();
-const WATCH_INTERVAL_MS = 15_000;
-const WATCH_ATTEMPTS = 120;
+const WATCH_INTERVAL_MS = 20_000;
+// The improvement run reads the evidence, edits, then runs an install, a build
+// and the whole test suite before it commits. Observed runs took a quarter of
+// an hour; this leaves room for a slow one without watching forever.
+const WATCH_ATTEMPTS = 270;
 
 export async function saveFeedback(body: string) {
   const feedback = body.trim();
@@ -62,19 +65,27 @@ export function forgetImprovementReview(runId: string) {
   clearImprovementWatchers();
 }
 
+/**
+ * The launcher exits as soon as the background job detaches, so its exit code
+ * only says the agent started. An improvement commit is the only honest signal
+ * that something is ready to promote: anything less, and the buttons open over
+ * a worktree the agent is still writing in.
+ */
 function watchForImprovements(worktreeName: string, runId: string, attempt = 0) {
   const timer = setTimeout(async () => {
     improvementWatchers.delete(timer);
     if (ctx.state.id !== runId || ctx.state.pendingSelfImprovementReview || decidedImprovementReviews.has(runId)) return;
     const worktree = await findWorktree(worktreeName).catch(() => undefined);
-    const diff = worktree ? await worktreeDiff(worktree).catch(() => "") : "";
-    if (diff.trim()) {
+    const commits = worktree ? await worktreeCommitCount(worktree).catch(() => 0) : 0;
+    if (commits > 0) {
       ctx.state.pendingSelfImprovementReview = { worktreeName, runId };
-      activity("agent", "Améliorations prêtes — en attente de validation", worktreeName);
+      activity("agent", "Améliorations prêtes — en attente de validation", `${commits} commit${commits > 1 ? "s" : ""} sur ${worktreeName}`);
       publishState();
       return;
     }
-    if (attempt + 1 < WATCH_ATTEMPTS) watchForImprovements(worktreeName, runId, attempt + 1);
+    if (attempt + 1 < WATCH_ATTEMPTS) { watchForImprovements(worktreeName, runId, attempt + 1); return; }
+    activity("attention", "Auto-amélioration sans commit", `Le worktree ${worktreeName} reste à inspecter à la main.`);
+    publishState();
   }, WATCH_INTERVAL_MS);
   improvementWatchers.add(timer);
 }

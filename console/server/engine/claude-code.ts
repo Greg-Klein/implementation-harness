@@ -2,7 +2,7 @@ import { spawn as spawnChild } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import * as pty from "node-pty";
-import { normalizeQuestion, normalizeText } from "../domain.js";
+import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../domain.js";
 import { pluginRoot } from "../config.js";
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
@@ -14,10 +14,11 @@ const SUBMIT_DELAY_MS = 150;
 /**
  * A harness started from inside a Claude Code session inherits markers that make
  * the spawned session behave like a nested one, transcript saving included, and
- * the conversation is read from that transcript.
+ * the conversation is read from that transcript. The bundler variables of the
+ * console itself go with them: the agent runs builds of its own.
  */
 function sessionEnvironment() {
-  const environment = { ...process.env };
+  const environment = withoutBundlerVariables(process.env);
   for (const key of Object.keys(environment)) if (key === "CLAUDECODE" || key === "CLAUDE_PID" || key.startsWith("CLAUDE_CODE_")) delete environment[key];
   return environment;
 }
@@ -152,6 +153,6 @@ export const claudeCode: Engine = {
       "--permission-mode", "auto",
       "--name", `implementation-harness self-improvement ${runId.slice(-8)}`,
       `/implementation-harness:improve ${feedbackDirectory}`,
-    ], { cwd: pluginRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    ], { cwd: pluginRoot, env: sessionEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
   },
 };

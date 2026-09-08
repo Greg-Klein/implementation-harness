@@ -62,6 +62,17 @@ export function hasAuditableEvidence(snapshot: Pick<RunState, "status" | "agents
   return snapshot.status === "failed" || snapshot.agents.length > 0 || snapshot.artifacts.length > 0;
 }
 
+// The console is itself a Next server, and Next writes its bundler choice and
+// NODE_ENV into the environment. Handing those down to an agent that runs a
+// build makes it abort on conflicting bundler flags, whatever the code checked.
+export function withoutBundlerVariables<T extends Record<string, string | undefined>>(environment: T) {
+  const cleaned = { ...environment };
+  for (const key of Object.keys(cleaned)) {
+    if (key.startsWith("__NEXT_") || key === "TURBOPACK" || key === "NODE_ENV" || key === "NEXT_DEPLOYMENT_ID") delete cleaned[key];
+  }
+  return cleaned;
+}
+
 export function gitLabProjectPath(issueUrl: string) {
   try {
     const url = new URL(issueUrl);

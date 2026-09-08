@@ -15,7 +15,7 @@ test("should return 404 for a valid but nonexistent worktree", async ({ request 
   expect(response.status()).toBe(404);
 });
 
-test("should surface an error when approving without a pending review", async ({ page }) => {
+test("should surface an error when approving without a pending review, without failing the run", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(() =>
     new Promise<{ status: string; error?: string }>((resolve, reject) => {
@@ -25,7 +25,7 @@ test("should surface an error when approving without a pending review", async ({
       socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "selfImprovement.approve", worktreeName: "self-improvement-fake" })));
       socket.addEventListener("message", (event) => {
         const msg = JSON.parse(event.data) as { type: string; state?: { status: string; error?: string } };
-        if (msg.type === "state" && msg.state?.status === "failed") {
+        if (msg.type === "state" && msg.state?.error) {
           window.clearTimeout(timeout);
           socket.close();
           resolve({ status: msg.state.status, error: msg.state.error });
@@ -33,6 +33,7 @@ test("should surface an error when approving without a pending review", async ({
       });
     }),
   );
-  expect(result.status).toBe("failed");
   expect(result.error).toContain("auto-amélioration");
+  // A panel action that fails is not the run's own failure.
+  expect(result.status).toBe("idle");
 });

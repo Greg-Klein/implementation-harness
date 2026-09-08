@@ -151,7 +151,7 @@ Cette commande lance Claude Code sur `/implementation-harness:improve`. Il regro
 
 Les tickets, logs et retours bruts restent sous `console/data/` et ne sont jamais ajoutés au commit d’amélioration.
 
-Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, documents manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité.
+Le harnais peut également se critiquer sans retour humain. À la fin de chaque workflow, y compris après un échec ou un arrêt manuel, il enregistre un auto-audit portant sur les échecs, interventions, boucles de revue, documents manquants et vérifications incomplètes. En mode autonome, Claude Code traite cette preuve dans un worktree isolé. Un signal auto-généré doit apparaître sur au moins deux runs, sauf bug déterministe ou défaut de sécurité. La décision est prise une seule fois par run, et seulement si le run a laissé quelque chose à analyser : un agent délégué, un document produit ou une sortie inattendue. Une session arrêtée avant ça est écartée, avec une ligne dans le fil d’activité.
 
 La politique se règle avec `impl config`, ou directement :
 
@@ -162,6 +162,10 @@ impl config set IMPL_SELF_IMPROVEMENT_AUTORUN=true
 Elle lance l’analyse en arrière-plan à la fin du run. L’option vaut `false` par défaut; il faut l’activer consciemment.
 
 L’agent travaille dans un worktree isolé et laisse toujours son commit sur sa branche `self-improvement-*`. Rien n’est fusionné automatiquement et rien n’est poussé sur GitHub. Le panneau de droite affiche le diff : c’est la seule porte de promotion. Après une fusion, redémarrer le harnais avec `impl restart` pour charger les changements du serveur local.
+
+La revue n’est proposée qu’une fois un commit d’amélioration présent sur la branche du worktree. Le lanceur rend la main dès que le travail se détache, donc son code de sortie ne dit que le démarrage; et `/implementation-harness:improve` laisse sa branche non commitée quand sa propre validation échoue, un état qui ne doit jamais être proposé à la fusion. Sans commit au bout d’une heure et demie, le fil d’activité pointe le worktree à inspecter à la main plutôt que d’ouvrir les boutons.
+
+La fusion ne s’annonce que si elle a réellement déplacé la branche du harnais. Git répond « Already up to date » avec un code de sortie nul, et un conflit laisse le dépôt à moitié fusionné : le premier cas est refusé, le second est annulé, et dans les deux le worktree est conservé au lieu d’être détruit avec le travail qu’il contient.
 
 ## Fonctionnement
 
