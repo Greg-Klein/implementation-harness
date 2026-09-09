@@ -146,7 +146,7 @@ Each `developer` invocation must receive:
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the Figma node URLs when the task is UI, plus the "Reading a Figma design" procedure below
-- the explicit instruction to **verify its own work in the browser with Playwright** when the change is observable in the running app, and to fill the `## Browser Evidence` table of its report: one row per observable criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
+- the explicit instruction to **verify its own work in the browser with Playwright** when the change is observable in the running app, and to fill the `## Preuves navigateur` table of its report: one row per observable criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
 - **the run instruction verbatim, when there is one**, presented as binding and above its own judgement
 - the implementation brief below, verbatim
 
@@ -199,7 +199,7 @@ Before the review phase, if the change is observable in a running app:
 
 If the app really cannot be started, say so explicitly with the reason you established: the design review will be skipped and QA confidence drops. Do not pretend a visual review happened.
 
-**An unreachable app does not make the visual criteria unverifiable.** The developer measured them and left screenshots and numbers behind, so collect the `## Browser Evidence` rows from `.claude/tasks/developer-report.md` and the files under `.claude/tasks/assets/`, and pass both on with the reason the app is out of reach. That evidence becomes the reviewers' reference: they confirm each criterion against it, or name it unverified. What must never happen again is a reviewer writing "browser check not run" while the measurement it needed sat in `.claude/tasks/assets/`.
+**An unreachable app does not make the visual criteria unverifiable.** The developer measured them and left screenshots and numbers behind, so collect the `## Preuves navigateur` rows from `.claude/tasks/developer-report.md` and the files under `.claude/tasks/assets/`, and pass both on with the reason the app is out of reach. That evidence becomes the reviewers' reference: they confirm each criterion against it, or name it unverified. What must never happen again is a reviewer writing "browser check not run" while the measurement it needed sat in `.claude/tasks/assets/`.
 
 ---
 
@@ -226,7 +226,7 @@ Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with w
 
 Never let a review round start that you are not willing to wait for. Idle waiting is the failure mode here, not a missed nitpick.
 
-Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths, app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Browser Evidence` rows and the screenshot paths from step 6), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
+Delegate the whole review phase to the `review-orchestrator` agent, passing: base branch, feature branch, artifact paths, app URL and route, Figma links, whether a design is available, **the developer's browser evidence** (the `## Preuves navigateur` rows and the screenshot paths from step 6), and **the run instruction verbatim when there is one**. Reviewers must judge the code against it too: something it explicitly asked for is never a finding, and something it forbade that shows up in the diff is a P0.
 
 Whatever the tier, scope every reviewer to **the diff**, never to the repository: name the files and say explicitly that untouched code is out of scope. An unbounded reviewer will audit whatever it finds, and that is where the hour goes. And whatever the tier, the browser evidence from step 6 travels with the scope, orchestrator or not: on tiers 0 and 1 you hand it to the reviewer yourself.
 
@@ -311,19 +311,19 @@ Description template (`.claude/tasks/mr-description.md`). **Keep it short.** A r
 ```md
 Closes #<iid>
 
-## Summary
+## Résumé
 
-Two or three sentences: the user facing problem, and what now happens instead.
+Deux ou trois phrases : le problème côté utilisateur, et ce qui se passe désormais à la place.
 
-## Changes
+## Changements
 
-Three to five bullets, one per meaningful piece. File names only when they help someone find their way in.
+Trois à cinq puces, une par élément marquant. Les noms de fichiers seulement quand ça aide à s'y retrouver.
 
-## Implementation notes
+## Notes d'implémentation
 
-Only what the code cannot say on its own: a decision that looks like a mistake and would get "fixed", a deliberate widening or narrowing of the ticket, a trap. Two or three at most, and none at all is a valid outcome. If a note merely describes what the diff shows, drop it.
+Seulement ce que le code ne peut pas dire tout seul : une décision qui a l'air d'une erreur et qu'on voudrait "corriger", un élargissement ou un rétrécissement volontaire du ticket, un piège. Deux ou trois au plus, et n'en avoir aucune est un résultat valable. Si une note ne fait que décrire ce que montre le diff, retire-la.
 
-Out of scope per the ticket: ...
+Hors scope selon le ticket : ...
 ```
 
 What does **not** belong in the description, because it is noise for the reviewer:
@@ -352,44 +352,44 @@ glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
 Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-harness:review`:
 
 ```md
-## Automated review
+## Revue automatisée
 
-Senior, QA and design reviews ran over N rounds. Findings below are what remains after the rework loop.
+Les revues senior, QA et design ont tourné sur N rounds. Les constats ci-dessous sont ce qui reste après la boucle de retouches.
 
-### Findings
+### Constats
 
-**issue (blocking):** `path/file.ts:42` - subject
+**issue (blocking):** `path/file.ts:42` - sujet
 
-Why it matters, in one or two sentences.
+Pourquoi c'est important, en une ou deux phrases.
 
-**suggestion (non-blocking):** `path/file.tsx:15-28` - subject
+**suggestion (non-blocking):** `path/file.tsx:15-28` - sujet
 
-What to change and why.
+Quoi changer et pourquoi.
 
-**nitpick (non-blocking):** `path/file.tsx:60` - subject
+**nitpick (non-blocking):** `path/file.tsx:60` - sujet
 
-**praise:** `path/file.ts:10` - subject
+**praise:** `path/file.ts:10` - sujet
 
-### Fixed during the loop
+### Corrigé pendant la boucle
 
-- [P0] ... (raised by senior, fixed round 2, confirmed by QA)
+- [P0] ... (relevé par senior, corrigé au round 2, confirmé par QA)
 
 ### Validation
 
-- Lint / typecheck / tests: ...
-- Browser check: routes and viewports, or why it could not run
-- Design review: compared against Figma / skipped and why
+- Lint / typecheck / tests : ...
+- Vérification navigateur : routes et viewports, ou pourquoi ça n'a pas pu tourner
+- Revue design : comparée à Figma / ignorée et pourquoi
 
 ### Verdict
 
-`ship it` | `minor changes` | `needs rework` - one or two sentences.
+`à merger` | `changements mineurs` | `à retravailler` - une ou deux phrases.
 
 N blocking - N non-blocking - N nitpicks - N praise
 ```
 
 Rules for this comment:
 
-- Everything in English, findings anchored on `file:line`
+- Everything in French, findings anchored on `file:line`
 - Only what survived the loop, plus what was fixed. No speculation, no hypothetical future problems
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - One single comment, not one per finding

@@ -146,31 +146,31 @@ Before finishing:
 Write to `.claude/tasks/senior-review.md`:
 
 ```md
-# Senior Review
+# Revue senior
 
-## Summary
+## Résumé
 
-- Overall assessment
+- Évaluation globale
 
-## Issues Found
+## Problèmes constatés
 
-- [P0] Critical issue
-- [P1] Important issue
-- [P2] Minor issue
+- [P0] Problème critique
+- [P1] Problème important
+- [P2] Problème mineur
 
-## Fixes Applied
-
-- ...
-
-## Improvements Made
+## Corrections appliquées
 
 - ...
 
-## Remaining Risks
+## Améliorations apportées
 
 - ...
 
-## Test Coverage Evaluation
+## Risques restants
+
+- ...
+
+## Évaluation de la couverture de tests
 
 - ...
 

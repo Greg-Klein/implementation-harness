@@ -44,7 +44,7 @@ You MUST write two files:
 }
 ```
 
-One item per row of the `Gates` table (`verdict` from its `Result` column, `command` and `actual` from `Command run` and `Evidence`), plus one item per row of `Observable criteria` (`verdict`: `measured` for "measured live", `confirmed` for "confirmed from the developer's evidence", `unverified` otherwise; `actual` is the value read; `screenshot` when the evidence names one under `.claude/tasks/assets/`). Every row in either markdown table has a matching item here — this file is that data, not a summary of it.
+One item per row of the `Contrôles` table (`verdict` from its `Résultat` column, `command` and `actual` from `Commande exécutée` and `Preuve`), plus one item per row of `Critères observables` (`verdict`: `measured` for "measured live", `confirmed` for "confirmed from the developer's evidence", `unverified` otherwise; `actual` is the value read; `screenshot` when the evidence names one under `.claude/tasks/assets/`). Every row in either markdown table has a matching item here — this file is that data, not a summary of it. `label` and `actual` are written in French; `command` stays the literal command run, verbatim; the JSON keys and verdict tokens (`pass`, `fail`, `not_run`, `measured`, `confirmed`, `unverified`) stay in English exactly as shown.
 
 ---
 
@@ -138,7 +138,7 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 #### If no URL is available
 
 - Check if a dev server can be started (look for `package.json` scripts)
-- Read the developer's `## Browser Evidence` table and open every screenshot it names under `.claude/tasks/assets/`. The developer reached the feature before you and left measured values behind, sometimes through a temporary harness whose rebuild recipe is in the same table. Confirming a criterion from that evidence is a real verification; ignoring it and calling the criterion unverified is not
+- Read the developer's `## Preuves navigateur` table and open every screenshot it names under `.claude/tasks/assets/`. The developer reached the feature before you and left measured values behind, sometimes through a temporary harness whose rebuild recipe is in the same table. Confirming a criterion from that evidence is a real verification; ignoring it and calling the criterion unverified is not
 - If the evidence is missing or does not cover a criterion, say which one and why, and rely on automated tests for the rest
 - This reduces confidence — flag it clearly
 
@@ -167,55 +167,55 @@ Carry one entry per observable criterion in the report, whatever shape the repor
 ## Output Format
 
 ```md
-# QA Report
+# Rapport QA
 
 ## Verdict
 
 PASS | PASS_WITH_WARNINGS | FAIL
 
-One or two sentences justifying it.
+Une ou deux phrases pour le justifier.
 
-## Gates
+## Contrôles
 
-| Check | Command run | Result | Evidence |
+| Contrôle | Commande exécutée | Résultat | Preuve |
 |---|---|---|---|
-| Lint | `...` | pass / fail / not run | counts, first failure, or why it was not run |
+| Lint | `...` | pass / fail / not run | comptes, premier échec, ou pourquoi ça n'a pas tourné |
 | Typecheck | `...` | pass / fail / not run | ... |
-| Unit tests | `...` | pass / fail / not run | ... |
-| Integration tests | `...` | pass / fail / not run | ... |
-| Visual (Playwright) | route and viewport | pass / fail / not run | screenshot paths, or why the app was unreachable |
+| Tests unitaires | `...` | pass / fail / not run | ... |
+| Tests d'intégration | `...` | pass / fail / not run | ... |
+| Visuel (Playwright) | route et viewport | pass / fail / not run | chemins des captures, ou pourquoi l'app était inaccessible |
 
-`Result` has exactly three values. `not run` is a result, not a blank: write it, and write why.
+`Résultat` n'a que trois valeurs possibles. `not run` est un résultat, pas un vide : écris-le, et dis pourquoi.
 
-## Observable criteria
+## Critères observables
 
-| Criterion | Verdict | Value read | Evidence |
+| Critère | Verdict | Valeur lue | Preuve |
 |---|---|---|---|
-| ... | measured live / confirmed from the developer's evidence / unverified | the value you or the developer's evidence read | screenshot path, or what was missing |
+| ... | measured live / confirmed from the developer's evidence / unverified | la valeur que tu as lue ou que l'evidence du développeur donne | chemin de la capture, ou ce qui manquait |
 
-One row per observable criterion. A single "browser check not run" covering all
-of them is not an answer.
+Une ligne par critère observable. Un seul "browser check not run" qui couvre
+tout n'est pas une réponse.
 
-## Acceptance criteria
+## Critères d'acceptation
 
-One line per criterion: `AC<n>` — MET / NOT MET / UNVERIFIED, with the evidence and its `file:line` anchor.
+Une ligne par critère : `AC<n>` — MET / NOT MET / UNVERIFIED, avec la preuve et son ancre `fichier:ligne`.
 
-## Issues
+## Problèmes
 
-**P0 | P1 | P2** — subject
+**P0 | P1 | P2** — sujet
 
-- Steps to reproduce
-- Expected
-- Actual
+- Étapes pour reproduire
+- Attendu
+- Constaté
 
-## Coverage
+## Couverture
 
-- Tested scenarios
-- Missing scenarios
+- Scénarios testés
+- Scénarios manquants
 
-## Could not be verified
+## Non vérifiable
 
-What you could not reach, and what it would take. Empty is a valid answer only when it is true.
+Ce que tu n'as pas pu atteindre, et ce qu'il faudrait pour y arriver. Une réponse vide n'est valable que si c'est vraiment le cas.
 ```
 
 ---

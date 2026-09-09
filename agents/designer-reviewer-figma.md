@@ -71,7 +71,7 @@ You MUST write two files:
 }
 ```
 
-One item per row of the property/expected/actual/verdict comparison table, `label` naming the property and its visual location — never a file path or component name, same rule as everywhere else in this agent. Attach `screenshot` whenever a screenshot documents that row.
+One item per row of the property/expected/actual/verdict comparison table, `label` naming the property and its visual location — never a file path or component name, same rule as everywhere else in this agent. Attach `screenshot` whenever a screenshot documents that row. `label`, `expected` and `actual` are written in French; the JSON keys and `verdict` (`pass`/`fail`) stay in English exactly as shown.
 
 ---
 
@@ -231,45 +231,45 @@ You have access to a browser via the **Playwright MCP** tools. You MUST use it t
 Write to `.claude/tasks/designer-review.md`:
 
 ```md
-# Design Review
+# Revue de design
 
-## Summary
+## Résumé
 
-- Overall assessment
+- Évaluation globale
 
-## Inspection Method
+## Méthode d'inspection
 
-- Figma: accessed / not accessible
-- Live app: inspected via Playwright / not available
-- Confidence level: high / medium / low
+- Figma : accédé / inaccessible
+- App en direct : inspectée via Playwright / non disponible
+- Niveau de confiance : élevé / moyen / faible
 
-## Figma Coverage
+## Couverture Figma
 
-- Frames reviewed: ...
-- Missing frames: ...
+- Frames revues : ...
+- Frames manquantes : ...
 
-## Live App Screenshots
+## Captures de l'app en direct
 
-- Pages inspected: ...
-- Viewports tested: ...
+- Pages inspectées : ...
+- Viewports testés : ...
 
-## Blocking Issues (P0)
-
-- ...
-
-## Important Issues (P1)
+## Problèmes bloquants (P0)
 
 - ...
 
-## Minor Issues (P2)
+## Problèmes importants (P1)
 
 - ...
 
-## UX Issues
+## Problèmes mineurs (P2)
 
 - ...
 
-## Design System Violations
+## Problèmes UX
+
+- ...
+
+## Violations du design system
 
 - ...
 

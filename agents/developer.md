@@ -33,7 +33,7 @@ You MUST produce:
 
 .claude/tasks/developer-report.md
 
-3. `.claude/tasks/dev-evidence.json`, the same Browser Evidence rows as data, for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/dev-evidence.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Preuves" tab. Schema:
 
 ```json
 {
@@ -44,7 +44,7 @@ You MUST produce:
 }
 ```
 
-One item per row of the `## Browser Evidence` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app.
+One item per row of the `## Preuves navigateur` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app. `label`, `expected`, `actual` and `note` are written in French, matching the table; the JSON keys and `"verdict": "measured"` stay in English exactly as shown.
 
 ---
 
@@ -137,50 +137,51 @@ Before finishing:
 Write to `.claude/tasks/developer-report.md`:
 
 ```md
-# Developer Report
+# Rapport développeur
 
-## Summary
+## Résumé
 
-- What was implemented
+- Ce qui a été implémenté
 
-## Tasks Completed
+## Tâches réalisées
 
-- T1: ...
-- T2: ...
+- T1 : ...
+- T2 : ...
 
-## Deviations from Plan
-
-- ...
-
-## Assumptions Made
+## Écarts par rapport au plan
 
 - ...
 
-## Edge Cases Handled
+## Hypothèses retenues
 
 - ...
 
-## Tests Added / Updated
+## Cas limites traités
 
 - ...
 
-## Browser Evidence
+## Tests ajoutés / modifiés
 
-One row per observable acceptance criterion, whether it renders pixels or only
-changes what the app sends, stores or hides. Omit the section only when nothing
-in the change is observable in a running app, and say so in one line instead.
+- ...
 
-| Criterion | Measured value | Reference | Screenshot | How to reproduce |
+## Preuves navigateur
+
+Une ligne par critère d'acceptation observable, qu'il affiche des pixels ou
+change seulement ce que l'application envoie, stocke ou cache. N'omets la
+section que si rien dans le changement n'est observable dans une app qui
+tourne, et dis-le en une ligne à la place.
+
+| Critère | Valeur mesurée | Référence | Capture | Comment reproduire |
 | --- | --- | --- | --- | --- |
-| ... | value read from the live DOM | Figma node, ticket, or the design's value | `.claude/tasks/assets/<name>.png` | route, viewport, and the temporary harness to rebuild if there was one |
+| ... | valeur lue dans le DOM en direct | nœud Figma, ticket, ou la valeur du design | `.claude/tasks/assets/<nom>.png` | route, viewport, et le harnais temporaire à reconstruire s'il y en avait un |
 
-- Criteria you could not measure, and why (app unreachable, no credentials, state not attainable)
+- Critères non mesurables, et pourquoi (app inaccessible, pas de credentials, état non atteignable)
 
-## Known Limitations
+## Limites connues
 
 - ...
 
-## Notes for Reviewer
+## Notes pour le reviewer
 
 - ...
 ```

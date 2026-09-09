@@ -30,7 +30,7 @@ Expected from the caller, in the prompt:
 - `.claude/tasks/planner-output.json` and `.claude/tasks/developer-report.md`
 - `.claude/tasks/ticket-context.md`
 - app URL and the route to reach the feature, plus test credentials if any
-- the developer's browser evidence: the `## Browser Evidence` rows of its report and the screenshots under `.claude/tasks/assets/`
+- the developer's browser evidence: the `## Preuves navigateur` rows of its report and the screenshots under `.claude/tasks/assets/`
 - Figma links, or an explicit statement that there is no design
 
 Missing input is not a reason to stop. Record what is missing, downgrade confidence, and run what you can.
@@ -110,7 +110,7 @@ Never mark something fixed on a reviewer's word alone. A P0 or P1 is closed only
 Write `.claude/tasks/review-summary.md`:
 
 ```md
-# Review Summary
+# Résumé de revue
 
 ## Verdict
 
@@ -118,35 +118,35 @@ READY | BLOCKED
 
 ## Rounds
 
-- Total rounds: N (senior: N, designer: N, qa: N)
+- Rounds au total : N (senior : N, designer : N, qa : N)
 
 ## Dimensions
 
-| Dimension | Ran | Final verdict | P0 | P1 | P2 |
+| Dimension | Exécuté | Verdict final | P0 | P1 | P2 |
 |---|---|---|---|---|---|
-| Senior | yes | PASS_WITH_CHANGES | 0 | 0 | 2 |
-| Designer | yes / skipped and why | ... | ... | ... | ... |
-| QA | yes | PASS_WITH_WARNINGS | 0 | 0 | 1 |
+| Senior | oui | PASS_WITH_CHANGES | 0 | 0 | 2 |
+| Designer | oui / ignoré et pourquoi | ... | ... | ... | ... |
+| QA | oui | PASS_WITH_WARNINGS | 0 | 0 | 1 |
 
-## Fixed During The Loop
+## Corrigé pendant la boucle
 
-- [P0] ... (raised by ..., fixed round N, confirmed by ...)
+- [P0] ... (relevé par ..., corrigé au round N, confirmé par ...)
 
-## Remaining Minor Findings (P2)
+## Findings mineurs restants (P2)
 
-- `path/file.ts:42` - what it is, what would be better
+- `path/file.ts:42` - ce que c'est, ce qui serait mieux
 
-## Still Open (BLOCKED only)
+## Encore ouvert (BLOCKED uniquement)
 
-- What remains, what was tried, what a human needs to decide
+- Ce qui reste, ce qui a été tenté, ce qu'un humain doit décider
 
-## Confidence
+## Confiance
 
-- Tests: run / partially run / not run
-- Live app: inspected via Playwright / not reachable and why
-- Figma: compared / no design provided
-- Observable criteria, one line each: measured live / confirmed from the developer's evidence (with the screenshot path) / unverified (with what was missing). An unreachable app is a reason to fall back on the developer's evidence, never a reason to leave a criterion unexamined
-- Anything that could not be verified
+- Tests : exécutés / partiellement exécutés / non exécutés
+- App en direct : inspectée via Playwright / inaccessible et pourquoi
+- Figma : comparé / pas de design fourni
+- Critères observables, une ligne chacun : measured live / confirmed from the developer's evidence (avec le chemin de la capture) / unverified (avec ce qui manquait). Une app inaccessible est une raison de se rabattre sur l'evidence du développeur, jamais une raison de laisser un critère non examiné
+- Tout ce qui n'a pas pu être vérifié
 ```
 
 ---

@@ -125,6 +125,12 @@ Define:
 
 ---
 
+## Language
+
+Every free-text field's content is written in French: `summary`, `assumptions`, `open_questions`, `requirements.*`, `acceptance_criteria`, `tasks[].title`/`description`, `technical_notes`, `risks[].description`/`mitigation`, `test_strategy.*`. Field names and enum-like values (`complexity: S|M|L`, `impact: low|medium|high`) stay in English exactly as specified below — other agents and the console read them as data, not as prose.
+
+---
+
 ## Output Format (STRICT JSON)
 
 ```json
