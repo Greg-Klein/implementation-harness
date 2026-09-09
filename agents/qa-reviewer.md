@@ -152,12 +152,12 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 
 #### How to use Playwright
 
-1. **Navigate** to the application URL using `playwright_navigate`
-2. **Take screenshots** to document current state using `playwright_screenshot`
-3. **Interact** with the UI: click buttons, fill forms, trigger actions using `playwright_click`, `playwright_hover`, `playwright_fill`
+1. **Navigate** to the application URL using `browser_navigate`
+2. **Take screenshots** to document current state using `browser_take_screenshot`
+3. **Interact** with the UI: click buttons, fill forms, trigger actions using `browser_click`, `browser_hover`, `browser_fill_form`
 4. **Validate outcomes**: check that expected elements appear, data is displayed correctly, error states work
 5. **Test edge cases**: invalid inputs, empty states, boundary conditions via the browser
-6. **Test responsive** behavior at different viewports using `playwright_resize`
+6. **Test responsive** behavior at different viewports using `browser_resize`
 
 #### What to validate via Playwright
 
