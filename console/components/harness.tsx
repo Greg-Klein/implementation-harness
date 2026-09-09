@@ -196,6 +196,12 @@ export function Harness() {
     setCwd(value);
     setDetectedProject(project);
   }, []);
+  const startNewRun = useCallback(() => {
+    send({ type: "run.reset" });
+    setIssueUrl("");
+    setInstruction("");
+    changeCwd("");
+  }, [send, changeCwd]);
   // Both channels need this gesture: a browser only prompts for notifications
   // and only lets a page emit sound from a real interaction. Starting a run is
   // also the moment the user says they are about to walk away.
@@ -225,7 +231,7 @@ export function Harness() {
             </button>
             <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
             <span>Serveur local</span><span aria-hidden="true" className="text-[var(--line)]">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
-            {run.status !== "idle" && !active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.reset" })} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">Nouveau run</button>}
+            {run.status !== "idle" && !active && <button type="button" disabled={!connected} onClick={startNewRun} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">Nouveau run</button>}
           </div>
         </header>
 

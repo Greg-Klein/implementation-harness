@@ -53,3 +53,42 @@ test("should hand back the launch form after a finished run", async ({ page }) =
   await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
   await expect(page.getByRole("log", { name: "Conversation" })).toBeHidden();
 });
+
+test("should clear the launch form fields when starting a new run", async ({ page }) => {
+  await page.goto("/");
+
+  // Filled before the ticket URL so the project auto-detection (debounced,
+  // and only kicking in while the project field is empty) never overwrites it.
+  await page.getByLabel("Répertoire du projet").fill("acme-dashboard");
+  await page.getByLabel("Ticket GitLab").fill("https://gitlab.com/acme/demo/-/issues/217");
+  await page.getByLabel("Instruction particulière").fill("reste sur desktop");
+
+  // Trigger the demo through the socket directly: a fresh navigation to
+  // /?demo=1 would reload the page and lose the values just typed above.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const timeout = window.setTimeout(() => { socket.close(); reject(new Error("demo.start timeout")); }, 3_000);
+    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "demo.start" })));
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "state" && message.state.status !== "idle") {
+        window.clearTimeout(timeout);
+        socket.close();
+        resolve();
+      }
+    });
+  }));
+
+  await expect(page.getByText("Décision requise")).toBeVisible();
+  await page.getByRole("button", { name: "develop" }).click();
+  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
+  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Nouveau run" }).click();
+
+  await expect(page.getByLabel("Ticket GitLab")).toHaveValue("");
+  await expect(page.getByLabel("Répertoire du projet")).toHaveValue("");
+  await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
+});
