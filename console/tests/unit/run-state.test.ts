@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { activeAgents, elapsedLabel, isDemoRun, isWriting } from "../../lib/run-state";
+import { activeAgents, elapsedLabel, isDemoRun, isWriting, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -34,15 +34,27 @@ describe("run state selectors", () => {
     expect(elapsedLabel(start, "2026-09-07T10:00:12.000Z", Date.parse("2026-09-07T11:00:00.000Z"))).toBe("12 s");
   });
 
-  it("should announce a message on the way only while the session is talking", () => {
+  it("should announce a message on the way only while the session is alive and talking", () => {
     const now = Date.parse("2026-09-08T13:52:30.000Z");
-    expect(isWriting("running", now - 400, now)).toBe(true);
-    expect(isWriting("attention", now - 400, now)).toBe(true);
+    expect(isWriting(true, now - 400, now)).toBe(true);
     // The session went quiet: what it wrote has landed, or it is waiting.
-    expect(isWriting("running", now - 4_000, now)).toBe(false);
-    expect(isWriting("completed", now - 400, now)).toBe(false);
+    expect(isWriting(true, now - 4_000, now)).toBe(false);
+    // The workflow finished and the engine process is gone: nothing left to write.
+    expect(isWriting(false, now - 400, now)).toBe(false);
     // No output has ever arrived on this page.
-    expect(isWriting("running", 0, now)).toBe(false);
+    expect(isWriting(true, 0, now)).toBe(false);
+  });
+
+  it("should keep the conversation usable while the engine session outlives the workflow", () => {
+    // A workflow phase in progress is always a live session, session flag or not.
+    expect(sessionAlive("running", false)).toBe(true);
+    expect(sessionAlive("attention", undefined)).toBe(true);
+    // The workflow finished, but the engine process is still up at its prompt.
+    expect(sessionAlive("completed", true)).toBe(true);
+    // The workflow finished and the engine process has actually exited.
+    expect(sessionAlive("completed", false)).toBe(false);
+    expect(sessionAlive("completed", undefined)).toBe(false);
+    expect(sessionAlive("idle", undefined)).toBe(false);
   });
 
   it("should keep an intentional terminal stop successful", () => {

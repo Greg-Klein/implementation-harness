@@ -80,6 +80,7 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
       const intentionallyStopped = intentionallyStoppedRuns.delete(id);
       if (ctx.state.id !== id) return;
       if (terminal === runTerminal) terminal = null;
+      ctx.state.sessionActive = false;
       clearPendingQuestion();
       // The workflow can already have closed the run, and how its idle session
       // then ends says nothing about the outcome it reached.
@@ -95,6 +96,7 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   });
   terminal = runTerminal;
   ctx.state.status = "running";
+  ctx.state.sessionActive = true;
   activity("system", `${engine.label} démarré`, command);
   publishState();
 }
