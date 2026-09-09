@@ -62,7 +62,7 @@ function conversationLine(line: string): ConversationMessage | undefined {
     const attachment = entry.attachment as { type?: unknown; prompt?: unknown } | undefined;
     if (attachment?.type !== "queued_command" || typeof attachment.prompt !== "string") return undefined;
     const queued = attachment.prompt.trim();
-    return queued ? { id, at, author: "user", text: queued } : undefined;
+    return queued && !TAGGED_INPUT.test(queued) ? { id, at, author: "user", text: queued } : undefined;
   }
   const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
   if (!author) return undefined;

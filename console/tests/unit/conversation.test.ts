@@ -40,6 +40,7 @@ describe("conversation extraction", () => {
       { type: "user", uuid: "t7", message: { content: "<task-notification>\n<status>completed</status>\n</task-notification>" } },
       { type: "attachment", uuid: "t8" },
       { type: "attachment", uuid: "t9", attachment: { type: "environment", snapshot: {} } },
+      { type: "attachment", uuid: "t10", attachment: { type: "queued_command", prompt: "<task-notification>\n<status>completed</status>\n</task-notification>", commandMode: "prompt", origin: { kind: "human" } } },
     ];
     expect(technical.map((entry) => parseConversationLine(line(entry)))).toEqual(technical.map(() => undefined));
   });
