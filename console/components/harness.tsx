@@ -5,14 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
 import { isWriting, runInProgress } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
-import type { RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
+import type { PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
 import { LaunchForm } from "./launch-form";
 import { PhaseRail } from "./phase-rail";
+import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
 
 const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
+// Independent of any run, so a slow improvement agent is caught however long it takes.
+const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 
 const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
 
@@ -24,6 +27,7 @@ export function Harness() {
   const [tab, setTab] = useState<"conversation" | "terminal">("conversation");
   const [instruction, setInstruction] = useState("");
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
+  const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
   // Read after mount: the server renders this page and has no localStorage.
@@ -63,6 +67,22 @@ export function Harness() {
     const initialConnection = window.setTimeout(connect, 0);
     return () => { disposed = true; window.clearTimeout(initialConnection); if (retry) clearTimeout(retry); socketRef.current?.close(); };
   }, []);
+
+  const refreshPendingImprovements = useCallback(() => {
+    fetch("/api/self-improvement/pending")
+      .then((response) => response.json() as Promise<PendingImprovementsResponse>)
+      .then((result) => setPendingImprovements(result.items ?? []))
+      .catch(() => undefined);
+  }, []);
+
+  // Independent of the current run: a worktree the improvement loop produced hours ago,
+  // or while no run was active, must surface just the same. Polled, never watched: the
+  // list is always exactly what git has right now, however long a background agent took.
+  useEffect(() => {
+    refreshPendingImprovements();
+    const timer = window.setInterval(refreshPendingImprovements, PENDING_IMPROVEMENTS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshPendingImprovements]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -158,6 +178,17 @@ export function Harness() {
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
 
+  // The panel drops the card immediately for a responsive click; the next poll
+  // reconciles from the server, which stays the source of truth either way.
+  const approveImprovement = useCallback((worktreeName: string) => {
+    setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
+    send({ type: "selfImprovement.approve", worktreeName });
+  }, [send]);
+  const rejectImprovement = useCallback((worktreeName: string) => {
+    setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
+    send({ type: "selfImprovement.reject", worktreeName });
+  }, [send]);
+
   const terminalInput = useCallback((data: string) => send({ type: "terminal.input", data }), [send]);
   const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
   const changeCwd = useCallback((value: string, project?: string) => {
@@ -198,6 +229,8 @@ export function Harness() {
           </div>
         </header>
 
+        <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
+
         {run.status === "idle" ? (
           <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
         ) : (
@@ -221,7 +254,7 @@ export function Harness() {
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
               </div>
             </section>
-            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} onSelfImprovementApprove={(worktreeName) => send({ type: "selfImprovement.approve", worktreeName })} onSelfImprovementReject={(worktreeName) => send({ type: "selfImprovement.reject", worktreeName })} />
+            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} />
           </div>
         )}
       </div>

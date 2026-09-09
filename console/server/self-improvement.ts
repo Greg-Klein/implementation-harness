@@ -2,19 +2,32 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
 import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
-import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, normalizeText } from "./domain.js";
+import { demoState } from "./demo.js";
+import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
-import { branchMergesCleanly, findWorktree, listWorktrees, worktreeCommitCount } from "./worktree.js";
-import type { RunState } from "./types.js";
+import { branchMergesCleanly, listWorktrees, worktreeCommitCount } from "./worktree.js";
+import type { PendingSelfImprovementReview, RunState } from "./types.js";
 
 const auditedRuns = new Set<string>();
-const decidedImprovementReviews = new Set<string>();
-const improvementWatchers = new Set<ReturnType<typeof setTimeout>>();
-const WATCH_INTERVAL_MS = 20_000;
-// The improvement run reads the evidence, edits, then runs an install, a build
-// and the whole test suite before it commits. Observed runs took a quarter of
-// an hour; this leaves room for a slow one without watching forever.
-const WATCH_ATTEMPTS = 270;
+
+/**
+ * Every self-improvement worktree that carries at least one commit, whichever run
+ * spawned it and however long ago. Computed fresh on every call instead of watched:
+ * a timer that gives up after a fixed delay can only ever miss a slow commit, and one
+ * that never re-checks a worktree it already gave up on loses it for good.
+ */
+export async function listPendingImprovements(): Promise<PendingSelfImprovementReview[]> {
+  const worktrees = (await listWorktrees()).filter((worktree) => isImprovementWorktree(worktree.path));
+  const reviews: PendingSelfImprovementReview[] = [];
+  for (const worktree of worktrees) {
+    const commits = await worktreeCommitCount(worktree).catch(() => 0);
+    if (commits === 0) continue;
+    const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
+    reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits, mergesCleanly });
+  }
+  if (demoState.pendingImprovement) reviews.push(demoState.pendingImprovement);
+  return reviews;
+}
 
 export async function saveFeedback(body: string) {
   const feedback = body.trim();
@@ -54,43 +67,6 @@ async function queueAutonomousReview(runId: string, snapshot: RunState) {
   }
 }
 
-export function clearImprovementWatchers() {
-  for (const timer of improvementWatchers) clearTimeout(timer);
-  improvementWatchers.clear();
-}
-
-/** The user merged or discarded these improvements: the watcher must never raise that review again. */
-export function forgetImprovementReview(runId: string) {
-  decidedImprovementReviews.add(runId);
-  clearImprovementWatchers();
-}
-
-/**
- * The launcher exits as soon as the background job detaches, so its exit code
- * only says the agent started. An improvement commit is the only honest signal
- * that something is ready to promote: anything less, and the buttons open over
- * a worktree the agent is still writing in.
- */
-function watchForImprovements(worktreeName: string, runId: string, attempt = 0) {
-  const timer = setTimeout(async () => {
-    improvementWatchers.delete(timer);
-    if (ctx.state.id !== runId || ctx.state.pendingSelfImprovementReview || decidedImprovementReviews.has(runId)) return;
-    const worktree = await findWorktree(worktreeName).catch(() => undefined);
-    const commits = worktree ? await worktreeCommitCount(worktree).catch(() => 0) : 0;
-    if (commits > 0) {
-      const mergesCleanly = worktree?.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
-      ctx.state.pendingSelfImprovementReview = { worktreeName, runId, mergesCleanly };
-      activity("agent", "Améliorations prêtes — en attente de validation", `${commits} commit${commits > 1 ? "s" : ""} sur ${worktreeName}`);
-      publishState();
-      return;
-    }
-    if (attempt + 1 < WATCH_ATTEMPTS) { watchForImprovements(worktreeName, runId, attempt + 1); return; }
-    activity("attention", "Auto-amélioration sans commit", `Le worktree ${worktreeName} reste à inspecter à la main, et la boucle reste en pause tant qu'il existe.`);
-    publishState();
-  }, WATCH_INTERVAL_MS);
-  improvementWatchers.add(timer);
-}
-
 async function startAutonomousImprovement(runId: string) {
   if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return;
   const worktrees = await listWorktrees().catch(() => []);
@@ -118,9 +94,9 @@ async function startAutonomousImprovement(runId: string) {
   child.on("close", (code) => {
     if (ctx.state.id !== runId) return;
     if (code === 0 && !launchError) {
-      // The launcher returns as soon as the background session exists, so the
-      // review is only offered once that session has actually written something.
-      watchForImprovements(worktreeName, runId);
+      // The launcher only confirms the background session exists, not that it has
+      // written anything yet: listPendingImprovements() picks up the worktree once
+      // it actually carries a commit, however long that takes.
       activity("agent", "Auto-amélioration lancée en tâche de fond", worktreeName);
     } else {
       activity("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));

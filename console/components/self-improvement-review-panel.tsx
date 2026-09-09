@@ -40,33 +40,45 @@ function DiffModal({ worktreeName, onClose }: { worktreeName: string; onClose: (
   );
 }
 
-export function SelfImprovementReviewPanel({ review, onApprove, onReject }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void }) {
-  const [diffOpen, setDiffOpen] = useState(false);
+function ReviewCard({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
+  return (
+    <div className="rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
+      <p className="mb-1 text-[11px] font-semibold text-[var(--accent)]">Améliorations prêtes</p>
+      <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</p>
+      {review.mergesCleanly === false && (
+        <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-4 text-red-700">
+          <WarningIcon size={13} className="mt-px shrink-0" />
+          Le harnais a avancé depuis : la fusion entrera en conflit et sera annulée. À reprendre à la main.
+        </p>
+      )}
+      <button type="button" onClick={onViewDiff} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">
+        <CodeIcon size={13} /> Voir les changements
+      </button>
+      <div className="flex gap-2">
+        <button type="button" onClick={onApprove} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px">
+          <CheckIcon size={12} weight="bold" /> Fusionner
+        </button>
+        <button type="button" onClick={onReject} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium text-[var(--muted)] transition hover:text-red-700 active:translate-y-px">
+          <TrashIcon size={12} /> Ignorer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { reviews: PendingSelfImprovementReview[]; onApprove: (worktreeName: string) => void; onReject: (worktreeName: string) => void }) {
+  const [diffWorktree, setDiffWorktree] = useState<string | null>(null);
+
+  if (reviews.length === 0) return null;
 
   return (
     <>
-      <div className="m-4 rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
-        <p className="mb-1 text-[11px] font-semibold text-[var(--accent)]">Améliorations prêtes</p>
-        <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName}</p>
-        {review.mergesCleanly === false && (
-          <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-4 text-red-700">
-            <WarningIcon size={13} className="mt-px shrink-0" />
-            Le harnais a avancé depuis : la fusion entrera en conflit et sera annulée. À reprendre à la main.
-          </p>
-        )}
-        <button type="button" onClick={() => setDiffOpen(true)} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">
-          <CodeIcon size={13} /> Voir les changements
-        </button>
-        <div className="flex gap-2">
-          <button type="button" onClick={onApprove} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px">
-            <CheckIcon size={12} weight="bold" /> Fusionner
-          </button>
-          <button type="button" onClick={onReject} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium text-[var(--muted)] transition hover:text-red-700 active:translate-y-px">
-            <TrashIcon size={12} /> Ignorer
-          </button>
-        </div>
+      <div className="mx-4 mt-4 space-y-3">
+        {reviews.map((review) => (
+          <ReviewCard key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />
+        ))}
       </div>
-      {diffOpen && <DiffModal worktreeName={review.worktreeName} onClose={() => setDiffOpen(false)} />}
+      {diffWorktree && <DiffModal worktreeName={diffWorktree} onClose={() => setDiffWorktree(null)} />}
     </>
   );
 }

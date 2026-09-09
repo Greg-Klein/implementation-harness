@@ -10,9 +10,9 @@ import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config
 import { closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript, followTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
-import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, startDemoRun } from "./demo.js";
+import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, demoState, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { clearImprovementWatchers, forgetImprovementReview, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
+import { listPendingImprovements, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
 import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { engine } from "./engine/index.js";
@@ -23,24 +23,14 @@ let terminal: EngineSession | null = null;
 const intentionallyStoppedRuns = new Set<string>();
 
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
-  const pending = ctx.state.pendingSelfImprovementReview;
-  if (!pending || pending.worktreeName !== worktreeName)
-    throw new Error("Aucune révision d’auto-amélioration en attente pour ce worktree.");
-  forgetImprovementReview(pending.runId);
   if (worktreeName.startsWith("demo-")) {
+    demoState.pendingImprovement = undefined;
     activity("system", merge ? "Améliorations fusionnées (démo)" : "Améliorations ignorées (démo)", worktreeName);
-    ctx.state.pendingSelfImprovementReview = undefined;
     publishState();
     return;
   }
   const worktree = await findWorktree(worktreeName);
-  if (!worktree) {
-    // Nothing left to rule on, and keeping the review pending would leave a panel no answer can close.
-    activity("system", "Révision d’auto-amélioration abandonnée", `Worktree "${worktreeName}" introuvable.`);
-    ctx.state.pendingSelfImprovementReview = undefined;
-    publishState();
-    return;
-  }
+  if (!worktree) throw new Error(`Aucun worktree d'auto-amélioration "${worktreeName}" à traiter.`);
   if (merge) {
     if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
     // A worktree is destroyed just below, so nothing may be announced as merged
@@ -61,14 +51,12 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     activity("system", "Améliorations ignorées", worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
-  ctx.state.pendingSelfImprovementReview = undefined;
   publishState();
 }
 
 async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
   if (terminal) throw new Error(`Une session ${engine.label} est déjà active.`);
   clearDemoTimers();
-  clearImprovementWatchers();
   const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
   if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
@@ -127,7 +115,6 @@ async function resetRun() {
   // prompt, and a new run needs the terminal free.
   stopRun();
   clearDemoTimers();
-  clearImprovementWatchers();
   await closeTranscript();
   ctx.state = emptyState();
   ctx.terminalBuffer = "";
@@ -138,7 +125,6 @@ function stopRun() {
   if (ctx.state.id?.startsWith("demo-")) {
     clearDemoTimers();
     ctx.state.pendingQuestion = undefined;
-    ctx.state.pendingSelfImprovementReview = undefined;
     ctx.state.status = "completed";
     ctx.state.endedAt = now();
     activity("system", "Démonstration arrêtée");
@@ -206,6 +192,11 @@ const server = createServer(async (request, response) => {
     } catch (error) { respond(response, 500, { error: error instanceof Error ? error.message : "Erreur git." }); }
     return;
   }
+  if (request.method === "GET" && request.url === "/api/self-improvement/pending") {
+    try { respond(response, 200, { items: await listPendingImprovements() }); }
+    catch (error) { respond(response, 500, { items: [], error: error instanceof Error ? error.message : "Erreur git." }); }
+    return;
+  }
   if (request.method === "GET" && request.url?.startsWith("/api/repositories")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
     const issueUrl = requestUrl.searchParams.get("issueUrl") ?? "";
@@ -259,6 +250,6 @@ wss.on("connection", (socket) => {
 
 server.listen(port, hostname, () => console.log(`Implementation Harness: http://${hostname}:${port}`));
 
-async function shutdown() { clearDemoTimers(); clearImprovementWatchers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
+async function shutdown() { clearDemoTimers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
 process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));

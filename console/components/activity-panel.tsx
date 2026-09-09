@@ -8,9 +8,8 @@ import type { RunState } from "@/lib/types";
 import { DocumentViewer } from "./document-viewer";
 import { InlineText } from "./inline-text";
 import { QuestionPanel } from "./question-panel";
-import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 
-export function ActivityPanel({ run, onFeedback, onAnswer, onSelfImprovementApprove, onSelfImprovementReject }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void; onSelfImprovementApprove: (worktreeName: string) => void; onSelfImprovementReject: (worktreeName: string) => void }) {
+export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void }) {
   const runningAgents = activeAgents(run.agents);
   const now = useNow(runningAgents.length > 0);
   const [feedback, setFeedback] = useState("");
@@ -28,8 +27,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer, onSelfImprovementAppr
   };
   return (
     <aside className="scrollbar-thin flex min-h-0 flex-col bg-[#f7f8f4] lg:overflow-y-auto">
-      {run.pendingSelfImprovementReview && <SelfImprovementReviewPanel review={run.pendingSelfImprovementReview} onApprove={() => onSelfImprovementApprove(run.pendingSelfImprovementReview!.worktreeName)} onReject={() => onSelfImprovementReject(run.pendingSelfImprovementReview!.worktreeName)} />}
-      {ended && <div className={`mx-4 mb-4 shrink-0 rounded-3 border border-[var(--line)] bg-white p-4 ${run.pendingSelfImprovementReview ? "" : "mt-4"}`}>
+      {ended && <div className="mx-4 mb-4 mt-4 shrink-0 rounded-3 border border-[var(--line)] bg-white p-4">
         <div className="flex items-center justify-between gap-2">
           <label className="text-[11px] font-semibold" htmlFor="run-feedback">Faire progresser le harnais</label>
           {demo && <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 font-mono text-[9px] text-[var(--accent)]">démo</span>}

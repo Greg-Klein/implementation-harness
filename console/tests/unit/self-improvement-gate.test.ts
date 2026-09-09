@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, withoutBundlerVariables } from "../../server/domain";
+import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -41,6 +41,24 @@ describe("one improvement in flight at a time", () => {
 
   it("should name a worktree after the run it audits", () => {
     expect(improvementWorktreeName("2026-09-08T12-49-02-961Z-025063c3")).toBe("self-improvement-025063c3");
+  });
+});
+
+// Every self-improvement worktree is a candidate for the pending-review list, whichever
+// run spawned it and however long ago: this is the filter listPendingImprovements uses.
+describe("recognizing an improvement worktree", () => {
+  const harness = "/Users/x/implementation-harness";
+
+  it("should recognize a worktree regardless of which run named it or how old it is", () => {
+    expect(isImprovementWorktree(`${harness}/.claude/worktrees/self-improvement-025063c3`)).toBe(true);
+  });
+
+  it("should ignore a worktree the user is working on themselves", () => {
+    expect(isImprovementWorktree(`${harness}/.claude/worktrees/feat-259-composer`)).toBe(false);
+  });
+
+  it("should ignore the harness checkout itself", () => {
+    expect(isImprovementWorktree(harness)).toBe(false);
   });
 });
 

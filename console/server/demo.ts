@@ -1,7 +1,11 @@
 import { ctx, activity, broadcast, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { demoStepDuration } from "./config.js";
+import type { PendingSelfImprovementReview } from "./types.js";
 
 const demoTimers = new Set<ReturnType<typeof setTimeout>>();
+
+/** The demo has no real worktree to list, so it fakes one entry alongside the real ones. */
+export const demoState: { pendingImprovement?: PendingSelfImprovementReview } = {};
 
 function scheduleDemo(delay: number, callback: () => void) {
   const timer = setTimeout(() => { demoTimers.delete(timer); callback(); }, delay);
@@ -11,6 +15,7 @@ function scheduleDemo(delay: number, callback: () => void) {
 export function clearDemoTimers() {
   for (const timer of demoTimers) clearTimeout(timer);
   demoTimers.clear();
+  demoState.pendingImprovement = undefined;
 }
 
 function demoTerminal(message: string) {
@@ -169,7 +174,7 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;
-    ctx.state.pendingSelfImprovementReview = { worktreeName, runId: ctx.state.id ?? "" };
+    demoState.pendingImprovement = { worktreeName, commits: 1 };
     activity("agent", "Améliorations prêtes — en attente de validation");
     publishState();
     demoTerminal("Auto-audit terminé. Des améliorations sont proposées dans le panneau de droite.");

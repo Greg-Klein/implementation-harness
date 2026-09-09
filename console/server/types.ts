@@ -5,12 +5,17 @@ export type AgentStatus = "running" | "completed" | "failed";
 export type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };
-/** `mergesCleanly` is false when the branch no longer merges into the harness: the promotion is not one click. */
-export type PendingSelfImprovementReview = { worktreeName: string; runId: string; mergesCleanly?: boolean };
+/**
+ * One worktree the improvement loop left for a verdict, independent of any run: it is
+ * discovered by listing worktrees, never tied to the run that happened to spawn it.
+ * `mergesCleanly` is false when the branch no longer merges into the harness: the
+ * promotion is not one click.
+ */
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
-  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; pendingSelfImprovementReview?: PendingSelfImprovementReview; error?: string;
+  startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };

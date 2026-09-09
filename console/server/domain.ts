@@ -80,6 +80,11 @@ export function improvementWorktreeName(runId: string) {
   return `${IMPROVEMENT_WORKTREE_PREFIX}${runId.slice(-8)}`;
 }
 
+/** Whether a worktree path is one the improvement loop created, whichever run named it. */
+export function isImprovementWorktree(worktreePath: string) {
+  return path.basename(worktreePath).startsWith(IMPROVEMENT_WORKTREE_PREFIX);
+}
+
 /**
  * The improvement worktree already in flight, out of every worktree registered
  * against the harness. One undecided branch at a time is the whole point: the
@@ -89,7 +94,7 @@ export function improvementWorktreeName(runId: string) {
  * the loop waits for a verdict instead of stacking.
  */
 export function improvementWorktreeInFlight(worktreePaths: string[]) {
-  return worktreePaths.find((worktreePath) => path.basename(worktreePath).startsWith(IMPROVEMENT_WORKTREE_PREFIX));
+  return worktreePaths.find(isImprovementWorktree);
 }
 
 // The console is itself a Next server, and Next writes its bundler choice and
