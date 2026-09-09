@@ -34,7 +34,7 @@ test("should say a message is on its way while the session is still talking", as
   await page.goto("/?demo=1");
 
   const conversation = page.getByRole("log", { name: "Conversation" });
-  await expect(conversation.getByText("Claude écrit…")).toBeVisible();
+  await expect(conversation.getByText("Claude réfléchit…")).toBeVisible();
 
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
@@ -42,7 +42,7 @@ test("should say a message is on its way while the session is still talking", as
   await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
 
   // The run is over: nothing is being written any more.
-  await expect(conversation.getByText("Claude écrit…")).toBeHidden();
+  await expect(conversation.getByText("Claude réfléchit…")).toBeHidden();
 });
 
 test("should hand back the launch form after a finished run", async ({ page }) => {
