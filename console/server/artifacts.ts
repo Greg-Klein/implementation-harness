@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
@@ -78,6 +78,19 @@ async function archiveArtifact(source: string, stats?: Stats) {
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) ctx.state.phase = Math.max(ctx.state.phase, completedPhase + 1);
   publishState();
+}
+
+/**
+ * The workflow's own last step cleans this directory, but only when it gets
+ * there: a run stopped from the interface or one whose `claude` process
+ * crashed never reaches it, and leaves a previous ticket's files for the next
+ * run to misread as its own (`ticket-context.md`, `planner-output.json`, a
+ * stale `developer-report-*.md`). Every run therefore starts from an empty
+ * task directory itself, rather than trusting the previous one to have ended
+ * cleanly.
+ */
+export async function clearTaskDirectory(cwd: string) {
+  await rm(engine.taskDirectory(cwd), { recursive: true, force: true });
 }
 
 export async function startArtifactWatcher(cwd: string) {

@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { ctx, activity, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { runInProgress, terminalExitStatus } from "./domain.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
-import { closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
+import { clearTaskDirectory, closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript, followTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, demoState, startDemoRun } from "./demo.js";
@@ -64,6 +64,7 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   ctx.terminalBuffer = "";
   activity("system", "Session créée", path.basename(cwd));
   publishState();
+  await clearTaskDirectory(cwd);
   await startArtifactWatcher(cwd);
   await closeTranscript();
   const command = engine.command(ctx.state.issueUrl, ctx.state.instruction);
