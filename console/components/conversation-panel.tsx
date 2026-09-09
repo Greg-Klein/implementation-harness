@@ -17,7 +17,7 @@ function WritingHint() {
   return (
     <p aria-live="polite" title="Claude Code n’écrit son message qu’à la fin de l’action en cours : le terminal est en avance sur ce panneau." className="flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
       <span aria-hidden="true" className="status-breathe size-1.5 rounded-full bg-[var(--accent)]" />
-      Claude écrit…
+      Claude réfléchit…
     </p>
   );
 }
