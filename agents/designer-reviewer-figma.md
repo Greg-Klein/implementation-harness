@@ -189,11 +189,11 @@ You have access to a browser via the **Playwright MCP** tools. You MUST use it t
 
 ### How to use Playwright
 
-1. **Navigate** to the application URL using `playwright_navigate`
-2. **Take screenshots** of relevant pages/components using `playwright_screenshot`
-3. **Interact** with the UI to test states: click, hover, fill forms using `playwright_click`, `playwright_hover`, `playwright_fill`
+1. **Navigate** to the application URL using `browser_navigate`
+2. **Take screenshots** of relevant pages/components using `browser_take_screenshot`
+3. **Interact** with the UI to test states: click, hover, fill forms using `browser_click`, `browser_hover`, `browser_fill_form`
 4. **Compare** what you see in the browser against Figma specs
-5. **Test viewports** by resizing using `playwright_resize`
+5. **Test viewports** by resizing using `browser_resize`
 
 ### If no URL is available
 
