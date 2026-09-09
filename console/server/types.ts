@@ -16,6 +16,8 @@ export type ConversationMessage = { id: string; at: string; author: "claude" | "
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
+  /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
+  sessionActive: boolean;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };

@@ -3,7 +3,7 @@
 import { ChatCircleDotsIcon, CodeIcon, ShieldCheckIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
-import { isWriting, runInProgress } from "@/lib/run-state";
+import { isWriting, runInProgress, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import type { PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
@@ -18,7 +18,7 @@ const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 
-const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
+const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false };
 
 export function Harness() {
   const [run, setRun] = useState<RunState>(initialState);
@@ -159,10 +159,11 @@ export function Harness() {
   // late: the flow of terminal output is the only live proof that the last
   // message shown is not the last one Claude wrote.
   useEffect(() => {
-    if (!runInProgress(run.status)) { setWriting(false); return; }
-    const timer = window.setInterval(() => setWriting(isWriting(run.status, lastOutputRef.current, Date.now())), 500);
+    const alive = sessionAlive(run.status, run.sessionActive);
+    if (!alive) { setWriting(false); return; }
+    const timer = window.setInterval(() => setWriting(isWriting(alive, lastOutputRef.current, Date.now())), 500);
     return () => window.clearInterval(timer);
-  }, [run.status]);
+  }, [run.status, run.sessionActive]);
 
   // A page may only emit sound after a real interaction. Starting a run is the
   // usual one, but the demonstration starts from a URL and would stay mute, so
@@ -275,7 +276,7 @@ export function Harness() {
                 {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>
               <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <ConversationPanel messages={run.messages} writing={writing} canSend={active && connected} onSend={(text) => send({ type: "instruction.send", text })} />
+                <ConversationPanel messages={run.messages} writing={writing} canSend={sessionAlive(run.status, run.sessionActive) && connected} onSend={(text) => send({ type: "instruction.send", text })} />
               </div>
               <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />

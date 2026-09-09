@@ -5,7 +5,7 @@ import { dataRoot } from "./config.js";
 import type { Activity, ConversationMessage, RunState } from "./types.js";
 
 export function emptyState(): RunState {
-  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [] };
+  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false };
 }
 
 export const ctx = {
