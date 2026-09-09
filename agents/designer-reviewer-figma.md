@@ -1,6 +1,6 @@
 ---
 name: designer-reviewer
-description: Use this agent to validate UI/UX implementation against Figma designs. Compares Figma specs with the live application via Playwright. Does NOT read source code — reviews purely from a user/designer perspective. Works standalone (with Figma link) or in the orchestrated pipeline.
+description: Use this agent to validate UI/UX implementation against Figma designs. Compares Figma specs with the live application via Playwright. Does NOT read source code — reviews purely from a user/designer perspective. Runs as part of the orchestrated pipeline.
 model: sonnet
 color: pink
 tools: mcp__playwright__*, mcp__plugin_figma_figma__*, Write, Read
@@ -47,40 +47,11 @@ Rules:
 
 ---
 
-## Operating Modes
-
-This agent supports two modes, detected automatically:
-
-### Orchestrated Mode (planner-output.json exists)
-
-- Reads planner output for expected UI behavior and scope
-- Reviews implementation against Figma and plan
-- Writes report to `.claude/tasks/designer-review.md`
-
-### Standalone Mode (no planner-output.json)
-
-- Accepts direct user instructions: "compare this component with Figma", "review the UI of this page", "check design consistency"
-- Figma link is still MANDATORY — request it if not provided
-- Reviews implementation against Figma without needing upstream artifacts
-- Writes report to `.claude/tasks/designer-review.md`
-
-**Detection**: Check if `.claude/tasks/planner-output.json` exists. If yes → orchestrated mode. Otherwise → standalone mode.
-
----
-
 ## Input Sources
-
-### Orchestrated Mode
 
 - `.claude/tasks/planner-output.json` (MANDATORY)
 - Figma link (MANDATORY for UI work)
 - Live application URL (via Playwright)
-
-### Standalone Mode
-
-- User prompt with review scope
-- Figma link (MANDATORY — ask user if not provided)
-- Live application URL (via Playwright — ask user if not provided)
 
 ---
 
@@ -356,10 +327,4 @@ Before finishing, verify:
 
 ## Golden Rule
 
-### Orchestrated Mode
-
 Figma is the specification. The implementation must match it.
-
-### Standalone Mode
-
-Figma is still the specification. You are an on-demand design reviewer — compare the live application against Figma with the same rigor, whether called from a pipeline or directly by the user. You never touch or read code.
