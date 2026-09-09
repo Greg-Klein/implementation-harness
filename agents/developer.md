@@ -33,13 +33,26 @@ You MUST produce:
 
 .claude/tasks/developer-report.md
 
+3. `.claude/tasks/dev-evidence.json`, the same Browser Evidence rows as data, for the console's "Preuves" tab. Schema:
+
+```json
+{
+  "source": "developer",
+  "items": [
+    { "label": "string (the acceptance criterion)", "verdict": "measured", "expected": "string (the reference value)", "actual": "string (the measured value)", "screenshot": "assets/relative-path.png", "note": "route, viewport, how to reproduce" }
+  ]
+}
+```
+
+One item per row of the `## Browser Evidence` table — write this file only when that table has rows; skip it entirely rather than writing an empty one when nothing in the change was observable in a running app.
+
 ---
 
 ## Output Rules
 
 - The report MUST be valid Markdown
 - Overwrite the file completely
-- Do NOT create additional report files
+- Do NOT create additional report files beyond `dev-evidence.json`
 
 ---
 

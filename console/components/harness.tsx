@@ -1,13 +1,14 @@
 "use client";
 
-import { ChatCircleDotsIcon, CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ChatCircleDotsIcon, CodeIcon, ShieldCheckIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
 import { isWriting, runInProgress } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import type { PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
 import { ActivityPanel } from "./activity-panel";
 import { ConversationPanel } from "./conversation-panel";
+import { EvidencePanel } from "./evidence-panel";
 import { LaunchForm } from "./launch-form";
 import { PhaseRail } from "./phase-rail";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
@@ -24,7 +25,7 @@ export function Harness() {
   const [connected, setConnected] = useState(false);
   const [cwd, setCwd] = useState("");
   const [issueUrl, setIssueUrl] = useState("");
-  const [tab, setTab] = useState<"conversation" | "terminal">("conversation");
+  const [tab, setTab] = useState<"conversation" | "terminal" | "preuves">("conversation");
   const [instruction, setInstruction] = useState("");
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
@@ -39,6 +40,25 @@ export function Harness() {
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
   const previousRunRef = useRef<RunState | null>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
+  const tabButtonRefs = useRef<Partial<Record<typeof tab, HTMLButtonElement | null>>>({});
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+
+  // Measured from the DOM rather than hardcoded, so the pill lines up whatever
+  // the label width ends up being (font load, locale, a tab added later).
+  useLayoutEffect(() => {
+    const list = tabListRef.current;
+    const button = tabButtonRefs.current[tab];
+    if (!list || !button) return;
+    const measure = () => {
+      const listRect = list.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      setTabIndicator({ left: buttonRect.left - listRect.left, width: buttonRect.width });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [tab]);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -244,10 +264,11 @@ export function Harness() {
             <PhaseRail run={run} />
             <section className="flex min-h-135 flex-col border-y border-[var(--line)] bg-[var(--surface)] lg:border-x lg:border-y-0">
               <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--line)] px-4">
-                <div role="tablist" aria-label="Vue de la session" className="flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
-                  {([["conversation", "Conversation"], ["terminal", "Terminal"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition ${tab === value ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
-                      {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : <TerminalWindowIcon size={13} />}{label}
+                <div ref={tabListRef} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
+                  <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />
+                  {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => (
+                    <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+                      {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
                     </button>
                   ))}
                 </div>
@@ -258,6 +279,9 @@ export function Harness() {
               </div>
               <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
+              </div>
+              <div className={tab === "preuves" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+                <EvidencePanel run={run} />
               </div>
             </section>
             <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} />

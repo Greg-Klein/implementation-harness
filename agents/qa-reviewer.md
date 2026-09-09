@@ -27,21 +27,32 @@ You have access to a browser via **Playwright MCP** to visually inspect and func
 
 ---
 
-## Output File (MANDATORY)
+## Output Files (MANDATORY)
 
-You MUST write your output to:
+You MUST write two files:
 
-.claude/tasks/qa-report.md
+1. `.claude/tasks/qa-report.md` — the report below. That exact name, always. The console maps the run's phases from artifact names and matches this one on its `qa-report` prefix, so a report written as `qa-review.md`, or under any other name, exists on disk and advances nothing.
+2. `.claude/tasks/qa-evidence.json` — the same gates and observable criteria as data, for the console's "Preuves" tab. Schema:
 
-That exact name, always. The console maps the run's phases from artifact names and matches this one on its `qa-report` prefix, so a report written as `qa-review.md`, or under any other name, exists on disk and advances nothing.
+```json
+{
+  "source": "qa",
+  "status": "PASS | PASS_WITH_WARNINGS | FAIL",
+  "items": [
+    { "label": "string", "verdict": "pass | fail | not_run | measured | confirmed | unverified", "command": "string", "actual": "string", "screenshot": "assets/relative-path.png" }
+  ]
+}
+```
+
+One item per row of the `Gates` table (`verdict` from its `Result` column, `command` and `actual` from `Command run` and `Evidence`), plus one item per row of `Observable criteria` (`verdict`: `measured` for "measured live", `confirmed` for "confirmed from the developer's evidence", `unverified` otherwise; `actual` is the value read; `screenshot` when the evidence names one under `.claude/tasks/assets/`). Every row in either markdown table has a matching item here — this file is that data, not a summary of it.
 
 ---
 
 ## Output Rules (STRICT)
 
 - Markdown, following the format below, with every heading present
-- Overwrite the file completely
-- Do NOT create other files
+- Overwrite both files completely
+- Do NOT create any file beyond these two
 - Every claim carries its evidence: the exact command, its exact result, and a `path/file.ext:line` anchor for anything read from the code
 
 ---

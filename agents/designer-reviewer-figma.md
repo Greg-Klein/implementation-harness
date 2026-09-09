@@ -55,19 +55,31 @@ Rules:
 
 ---
 
-## Output File (MANDATORY)
+## Output Files (MANDATORY)
 
-You MUST write your output to:
+You MUST write two files:
 
-.claude/tasks/designer-review.md
+1. `.claude/tasks/designer-review.md` — the report below.
+2. `.claude/tasks/design-evidence.json` — the same property comparisons as data, for the console's "Preuves" tab. Schema:
+
+```json
+{
+  "source": "design",
+  "items": [
+    { "label": "string", "verdict": "pass | fail", "expected": "string", "actual": "string", "screenshot": "assets/relative-path.png" }
+  ]
+}
+```
+
+One item per row of the property/expected/actual/verdict comparison table, `label` naming the property and its visual location — never a file path or component name, same rule as everywhere else in this agent. Attach `screenshot` whenever a screenshot documents that row.
 
 ---
 
 ## Output Rules
 
 - Output MUST be valid Markdown
-- Overwrite the file completely
-- Do NOT create additional files
+- Overwrite both files completely
+- Do NOT create any file beyond these two
 
 ---
 
@@ -281,7 +293,7 @@ PASS | PASS_WITH_WARNINGS | FAIL
 - DO NOT reference file paths, component names, or code internals
 - ALWAYS reference issues by visual location ("the header on the login page", "the CTA button in the hero section")
 - ALWAYS use Playwright to inspect the application — never guess from code
-- ONLY tools allowed: Playwright MCP tools, Figma MCP tools, Write (for the report), Read (ONLY for `.claude/tasks/` artifacts)
+- ONLY tools allowed: Playwright MCP tools, Figma MCP tools, Write (for the report and the evidence file), Read (ONLY for `.claude/tasks/` artifacts)
 
 ---
 

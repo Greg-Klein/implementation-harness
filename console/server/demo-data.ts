@@ -107,6 +107,23 @@ PASS
 ## Issues
 
 Aucune.`,
+  "dev-evidence.json": `{
+  "source": "developer",
+  "items": [
+    { "label": "Le panneau enregistre les préférences sans rechargement", "verdict": "measured", "actual": "PATCH /api/preferences → 200, état local mis à jour sans reload" },
+    { "label": "Les alertes critiques restent visibles quand les notifications sont désactivées", "verdict": "measured", "expected": "alerte critique affichée", "actual": "alerte critique affichée" }
+  ]
+}`,
+  "qa-evidence.json": `{
+  "source": "qa",
+  "status": "PASS",
+  "items": [
+    { "label": "Lint", "verdict": "pass", "command": "npm run lint", "actual": "0 avertissement" },
+    { "label": "Typecheck", "verdict": "pass", "command": "npm run typecheck", "actual": "0 erreur" },
+    { "label": "Tests unitaires", "verdict": "pass", "command": "npm run test", "actual": "12/12" },
+    { "label": "Accessibilité du panneau de préférences", "verdict": "pass", "command": "axe sur le panneau", "actual": "0 violation" }
+  ]
+}`,
   "mr-description.md": `# IH-42 · Ajouter les préférences de notification
 
 ## Changements

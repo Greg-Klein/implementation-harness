@@ -15,5 +15,8 @@ export type RepositoryResponse = {
   repositories: RepositoryOption[];
   detected: (RepositoryOption & { source: "git" }) | null;
 };
-export type ArtifactResponse = { path: string; content: string; error?: string };
+export type ArtifactResponse = { path: string; content: string; error?: string; encoding?: "utf8" | "base64"; contentType?: string };
+export type EvidenceVerdict = "pass" | "fail" | "not_run" | "measured" | "confirmed" | "unverified";
+export type EvidenceItem = { label: string; verdict: EvidenceVerdict; expected?: string; actual?: string; command?: string; screenshot?: string; note?: string };
+export type EvidenceReport = { source: "qa" | "design" | "developer"; status?: string; items: EvidenceItem[] };
 export type PendingImprovementsResponse = { items: PendingSelfImprovementReview[]; error?: string };

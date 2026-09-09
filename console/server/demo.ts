@@ -109,7 +109,7 @@ export function continueDemoRun() {
       ...ctx.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
       { id: "demo-reviewer", name: "senior-reviewer", status: "running" as const, startedAt: now() },
     ];
-    ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json"];
+    ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json"];
     activity("agent", "Implémentation terminée, vérifications en cours");
     publishState();
     demoTerminal("Tests unitaires et contrôle TypeScript terminés. Passage en review…");
@@ -144,7 +144,7 @@ export function continueDemoRun() {
   scheduleDemo(demoStepDuration * 7, () => {
     ctx.state.phase = 7;
     ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.md"];
+    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.md", "qa-evidence.json"];
     activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
     publishState();
     demoTerminal("Review 2/2 : approuvée. Les retours ont bien été pris en compte.");

@@ -10,6 +10,11 @@ import { dataRoot } from "./config.js";
 
 let artifactWatcher: FSWatcher | null = null;
 
+const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
+
+/** The evidence files a reviewer or the developer writes for the console's "Preuves" tab, round archives included. */
+const EVIDENCE_FILE = /^(qa|design|dev)-evidence(-round\d+)?\.json$/;
+
 export async function readArtifact(artifactPath: string) {
   if (!ctx.state.id || !ctx.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
   if (ctx.state.id.startsWith("demo-")) {
@@ -22,7 +27,35 @@ export async function readArtifact(artifactPath: string) {
   if (!target) throw new Error("Chemin de document invalide.");
   const buffer = await readFile(target);
   if (buffer.byteLength > 2_000_000) throw new Error("Ce document dépasse la limite de prévisualisation de 2 Mo.");
+  const contentType = IMAGE_CONTENT_TYPES[path.extname(target).toLowerCase()];
+  if (contentType) return { path: artifactPath, content: buffer.toString("base64"), encoding: "base64" as const, contentType };
   return { path: artifactPath, content: buffer.toString("utf8") };
+}
+
+/**
+ * A screenshot is only ever archived when a proof file names it: widening this
+ * to every file under assets/ would pull in every Figma download and debug
+ * capture, exactly what isRunDocument's extension filter was written to avoid.
+ */
+async function archiveEvidenceScreenshots(evidenceSource: string, taskRoot: string) {
+  if (!ctx.state.id) return;
+  let items: unknown;
+  try { items = JSON.parse(await readFile(evidenceSource, "utf8")).items; } catch { return; }
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    const screenshot = (item as { screenshot?: unknown } | null)?.screenshot;
+    if (typeof screenshot !== "string" || !screenshot) continue;
+    const source = path.resolve(taskRoot, screenshot);
+    const relative = path.relative(taskRoot, source);
+    if (relative.startsWith("..") || path.isAbsolute(relative) || ctx.state.artifacts.includes(relative)) continue;
+    const target = path.join(dataRoot, ctx.state.id, "artifacts", relative);
+    await mkdir(path.dirname(target), { recursive: true });
+    const copied = await copyFile(source, target).then(() => true, () => false);
+    if (copied && !ctx.state.artifacts.includes(relative)) {
+      ctx.state.artifacts = [...ctx.state.artifacts, relative];
+      activity("artifact", "Capture archivée", relative);
+    }
+  }
 }
 
 async function archiveArtifact(source: string, stats?: Stats) {
@@ -40,6 +73,7 @@ async function archiveArtifact(source: string, stats?: Stats) {
     ctx.state.artifacts = [...ctx.state.artifacts, relative];
     activity("artifact", "Nouvel artefact", relative);
   }
+  if (EVIDENCE_FILE.test(path.basename(relative))) await archiveEvidenceScreenshots(source, taskRoot);
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) ctx.state.phase = Math.max(ctx.state.phase, completedPhase + 1);
