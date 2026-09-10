@@ -65,3 +65,5 @@ Chaque exécution est conservée dans `console/data/runs/<run-id>/` :
 - `artifacts/` reçoit une copie des documents produits dans `.claude/tasks/` avant leur nettoyage. Seuls les documents lisibles y sont copiés : les captures et les assets téléchargés restent dans le dépôt, sous `.claude/tasks/assets/`.
 
 Le dossier `data/` est ignoré par Git.
+
+Au démarrage, le serveur referme tout run resté sur un statut non terminal (`starting`, `running`, `attention`) : `ctx.state` repart vide à chaque lancement, donc un run que le processus précédent n'a pas pu clore lui-même (arrêt brutal, `impl restart`) resterait sinon marqué "running" indéfiniment. Il est reclassé "failed" avec un message l'expliquant, distinct d'un échec de l'agent.
