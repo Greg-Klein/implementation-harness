@@ -57,8 +57,9 @@ describe("run state selectors", () => {
     expect(sessionAlive("idle", undefined)).toBe(false);
   });
 
-  it("should keep an intentional terminal stop successful", () => {
-    expect(terminalExitStatus(1, true)).toBe("completed");
+  it("should mark an intentional terminal stop as stopped, never as completed or failed", () => {
+    expect(terminalExitStatus(1, true)).toBe("stopped");
+    expect(terminalExitStatus(0, true)).toBe("stopped");
     expect(terminalExitStatus(0, false)).toBe("completed");
     expect(terminalExitStatus(1, false)).toBe("failed");
   });

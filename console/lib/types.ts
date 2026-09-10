@@ -1,4 +1,4 @@
-export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
+export type Status = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 export type Agent = { id: string; name: string; status: "running" | "completed" | "failed"; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };

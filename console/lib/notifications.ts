@@ -25,6 +25,10 @@ export function runAlert(previous: RunState | null, next: RunState): RunAlert | 
   // way: the workflow has always used the same cue for both.
   if (next.status === "failed" && runInProgress(previous.status))
     return { tag: `failed-${next.id}`, title: "Le run a échoué", body: next.error ?? "La session s'est interrompue.", cue: "done" };
+  // A stop the user asked for is over too, but it never went all the way: it
+  // must never read like the "completed" case above.
+  if (next.status === "stopped" && runInProgress(previous.status))
+    return { tag: `stopped-${next.id}`, title: "Run arrêté", body: "Tu as arrêté la session avant la fin du workflow.", cue: "done" };
   return undefined;
 }
 
@@ -35,6 +39,7 @@ export function documentTitle(run: RunState) {
   if (run.status === "attention") return `● Attention requise · ${NAME}`;
   if (run.status === "failed") return `✗ Échec · ${NAME}`;
   if (run.status === "completed") return `✓ Terminé · ${NAME}`;
+  if (run.status === "stopped") return `○ Arrêté · ${NAME}`;
   if (runInProgress(run.status)) return `Run en cours · ${NAME}`;
   return NAME;
 }
@@ -43,6 +48,7 @@ export function faviconColor(run: RunState) {
   if (run.status === "attention") return "#d97706";
   if (run.status === "failed") return "#b91c1c";
   if (run.status === "completed") return "#477a62";
+  if (run.status === "stopped") return "#6b7280";
   if (runInProgress(run.status)) return "#477a62";
   return "#1c211f";
 }

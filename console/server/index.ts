@@ -128,7 +128,7 @@ function stopRun() {
   if (ctx.state.id?.startsWith("demo-")) {
     clearDemoTimers();
     ctx.state.pendingQuestion = undefined;
-    ctx.state.status = "completed";
+    ctx.state.status = "stopped";
     ctx.state.endedAt = now();
     activity("system", "Démonstration arrêtée");
     publishState();
