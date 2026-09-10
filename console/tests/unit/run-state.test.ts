@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { activeAgents, elapsedLabel, isDemoRun, isWriting, sessionAlive } from "../../lib/run-state";
+import { activeAgents, elapsedLabel, isDemoRun, isTranscriptStalled, isWriting, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -55,6 +55,17 @@ describe("run state selectors", () => {
     expect(sessionAlive("completed", false)).toBe(false);
     expect(sessionAlive("completed", undefined)).toBe(false);
     expect(sessionAlive("idle", undefined)).toBe(false);
+  });
+
+  it("should flag an empty conversation as stalled once the run has produced other hook-driven progress", () => {
+    // Nothing has happened yet: an empty conversation is the ordinary start of a run.
+    expect(isTranscriptStalled(0, 0, 0, 0)).toBe(false);
+    // A phase advance, an agent, or an artifact can only exist once a hook fired.
+    expect(isTranscriptStalled(0, 3, 0, 0)).toBe(true);
+    expect(isTranscriptStalled(0, 0, 1, 0)).toBe(true);
+    expect(isTranscriptStalled(0, 0, 0, 2)).toBe(true);
+    // Once at least one message has been read, the follower is known to work.
+    expect(isTranscriptStalled(1, 5, 2, 3)).toBe(false);
   });
 
   it("should mark an intentional terminal stop as stopped, never as completed or failed", () => {

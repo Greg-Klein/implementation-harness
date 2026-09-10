@@ -34,6 +34,18 @@ export function isWriting(alive: boolean, lastOutputAt: number, now: number) {
   return alive && now - lastOutputAt < OUTPUT_IDLE_MS;
 }
 
+/**
+ * A branch, an agent or an artifact can only be recorded once a hook has fired,
+ * and every hook payload names the transcript to read the dialogue from. An
+ * empty conversation next to that kind of progress means the follower missed
+ * the transcript, not that Claude is merely slow to write its next message: the
+ * ordinary lag the "Claude réfléchit…" hint covers never reaches this point
+ * empty-handed.
+ */
+export function isTranscriptStalled(messageCount: number, phase: number, agentCount: number, artifactCount: number) {
+  return messageCount === 0 && (phase > 0 || agentCount > 0 || artifactCount > 0);
+}
+
 export function pendingAnswerLabel(count: number) {
   return count === 1 ? "Claude attend une réponse" : `Claude attend ${count} réponses`;
 }
