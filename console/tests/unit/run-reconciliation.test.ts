@@ -10,7 +10,7 @@ let runsDirectory: string;
 function writeRun(runId: string, overrides: Partial<RunState>) {
   const runDir = path.join(runsDirectory, runId);
   mkdirSync(runDir, { recursive: true });
-  const state: RunState = { id: runId, status: "running", phase: 3, cwd: "/repo", issueUrl: "", instruction: "", startedAt: "2026-09-09T08:18:30.710Z", endedAt: null, agents: [], activities: [], messages: [], artifacts: [], ...overrides };
+  const state: RunState = { id: runId, status: "running", phase: 3, cwd: "/repo", issueUrl: "", instruction: "", startedAt: "2026-09-09T08:18:30.710Z", endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false, ...overrides };
   writeFileSync(path.join(runDir, "run.json"), JSON.stringify(state, null, 2));
 }
 
