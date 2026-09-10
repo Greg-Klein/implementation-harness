@@ -4,7 +4,7 @@ export type Activity = { id: string; at: string; kind: string; title: string; de
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
 /** `mergesCleanly` is false when the branch no longer merges into the harness: the promotion is not one click. */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: Status; phase: number; cwd: string; issueUrl: string; instruction: string;

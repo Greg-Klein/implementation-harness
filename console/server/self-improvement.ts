@@ -11,19 +11,24 @@ import type { PendingSelfImprovementReview, RunState } from "./types.js";
 const auditedRuns = new Set<string>();
 
 /**
- * Every self-improvement worktree that carries at least one commit, whichever run
- * spawned it and however long ago. Computed fresh on every call instead of watched:
- * a timer that gives up after a fixed delay can only ever miss a slow commit, and one
- * that never re-checks a worktree it already gave up on loses it for good.
+ * Every self-improvement worktree, whichever run spawned it and however long ago,
+ * including one the background agent has just opened and not committed to yet: the
+ * console shows it as "analyzing" rather than staying silent until the first commit
+ * lands. Computed fresh on every call instead of watched: a timer that gives up after
+ * a fixed delay can only ever miss a slow commit, and one that never re-checks a
+ * worktree it already gave up on loses it for good.
  */
 export async function listPendingImprovements(): Promise<PendingSelfImprovementReview[]> {
   const worktrees = (await listWorktrees()).filter((worktree) => isImprovementWorktree(worktree.path));
   const reviews: PendingSelfImprovementReview[] = [];
   for (const worktree of worktrees) {
     const commits = await worktreeCommitCount(worktree).catch(() => 0);
-    if (commits === 0) continue;
+    if (commits === 0) {
+      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: "analyzing" });
+      continue;
+    }
     const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
-    reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits, mergesCleanly });
+    reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits, mergesCleanly, status: "ready" });
   }
   if (demoState.pendingImprovement) reviews.push(demoState.pendingImprovement);
   return reviews;
@@ -95,8 +100,8 @@ async function startAutonomousImprovement(runId: string) {
     if (ctx.state.id !== runId) return;
     if (code === 0 && !launchError) {
       // The launcher only confirms the background session exists, not that it has
-      // written anything yet: listPendingImprovements() picks up the worktree once
-      // it actually carries a commit, however long that takes.
+      // written anything yet: listPendingImprovements() shows the worktree as
+      // "analyzing" from here, then flips it to a reviewable card once a commit lands.
       activity("agent", "Auto-amélioration lancée en tâche de fond", worktreeName);
     } else {
       activity("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));

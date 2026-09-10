@@ -174,7 +174,7 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;
-    demoState.pendingImprovement = { worktreeName, commits: 1 };
+    demoState.pendingImprovement = { worktreeName, commits: 1, status: "ready" };
     activity("agent", "Améliorations prêtes — en attente de validation");
     publishState();
     demoTerminal("Auto-audit terminé. Des améliorations sont proposées dans le panneau de droite.");

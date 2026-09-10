@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, CodeIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { CheckIcon, CircleNotchIcon, CodeIcon, TrashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import type { PendingSelfImprovementReview } from "@/lib/types";
 
@@ -40,6 +40,17 @@ function DiffModal({ worktreeName, onClose }: { worktreeName: string; onClose: (
   );
 }
 
+function AnalyzingCard({ review }: { review: PendingSelfImprovementReview }) {
+  return (
+    <div className="rounded-3 border border-[var(--line)] bg-[var(--paper)] p-4">
+      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)]">
+        <CircleNotchIcon size={13} className="animate-spin" /> Auto-amélioration en cours d’analyse
+      </p>
+      <p className="font-mono text-[9px] text-[var(--muted)]">{review.worktreeName}</p>
+    </div>
+  );
+}
+
 function ReviewCard({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
   return (
     <div className="rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
@@ -74,9 +85,9 @@ export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { r
   return (
     <>
       <div className="mx-4 mt-4 space-y-3">
-        {reviews.map((review) => (
-          <ReviewCard key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />
-        ))}
+        {reviews.map((review) => review.status === "analyzing"
+          ? <AnalyzingCard key={review.worktreeName} review={review} />
+          : <ReviewCard key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />)}
       </div>
       {diffWorktree && <DiffModal worktreeName={diffWorktree} onClose={() => setDiffWorktree(null)} />}
     </>

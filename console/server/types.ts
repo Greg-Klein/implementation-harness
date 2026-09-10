@@ -11,7 +11,7 @@ export type PendingQuestion = { id: string; questions: Question[] };
  * `mergesCleanly` is false when the branch no longer merges into the harness: the
  * promotion is not one click.
  */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;
