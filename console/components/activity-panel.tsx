@@ -16,7 +16,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; on
   const [queued, setQueued] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const demo = isDemoRun(run.id);
-  const ended = run.status === "completed" || run.status === "failed";
+  const ended = run.status === "completed" || run.status === "stopped" || run.status === "failed";
   const submitFeedback = () => {
     if (!feedback.trim()) return;
     // La demonstration montre le panneau sans alimenter la boucle : un retour

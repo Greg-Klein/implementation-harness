@@ -30,6 +30,7 @@ function statusLabel(status: Status) {
   if (status === "running") return "En cours";
   if (status === "attention") return "À toi de jouer";
   if (status === "completed") return "Terminé";
+  if (status === "stopped") return "Arrêté";
   if (status === "failed") return "Erreur";
   return "Disponible";
 }
@@ -40,7 +41,7 @@ export function PhaseRail({ run }: { run: RunState }) {
 
   return (
     <aside className="scrollbar-thin min-h-0 p-5 lg:overflow-y-auto">
-      <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.status === "attention" && <WarningIcon size={10} weight="fill" />}{statusLabel(run.status)}</span></div>
+      <div className="mb-6 flex items-center justify-between"><span className="text-xs font-semibold">Progression</span><span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${run.status === "attention" ? "bg-amber-100 text-amber-800" : run.status === "stopped" ? "bg-[var(--line)] text-[var(--muted)]" : "bg-[var(--accent-soft)] text-[var(--accent)]"}`}>{run.status === "attention" && <WarningIcon size={10} weight="fill" />}{statusLabel(run.status)}</span></div>
       <ol>{phases.map((phase, index) => {
         // The last step is only ticked when the run itself is over, never just
         // because the workflow reached it.

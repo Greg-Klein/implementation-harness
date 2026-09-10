@@ -60,8 +60,15 @@ export function positiveDuration(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+/**
+ * A user-initiated stop is neither a crash nor a workflow that ran to its end:
+ * calling it "completed" told the user the run had gone all the way (a merge
+ * request, a published review) when they themselves had just cut it off,
+ * sometimes before a single agent had started.
+ */
 export function terminalExitStatus(exitCode: number, intentionallyStopped: boolean) {
-  return intentionallyStopped || exitCode === 0 ? "completed" as const : "failed" as const;
+  if (intentionallyStopped) return "stopped" as const;
+  return exitCode === 0 ? "completed" as const : "failed" as const;
 }
 
 /**

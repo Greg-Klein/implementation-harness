@@ -1,6 +1,6 @@
 import type { Question } from "./domain.js";
 
-export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "failed";
+export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
 export type AgentStatus = "running" | "completed" | "failed";
 export type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
