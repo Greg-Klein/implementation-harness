@@ -22,7 +22,7 @@ function WritingHint() {
   );
 }
 
-export function ConversationPanel({ messages, writing, canSend, onSend }: { messages: ConversationMessage[]; writing: boolean; canSend: boolean; onSend: (text: string) => void }) {
+export function ConversationPanel({ messages, writing, stalled, canSend, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; stalled: boolean; canSend: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -60,8 +60,17 @@ export function ConversationPanel({ messages, writing, canSend, onSend }: { mess
       >
         {messages.length === 0 ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
           <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
-          <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Les échanges avec Claude apparaissent ici. Les appels d’outils et les agents restent dans l’onglet Terminal.</p>
-          {writing && <WritingHint />}
+          {stalled ? (
+            <>
+              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Le run progresse mais aucun message n’a pu être lu depuis le transcript. La session peut attendre une confirmation invisible ici, comme la confiance du dossier.</p>
+              <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Vérifier l’onglet Terminal</button>
+            </>
+          ) : (
+            <>
+              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Les échanges avec Claude apparaissent ici. Les appels d’outils et les agents restent dans l’onglet Terminal.</p>
+              {writing && <WritingHint />}
+            </>
+          )}
         </div> : messages.map((message, index) => (
           <article key={message.id} className={`reveal flex flex-col ${message.author === "user" ? "items-end" : "items-start"}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
             <div className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
