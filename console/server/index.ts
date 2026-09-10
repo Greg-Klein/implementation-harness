@@ -48,6 +48,12 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
       throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
     activity("system", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
   } else {
+    // Merging already refuses to destroy a worktree with something uncommitted
+    // on disk (see worktreeIsClean's own contract): ignoring must refuse the same
+    // way, or "Ignorer" becomes the one button that can erase a diagnosis the
+    // validation step deliberately left uncommitted after a failed check.
+    if (!(await worktreeIsClean(worktree)))
+      throw new Error(`${worktreeName} contient des changements non validés : les ignorer les détruirait. Rien n'a été touché.`);
     activity("system", "Améliorations ignorées", worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
