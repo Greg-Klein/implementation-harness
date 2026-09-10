@@ -200,6 +200,8 @@ Les données sont archivées dans `console/data/runs/<run-id>/` :
 
 Ce dossier est local et ignoré par Git. Il peut contenir des informations confidentielles provenant des tickets traités; il ne faut pas le partager.
 
+Un run que le serveur n'a pas pu clore lui-même (arrêt brutal, redémarrage) est reclassé "failed" au démarrage suivant plutôt que de rester marqué "running" indéfiniment : voir `console/README.md`.
+
 ## Tests
 
 Depuis le dossier `console/` :

@@ -4,7 +4,7 @@ import path from "node:path";
 import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
-import { ctx, activity, conversationMessage, emptyState, now, publishState } from "./context.js";
+import { ctx, activity, conversationMessage, emptyState, now, publishState, reconcileInterruptedRuns } from "./context.js";
 import { runInProgress, terminalExitStatus } from "./domain.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
 import { clearTaskDirectory, closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
@@ -160,6 +160,7 @@ function respond(response: ServerResponse, status: number, body: object) {
 }
 
 await mkdir(dataRoot, { recursive: true });
+await reconcileInterruptedRuns(dataRoot);
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();
