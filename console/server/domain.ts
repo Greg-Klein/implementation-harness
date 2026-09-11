@@ -169,12 +169,21 @@ export function branchFromCommand(command: string | undefined) {
 }
 
 /**
+ * Both shapes that open a merge request: the subcommand, and the REST call the
+ * workflow uses so the description exists at creation time. The trailing guard
+ * keeps the collection endpoint apart from the ones nested under a merge
+ * request, `merge_requests/<iid>/notes` being a comment, not an opening.
+ */
+const OPENS_MERGE_REQUEST =
+  /\b(?:glab|gh)\b[^;&|]*?(?:\b(?:mr|pr)\s+create\b|--method\s+POST\b[^;&|]*\/(?:merge_requests|pulls)(?![\w/]))/;
+
+/**
  * What a shell command is busy doing. Ordered, first match wins, so a rule
- * always comes before the family it belongs to: `glab mr create` opens the
- * merge request before it is merely a call to GitLab.
+ * always comes before the family it belongs to: opening the merge request
+ * comes before being merely a call to GitLab.
  */
 const SHELL_ACTIONS: [RegExp, string][] = [
-  [/\b(?:glab|gh)\b[^;&|]*\b(?:mr|pr)\s+create\b/, "Ouverture de la merge request"],
+  [OPENS_MERGE_REQUEST, "Ouverture de la merge request"],
   [/\b(?:glab|gh)\b[^;&|]*\b(?:mr|pr)\b/, "Consultation de la merge request"],
   [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Lecture du ticket GitLab"],
   [/\bglab\b/, "Consultation de GitLab"],
@@ -233,7 +242,7 @@ export function actionLabel(tool: string, command?: string, target?: string) {
 }
 
 export function createsMergeRequest(command: string | undefined) {
-  return command !== undefined && /\b(?:glab|gh)\b[^;&|]*?\b(?:mr|pr)\s+create\b/.test(command);
+  return command !== undefined && OPENS_MERGE_REQUEST.test(command);
 }
 
 const MERGE_REQUEST_URL = /https?:\/\/[^\s"'<>()\\]*?\/(?:-\/merge_requests|merge_requests|pull)\/\d+/;

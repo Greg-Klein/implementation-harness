@@ -6,6 +6,8 @@ describe("what the agent is doing right now", () => {
     expect(actionLabel("Bash", "glab issue view 258")).toBe("Lecture du ticket GitLab");
     expect(actionLabel("Bash", "glab api projects/42")).toBe("Consultation de GitLab");
     expect(actionLabel("Bash", "glab mr create --fill --draft")).toBe("Ouverture de la merge request");
+    expect(actionLabel("Bash", 'glab api --method POST "projects/:fullpath/merge_requests" --field "source_branch=feat/258"')).toBe("Ouverture de la merge request");
+    expect(actionLabel("Bash", 'glab api --method POST projects/42/merge_requests/128/notes --field "body=@review.md"')).toBe("Consultation de GitLab");
     expect(actionLabel("Bash", "glab mr view 128 --comments")).toBe("Consultation de la merge request");
     expect(actionLabel("Bash", "git switch -c feat/258-notifications")).toBe("Création de la branche");
     expect(actionLabel("Bash", 'git commit -m "fix: close the agents"')).toBe("Commit des modifications");

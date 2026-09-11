@@ -289,21 +289,24 @@ If it comes back blocked (loop limit reached, `P0` still open), do not throw the
 
 ## Step 8 - Merge request
 
-Push the branch, then open a normal merge request (not a draft) targeting the base branch from step 2.
+Write the description to `.claude/tasks/mr-description.md` first, then push the branch and open the merge request in one call, as a normal merge request (not a draft) targeting the base branch from step 2.
 
 ```bash
 git push -u origin <branch>
-glab mr create --source-branch <branch> --target-branch <base> \
-  --title "feat: <english title>" --description "placeholder" \
-  --remove-source-branch
+glab api --method POST "projects/:fullpath/merge_requests" \
+  --field "source_branch=<branch>" \
+  --field "target_branch=<base>" \
+  --field "title=feat: <english title>" \
+  --field "description=@.claude/tasks/mr-description.md" \
+  --field "remove_source_branch=true"
 ```
 
-Then set the real description from a file, because inline long descriptions get mangled:
+Two things this single call settles, and neither is optional:
 
-```bash
-glab api --method PUT projects/<id>/merge_requests/<mr_iid> \
-  --field "description=@.claude/tasks/mr-description.md"
-```
+- **The description comes from the file, never from the command line.** `--field "key=@<file>"` reads the file instead of passing its content through the shell, so the backticks and the quotes of a long Markdown description survive intact. `glab mr create` has no file flag for the description, only `-d`, which is why the REST endpoint replaces the subcommand here rather than being paired with it.
+- **No filler content is ever published, not even for a second.** A merge request is public the instant it exists: it fires a notification, mails the subscribers, and whoever opens the link in that window reads what is there. Creating one with a stand-in description and patching it a moment later puts fake content in front of real people, and `placeholder` reads as a botched description rather than as a transient state. The description is written before the merge request, never after.
+
+The response carries `iid` and `web_url`; keep both, steps 9 and 10 need them. For the blocked case above, prefix the title with `Draft: ` - the REST call has no `--draft` flag.
 
 Rules:
 
@@ -313,10 +316,10 @@ Rules:
 - **Always link the MR to its ticket**, without exception. Two things, both required:
   - the full ticket URL on the first line of the description, so the link is visible and clickable whatever GitLab does with keywords
   - the keyword: `Closes #<iid>` when the target is the project's default branch, `Related to #<iid>` otherwise (a merge into a feature branch closes nothing, so `Closes` would be a lie)
-  - if the MR was created before the description was set, verify the link is really there afterwards
+  - both go into the description file before the merge request is created, so the link is there from the first second
 - **Never merge the MR yourself.** The user merges.
 
-Once the merge request is open and its description is set, move the ticket to **In progress -
+Once the merge request is open, move the ticket to **In progress -
 Merge request** (see "Setting the ticket status" below). Do it even when the run ends blocked and
 the merge request is a draft: the work has left implementation either way.
 
