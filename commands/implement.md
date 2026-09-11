@@ -189,6 +189,7 @@ When all tasks are done, concatenate the per-task reports back into `.claude/tas
 
 Before the review phase, if the change is observable in a running app:
 
+- **Establish the port from the project's own configuration before you start or probe anything.** Read `.env`, `.env.local`, `docker-compose.yml`, the framework config, or an OAuth/callback URL for the port the app actually expects, and use that one explicitly. Two archived runs lost time to guessing instead: one polled the framework's default port for over twenty minutes while `.env.local` named a different one, the other started on the default port and broke the OAuth callback that expected another — both found out only after repeated failed connections.
 - Use the `run` skill (or the repository's documented dev command) to start the app and get a URL.
 - Note the URL, the route to reach the feature, and any test credentials in `.claude/tasks/state.json`.
 
