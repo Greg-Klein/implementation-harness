@@ -5,7 +5,7 @@ import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { ctx, activity, conversationMessage, emptyState, now, publishState, reconcileInterruptedRuns } from "./context.js";
-import { runInProgress, terminalExitStatus } from "./domain.js";
+import { closeAbandonedAgents, runInProgress, terminalExitStatus } from "./domain.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
 import { clearTaskDirectory, closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript, followTranscript } from "./transcript.js";
@@ -96,6 +96,7 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
         if (ctx.state.status === "failed") ctx.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
       }
       activity("system", intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
+      closeAgentsLeftBehind();
       publishState();
       scheduleAutonomousReview(id);
     },
@@ -105,6 +106,18 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
   ctx.state.sessionActive = true;
   activity("system", `${engine.label} démarré`, command);
   publishState();
+}
+
+/**
+ * Called on every path that ends a run, and before the self-audit reads the
+ * state: an agent the session can no longer report on must stop reading as
+ * running, in the console and in the signals the improvement loop is given.
+ */
+function closeAgentsLeftBehind() {
+  const { agents, abandoned } = closeAbandonedAgents(ctx.state.agents, now());
+  if (abandoned.length === 0) return;
+  ctx.state.agents = agents;
+  activity("agent", abandoned.length === 1 ? "Un agent n'a jamais rapporté sa fin" : `${abandoned.length} agents n'ont jamais rapporté leur fin`, abandoned.map((agent) => agent.name).join(" · "));
 }
 
 function sendInstruction(text: string) {
@@ -137,6 +150,7 @@ function stopRun() {
     ctx.state.status = "stopped";
     ctx.state.endedAt = now();
     activity("system", "Démonstration arrêtée");
+    closeAgentsLeftBehind();
     publishState();
     return;
   }
