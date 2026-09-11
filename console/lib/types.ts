@@ -14,6 +14,8 @@ export type RunState = {
   sessionActive?: boolean;
   /** What Claude is doing at this instant, from the tool it last called. Absent as soon as it hands control back. */
   action?: string;
+  /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
+  evidenceUpdatedAt?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {

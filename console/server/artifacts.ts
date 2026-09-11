@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
-import { belongsToRun, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
+import { belongsToRun, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
@@ -75,6 +75,11 @@ async function archiveArtifact(source: string, stats?: Stats) {
     ctx.state.artifacts = [...ctx.state.artifacts, relative];
     activity("artifact", "Nouvel artefact", relative);
   }
+  // Every reviewer overwrites its own file on each round, so the list of
+  // artifacts is identical from one round to the next and this stamp is the
+  // only thing saying the content moved. Taken from the file's own mtime, so a
+  // watcher firing twice on one write does not read as a second change.
+  if (isPanelEvidence(relative)) ctx.state.evidenceUpdatedAt = new Date(writtenAt).toISOString();
   if (EVIDENCE_FILE.test(path.basename(relative))) await archiveEvidenceScreenshots(source, taskRoot);
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);

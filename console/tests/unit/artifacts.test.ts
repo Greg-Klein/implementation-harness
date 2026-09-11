@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { belongsToRun, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
+import { belongsToRun, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -27,6 +27,17 @@ describe("artifact handling", () => {
     expect(belongsToRun(Date.parse("2026-09-07T13:07:31.000Z"), startedAt)).toBe(true);
     expect(belongsToRun(Date.parse("2026-08-27T08:37:00.000Z"), startedAt)).toBe(false);
     expect(belongsToRun(Date.now(), null)).toBe(false);
+  });
+
+  it("should recognize only the evidence files the Preuves tab reads", () => {
+    expect(isPanelEvidence("qa-evidence.json")).toBe(true);
+    expect(isPanelEvidence("design-evidence.json")).toBe(true);
+    expect(isPanelEvidence("dev-evidence.json")).toBe(true);
+    // The round copies are history the tab never shows: a badge on one would
+    // point at nothing new.
+    expect(isPanelEvidence("qa-evidence-round1.json")).toBe(false);
+    expect(isPanelEvidence("qa-report.md")).toBe(false);
+    expect(isPanelEvidence("evidence.json")).toBe(false);
   });
 
   it("should map generated documents to workflow phases", () => {

@@ -21,6 +21,8 @@ export type RunState = {
   sessionActive: boolean;
   /** What the agent is doing at this instant, from the tool it last called. Cleared as soon as it hands control back. */
   action?: string;
+  /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
+  evidenceUpdatedAt?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };

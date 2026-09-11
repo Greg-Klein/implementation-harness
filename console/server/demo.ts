@@ -115,6 +115,7 @@ export function continueDemoRun() {
     ];
     ctx.state.action = "Exécution des tests";
     ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
+    ctx.state.evidenceUpdatedAt = now();
     activity("agent", "Implémentation terminée, vérifications en cours");
     publishState();
     demoTerminal("Tests unitaires et contrôle TypeScript terminés. Passage en review…");
@@ -150,6 +151,8 @@ export function continueDemoRun() {
     ctx.state.phase = 7;
     ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
     ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.md", "qa-evidence.json"];
+    // A second write, the way a review round overwrites the file: the badge has to light again.
+    ctx.state.evidenceUpdatedAt = now();
     activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
     publishState();
     demoTerminal("Review 2/2 : approuvée. Les retours ont bien été pris en compte.");

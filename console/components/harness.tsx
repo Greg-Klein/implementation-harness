@@ -48,6 +48,31 @@ export function Harness() {
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
   const tabButtonRefs = useRef<Partial<Record<typeof tab, HTMLButtonElement | null>>>({});
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  // What the user was last shown in each tab. A review round overwrites the same
+  // evidence files, so the write stamp is the only thing that says the Preuves
+  // tab holds something new; for the dialogue it is the last message.
+  const [seenEvidenceAt, setSeenEvidenceAt] = useState<string>();
+  const [seenMessageId, setSeenMessageId] = useState<string>();
+  const lastMessage = run.messages.at(-1);
+  /**
+   * The dot on a tab the user is not reading, and what it is about. Read in
+   * render, not in an effect: it widens the tab button, so it has to be gone in
+   * the very commit that selects the tab, before the measurement below runs on
+   * a button that is about to get narrower. A message the user typed themselves
+   * is not news to them.
+   */
+  const unread: Partial<Record<typeof tab, string>> = {
+    conversation: tab !== "conversation" && lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
+    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
+  };
+
+  useEffect(() => {
+    if (tab === "preuves") setSeenEvidenceAt(run.evidenceUpdatedAt);
+  }, [tab, run.evidenceUpdatedAt]);
+
+  useEffect(() => {
+    if (tab === "conversation") setSeenMessageId(lastMessage?.id);
+  }, [tab, lastMessage?.id]);
 
   // Measured from the DOM rather than hardcoded, so the pill lines up whatever
   // the label width ends up being (font load, locale, a tab added later).
@@ -68,7 +93,9 @@ export function Harness() {
       window.removeEventListener("resize", measure);
       document.fonts?.removeEventListener("loadingdone", measure);
     };
-  }, [tab, tabList]);
+    // The badges too: each one widens its tab button, and Conversation being the
+    // first tab, a dot there shifts every button after it.
+  }, [tab, tabList, unread.conversation, unread.preuves]);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -278,11 +305,16 @@ export function Harness() {
                 <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
                   {/* Only once measured: mounted at its final size it never animates in from a zero-width sliver, and it still slides on every tab change after that. */}
                   {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
-                  {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => (
-                    <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
-                      {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                    </button>
-                  ))}
+                  {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
+                    const fresh = unread[value];
+                    return (
+                      <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+                        {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
+                        {/* Named, not decorative: the dot is the whole message, and it is also what the tab announces. */}
+                        {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} depuis ta dernière visite de cet onglet`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                      </button>
+                    );
+                  })}
                 </div>
                 {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>

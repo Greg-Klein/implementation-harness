@@ -55,6 +55,18 @@ export function isRunDocument(relativePath: string) {
   return DOCUMENT_EXTENSIONS.has(path.extname(relativePath).toLowerCase());
 }
 
+/**
+ * The three files the "Preuves" tab reads, and only those: the `-roundN`
+ * copies the review orchestrator keeps are history the tab never shows, so a
+ * badge raised on one would point at nothing new. Mirrors SOURCES in
+ * components/evidence-panel.tsx.
+ */
+const PANEL_EVIDENCE = /^(?:qa|design|dev)-evidence\.json$/;
+
+export function isPanelEvidence(relativePath: string) {
+  return PANEL_EVIDENCE.test(path.basename(relativePath));
+}
+
 export function positiveDuration(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;

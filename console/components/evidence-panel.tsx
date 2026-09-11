@@ -102,7 +102,10 @@ function Section({ title, file, run }: { title: string; file: string; run: RunSt
       .then((result) => { if (cancelled) return; try { setReport(JSON.parse(result.content) as EvidenceReport); } catch { setError("Document illisible."); } })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Erreur."); });
     return () => { cancelled = true; };
-  }, [file, present, run.id]);
+    // evidenceUpdatedAt is what tells a rewrite: a later review round overwrites
+    // the same file, so nothing else in the state moves and the tab would keep
+    // showing the findings of the first round.
+  }, [file, present, run.id, run.evidenceUpdatedAt]);
 
   return (
     <section className="mb-6 last:mb-0">
