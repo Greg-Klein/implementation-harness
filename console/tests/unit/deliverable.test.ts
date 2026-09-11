@@ -19,9 +19,17 @@ describe("run deliverable", () => {
   it("should recognise the commands that open a merge request", () => {
     expect(createsMergeRequest("glab mr create --fill")).toBe(true);
     expect(createsMergeRequest("gh pr create --title x")).toBe(true);
+    expect(createsMergeRequest('glab api --method POST "projects/:fullpath/merge_requests" --field "title=feat: x"')).toBe(true);
+    expect(createsMergeRequest("gh api --method POST repos/acme/app/pulls -f title=x")).toBe(true);
     expect(createsMergeRequest("glab mr view 128")).toBe(false);
     expect(createsMergeRequest("git push -u origin feat/258")).toBe(false);
     expect(createsMergeRequest(undefined)).toBe(false);
+  });
+
+  it("should not take a call nested under a merge request for its opening", () => {
+    expect(createsMergeRequest('glab api --method POST projects/42/merge_requests/128/notes --field "body=@review.md"')).toBe(false);
+    expect(createsMergeRequest('glab api --method PUT projects/42/merge_requests/128 --field "description=@mr.md"')).toBe(false);
+    expect(createsMergeRequest("glab api projects/:fullpath/merge_requests")).toBe(false);
   });
 
   it("should find the merge request address in a tool response of any shape", () => {
@@ -31,6 +39,9 @@ describe("run deliverable", () => {
       .toBe("https://gitlab.com/acme/-/merge_requests/7");
     expect(mergeRequestUrl({ stdout: "https://github.com/acme/app/pull/12" }))
       .toBe("https://github.com/acme/app/pull/12");
+    expect(mergeRequestUrl({
+      stdout: '{"iid":128,"author":{"web_url":"https://gitlab.com/greg"},"web_url":"https://gitlab.com/acme/app/-/merge_requests/128"}',
+    })).toBe("https://gitlab.com/acme/app/-/merge_requests/128");
   });
 
   it("should find no address when the response carries none", () => {
