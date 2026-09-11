@@ -20,6 +20,8 @@ export async function readArtifact(artifactPath: string) {
   if (ctx.state.id.startsWith("demo-")) {
     const content = demoArtifactContents[artifactPath];
     if (content === undefined) throw new Error("Document de démonstration introuvable.");
+    const demoContentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
+    if (demoContentType) return { path: artifactPath, content, encoding: "base64" as const, contentType: demoContentType };
     return { path: artifactPath, content };
   }
   const root = path.resolve(dataRoot, ctx.state.id, "artifacts");

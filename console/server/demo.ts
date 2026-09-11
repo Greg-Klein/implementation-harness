@@ -109,7 +109,7 @@ export function continueDemoRun() {
       ...ctx.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
       { id: "demo-reviewer", name: "senior-reviewer", status: "running" as const, startedAt: now() },
     ];
-    ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json"];
+    ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
     activity("agent", "Implémentation terminée, vérifications en cours");
     publishState();
     demoTerminal("Tests unitaires et contrôle TypeScript terminés. Passage en review…");

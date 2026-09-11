@@ -219,6 +219,20 @@ Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with w
 
 **Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer` keeps its default Opus model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap.
 
+**The gates you run yourself still get written down.** At tier 0 no `qa-reviewer` runs, so nobody writes `.claude/tasks/qa-evidence.json` and the console's "Preuves" tab reports the tests as never run while they were green in your own terminal. Once lint, typecheck and tests have run, write that file yourself, same schema as `qa-reviewer`'s:
+
+```json
+{
+  "source": "qa",
+  "status": "PASS | PASS_WITH_WARNINGS | FAIL",
+  "items": [
+    { "label": "string", "verdict": "pass | fail | not_run", "command": "string", "actual": "string" }
+  ]
+}
+```
+
+One item per gate, `label` and `actual` in French, `command` the literal command run, the JSON keys and verdict tokens in English exactly as shown. A gate you did not run is an item with `not_run` and the reason in `actual`, never a missing item.
+
 **Bound every tier in time, whatever the tier.** Two rules, both enforced by you:
 
 - **The review must not outlast the implementation.** Note when step 5 ended. Once the review phase has run about as long as the implementation did, stop launching new rounds: take what the running agents have produced, commit it, and put whatever is unresolved in the step 9 comment as an explicit "not verified" line.

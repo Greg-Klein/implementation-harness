@@ -111,9 +111,10 @@ Aucune.`,
   "source": "developer",
   "items": [
     { "label": "Le panneau enregistre les préférences sans rechargement", "verdict": "measured", "actual": "PATCH /api/preferences → 200, état local mis à jour sans reload" },
-    { "label": "Les alertes critiques restent visibles quand les notifications sont désactivées", "verdict": "measured", "expected": "alerte critique affichée", "actual": "alerte critique affichée" }
+    { "label": "Les alertes critiques restent visibles quand les notifications sont désactivées", "verdict": "measured", "expected": "alerte critique affichée", "actual": "alerte critique affichée", "screenshot": "assets/panneau-preferences.png", "note": "Route /settings, viewport 1280x900" }
   ]
 }`,
+  "assets/panneau-preferences.png": "iVBORw0KGgoAAAANSUhEUgAAAPAAAACWCAIAAABvmpKCAAABhUlEQVR42u3bsQkAIAxFQee0dghXFizcQFsHMCB6jz9BuDZpSg+VnEBAS0BLQEtAC2gJaAloCWgJaAEtAS0BLQEtAS2gJaAloCWgpRDQuRaz4wPagAbagAbagDYD2oAG2oAG2oAG2oA2A9qABtqABtqABtqANgPagAbagAbagDYD2uw+0JKvbwloCWgBLQEtAS0BLQEtoCWgJaAloCWgBbQEtAS0BLQEtICW/gDdRzM7PqANaKANaKANaDOgDWigDWigDWigDWgzoA1ooA1ooA1ooA1oM6ANaKANaKANaDOgzYA2oIE2oIE2oM2ANgPagAbagAbagDYD2gxoAxpoAxpoA9oMaDOgDWigDWigDWgzoA1ooA1ooA1ooA1oM6ANaKANaKANaKANaDOgDWigDWigDWjXN6DNgDaggTaggTagzYA2A9qAjgMt3RbQAloCWgJaAlpAS0BLQEtAS0ALaAloCWgJaAloAS0BLQEtAS0BLaAloCWgJaAloAW0BLQEtAS0tLUAbBdKI9fqZY4AAAAASUVORK5CYII=",
   "qa-evidence.json": `{
   "source": "qa",
   "status": "PASS",
