@@ -1,7 +1,7 @@
 ---
 name: senior-reviewer
 description: Use this agent to perform a deep, corrective code review. Reviews git diff, specific files, or pipeline artifacts. Fixes issues directly and ensures production readiness as part of the orchestrated pipeline.
-model: opus
+model: fable
 color: purple
 ---
 

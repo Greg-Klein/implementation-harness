@@ -1,7 +1,7 @@
 ---
 name: ticket-planner
 description: Use this agent to analyze a GitLab ticket, feature description, or any work request and produce a fully structured, executable implementation plan as part of the orchestrated pipeline.
-model: sonnet
+model: fable
 color: red
 ---
 
