@@ -139,11 +139,12 @@ Decide it from the plan, not from a hunch: two tasks may run together only when 
 
 In practice the early tasks of a ticket are often disjoint (a store, a hook, an i18n file) and the wiring tasks never are. Batch two or three disjoint ones, then fall back to sequential. Announce which tasks you are running together and why.
 
-Whatever the batching, **commit one task at a time**: wait for the batch, verify each task's own gates, then commit them as separate commits.
+Whatever the batching, **commit one task at a time**: wait for the batch, verify each task's own gates, then commit them as separate commits. The repository-wide gates (lint, typecheck, the full test suite) are yours to run, once the batch is done and nothing is editing any more. A batch member that reported such a gate as non conclusive hands you a measurement to redo here, and redoing it is not optional: it is the only moment its result means anything.
 
 Each `developer` invocation must receive:
 
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
+- **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the Figma node URLs when the task is UI, plus the "Reading a Figma design" procedure below
 - the explicit instruction to **verify its own work in the browser with Playwright** when the change is observable in the running app, and to fill the `## Preuves navigateur` table of its report: one row per observable criterion, with the value read from the live DOM, the reference it is checked against, the screenshot path under `.claude/tasks/assets/`, and how to redo the measurement. A temporary harness (fixture route, measurement page, seeded state) stays out of the diff, but the recipe to rebuild it goes in the report: the reviewers often cannot reach the app themselves, and a measurement nobody can redo is one they must record as unverified
@@ -607,7 +608,7 @@ If a git operation fails or the state is not what you expected, stop touching gi
 - Contradicting specifications are resolved by precedence: PRD, then design, then ticket, and the arbitration is always written down
 - One ticket, one dedicated branch, always
 - The MR always targets the branch chosen in step 1
-- Developers run sequentially, never in parallel
+- Developers run in parallel only on strictly disjoint file scopes, and sequentially the moment those scopes overlap. While a batch is in flight the branch is a moving target: a repository-wide gate measures that, not any one task, so nobody concludes from it until the batch is done
 - Reviewers that drive Playwright run one at a time: a single browser is shared
 - A change with no pixels is still measured in a running app when it changes what the app sends, stores or hides, an impossible verification is established from the repository's configuration and never assumed, and no file is edited while a measurement runs
 - Only you touch git: branches, commits, push, MR

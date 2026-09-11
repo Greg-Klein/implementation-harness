@@ -127,6 +127,7 @@ Before finishing:
 - Run typecheck
 - Run tests
 - Validate acceptance criteria coverage
+- **When your invocation says you run in a parallel batch, a repository-wide gate does not measure your work.** Lint, typecheck and the full test suite read the whole tree, and your peers are writing in it while you run them. Scope them to your own files whenever the tooling allows it. What you cannot scope, you still run, but you report a failure outside your own file scope as **non conclusive**, naming the paths and the peer scope it falls in, and you stop there: you do not diagnose it, do not blame a dependency, do not conclude on the state of the branch and do not infer work the plan is missing. The pilot re-runs those gates on frozen code once the batch is done. Half-written code from a peer read as a pre-existing defect is a finding someone then has to disprove, and it costs more than the measurement was worth
 - Measure every visible acceptance criterion in the browser with Playwright, and leave the evidence behind: screenshots under `.claude/tasks/assets/`, values read from the live DOM with `getComputedStyle` / `getBoundingClientRect`. The reviewers may not be able to reach the app themselves, so this evidence is what they will judge against. Report it, never a claim without a number.
 - If reaching the feature took a temporary harness (a fixture route, a measurement page, a seeded state), keep it out of the diff but write down in the report how to rebuild it. A measurement nobody can redo is a measurement the reviewer has to record as unverified.
 
