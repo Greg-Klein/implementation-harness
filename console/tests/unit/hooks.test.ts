@@ -60,6 +60,28 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(ctx.state).toMatchObject({ status: "completed", phase: 10 });
   });
 
+  it("should say what the agent is doing, and forget it as soon as the turn ends", () => {
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "glab issue view 258" } });
+    expect(ctx.state.action).toBe("Lecture du ticket GitLab");
+    hook({ hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "/repo/console/server/domain.ts" } });
+    expect(ctx.state.action).toBe("Lecture de domain.ts");
+    // The action is an instant, never a milestone: the feed keeps none of it.
+    expect(ctx.state.activities).toEqual([]);
+    hook({ hook_event_name: "Stop" });
+    expect(ctx.state.action).toBeUndefined();
+  });
+
+  it("should stop claiming an action while it waits for the user to decide", () => {
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "npm run test:unit" } });
+    expect(ctx.state.action).toBe("Exécution des tests");
+    hook({
+      hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
+      tool_input: { questions: [{ question: "Quelle base ?", header: "Branche", options: [{ label: "develop" }] }] },
+    });
+    expect(ctx.state.status).toBe("attention");
+    expect(ctx.state.action).toBeUndefined();
+  });
+
   it("should ignore an agent event that names no agent", () => {
     hook({ hook_event_name: "SubagentStart", agent_type: "  ", agent_id: "a1" });
     expect(ctx.state.agents).toEqual([]);

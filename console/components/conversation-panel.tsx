@@ -12,17 +12,24 @@ function MessageBody({ text }: { text: string }) {
     : <p key={index} className="mt-2 whitespace-pre-wrap text-[12.5px] leading-5 first:mt-0"><InlineText text={block.content} /></p>)}</>;
 }
 
-/** Claude Code only writes a message to its transcript once the action that followed it has returned, so the panel says it is waiting rather than looking finished. */
-function WritingHint() {
+/** Claude Code only writes a message to its transcript once the action that followed it has returned, so the panel says it is waiting rather than looking finished, and names the action it is waiting on. */
+function WritingHint({ action }: { action?: string }) {
   return (
-    <p aria-live="polite" title="Claude Code n’écrit son message qu’à la fin de l’action en cours : le terminal est en avance sur ce panneau." className="flex items-center gap-2 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
-      <span aria-hidden="true" className="status-breathe size-1.5 rounded-full bg-[var(--accent)]" />
-      Claude réfléchit…
-    </p>
+    <div aria-live="polite" title="Claude Code n’écrit son message qu’à la fin de l’action en cours : le terminal est en avance sur ce panneau." className="px-1">
+      <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
+        <span aria-hidden="true" className="status-breathe size-1.5 rounded-full bg-[var(--accent)]" />
+        Claude réfléchit…
+      </p>
+      {/* Aligned on the label above, past the dot and its gap. */}
+      {action && <p className="mt-1 pl-3.5 font-mono text-[9px] leading-4 text-[#9aa19c]">{action}</p>}
+    </div>
   );
 }
 
-export function ConversationPanel({ messages, writing, stalled, canSend, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; stalled: boolean; canSend: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, writing, action, stalled, canSend, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; action?: string; stalled: boolean; canSend: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
+  // The flow of terminal output falls silent during a long command, and a named
+  // action is proof on its own that the turn is still running.
+  const busy = writing || Boolean(action);
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -31,7 +38,7 @@ export function ConversationPanel({ messages, writing, stalled, canSend, onSend,
   useEffect(() => {
     const list = listRef.current;
     if (list && pinnedRef.current) list.scrollTop = list.scrollHeight;
-  }, [messages.length, writing]);
+  }, [messages.length, busy]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -68,7 +75,7 @@ export function ConversationPanel({ messages, writing, stalled, canSend, onSend,
           ) : (
             <>
               <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Les échanges avec Claude apparaissent ici. Les appels d’outils et les agents restent dans l’onglet Terminal.</p>
-              {writing && <WritingHint />}
+              {busy && <WritingHint action={action} />}
             </>
           )}
         </div> : messages.map((message, index) => (
@@ -85,7 +92,7 @@ export function ConversationPanel({ messages, writing, stalled, canSend, onSend,
             </div>
           </article>
         ))}
-        {messages.length > 0 && writing && <WritingHint />}
+        {messages.length > 0 && busy && <WritingHint action={action} />}
       </div>
       <form
         onSubmit={(event) => { event.preventDefault(); send(); }}

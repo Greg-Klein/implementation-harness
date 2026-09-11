@@ -168,6 +168,70 @@ export function branchFromCommand(command: string | undefined) {
   return name ? name.replace(/^["']|["']$/g, "") : undefined;
 }
 
+/**
+ * What a shell command is busy doing. Ordered, first match wins, so a rule
+ * always comes before the family it belongs to: `glab mr create` opens the
+ * merge request before it is merely a call to GitLab.
+ */
+const SHELL_ACTIONS: [RegExp, string][] = [
+  [/\b(?:glab|gh)\b[^;&|]*\b(?:mr|pr)\s+create\b/, "Ouverture de la merge request"],
+  [/\b(?:glab|gh)\b[^;&|]*\b(?:mr|pr)\b/, "Consultation de la merge request"],
+  [/\bglab\b[^;&|]*\b(?:issue|work-item)\b/, "Lecture du ticket GitLab"],
+  [/\bglab\b/, "Consultation de GitLab"],
+  [/\bgh\b/, "Consultation de GitHub"],
+  [/\bgit\b[^;&|]*\b(?:checkout\s+-b|switch\s+(?:-c|--create))\b/, "Création de la branche"],
+  [/\bgit\b[^;&|]*\bcommit\b/, "Commit des modifications"],
+  [/\bgit\b[^;&|]*\bpush\b/, "Publication de la branche"],
+  [/\bgit\b/, "Inspection du dépôt"],
+  [/\b(?:jest|vitest|pytest|playwright|test:unit|test:integration)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b/, "Exécution des tests"],
+  [/\btsc\b|\btypecheck\b/, "Vérification des types"],
+  [/\b(?:eslint|biome|ruff|lint)\b/, "Analyse statique du code"],
+  [/\b(?:build|make|cargo)\b/, "Build du projet"],
+  [/\b(?:npm|pnpm|yarn)\s+(?:ci|install|add)\b/, "Installation des dépendances"],
+  [/\b(?:grep|rg|ack)\b/, "Recherche dans le code"],
+  [/\b(?:cat|head|tail|less|sed|awk)\b/, "Lecture des fichiers"],
+  [/\b(?:ls|find|tree)\b/, "Exploration du dépôt"],
+];
+
+function named(prefix: string, target: string | undefined, fallback: string) {
+  return target ? `${prefix} ${path.basename(target)}` : fallback;
+}
+
+const TOOL_ACTIONS: Record<string, (target?: string) => string> = {
+  Read: (target) => named("Lecture de", target, "Lecture d'un fichier"),
+  Edit: (target) => named("Modification de", target, "Modification d'un fichier"),
+  NotebookEdit: (target) => named("Modification de", target, "Modification d'un notebook"),
+  Write: (target) => named("Écriture de", target, "Écriture d'un fichier"),
+  Grep: (target) => target ? `Recherche de « ${target} »` : "Recherche dans le code",
+  Glob: () => "Parcours des fichiers",
+  Task: (target) => target ? `Délégation à ${target}` : "Délégation à un agent",
+  Agent: (target) => target ? `Délégation à ${target}` : "Délégation à un agent",
+  Skill: (target) => target ? `Compétence ${target}` : "Chargement d'une compétence",
+  TodoWrite: () => "Mise à jour du plan",
+  WebSearch: () => "Recherche sur le web",
+  WebFetch: (target) => {
+    const host = target && URL.canParse(target) ? new URL(target).host : undefined;
+    return host ? `Consultation de ${host}` : "Consultation du web";
+  },
+};
+
+function externalToolAction(tool: string) {
+  if (tool.startsWith("mcp__playwright__")) return "Pilotage du navigateur";
+  if (/figma/i.test(tool)) return "Consultation de Figma";
+  return tool.startsWith("mcp__") ? "Appel d'un outil externe" : undefined;
+}
+
+/**
+ * What the interface says the agent is doing right now, read from the tool it
+ * just called. A tool call is not a milestone and has no place in the activity
+ * feed, but between two paragraphs of the dialogue it is the only thing that
+ * says a silent session is working rather than stuck.
+ */
+export function actionLabel(tool: string, command?: string, target?: string) {
+  if (tool === "Bash") return SHELL_ACTIONS.find(([pattern]) => pattern.test(command ?? ""))?.[1] ?? "Commande shell";
+  return TOOL_ACTIONS[tool]?.(target) ?? externalToolAction(tool);
+}
+
 export function createsMergeRequest(command: string | undefined) {
   return command !== undefined && /\b(?:glab|gh)\b[^;&|]*?\b(?:mr|pr)\s+create\b/.test(command);
 }

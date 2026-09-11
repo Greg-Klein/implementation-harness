@@ -87,6 +87,22 @@ function questionEvent(payload: Record<string, unknown>): EngineEvent | undefine
   return { kind: "question", id: normalizeText(payload.tool_use_id), questions, input };
 }
 
+/**
+ * The one field of a tool input worth naming in the interface. Claude Code puts
+ * it under a different key for every tool, and which key won is of no interest
+ * above this layer: what comes out is the file, the pattern, the agent or the
+ * address the call is about, left raw for the caller to shorten as it sees fit.
+ */
+const TARGET_KEYS = ["file_path", "notebook_path", "pattern", "subagent_type", "skill", "url", "path"];
+
+function toolTarget(input: Record<string, unknown> | undefined) {
+  for (const key of TARGET_KEYS) {
+    const target = normalizeText(input?.[key]);
+    if (target) return target;
+  }
+  return undefined;
+}
+
 function event(payload: Record<string, unknown>): EngineEvent | undefined {
   const name = normalizeText(payload.hook_event_name) ?? "Hook";
   if (name === "SubagentStart" || name === "SubagentStop") {
@@ -113,8 +129,9 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
   // against must not be.
   const command = typeof input?.command === "string" ? input.command : undefined;
   if (name === "PreToolUse") {
-    if (normalizeText(payload.tool_name) === "AskUserQuestion") return questionEvent(payload);
-    return { kind: "tool.start", command };
+    const tool = normalizeText(payload.tool_name);
+    if (tool === "AskUserQuestion") return questionEvent(payload);
+    return { kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input) };
   }
   if (name === "PostToolUse") return { kind: "tool.end", command, response: payload.tool_response };
   return undefined;

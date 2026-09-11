@@ -87,6 +87,8 @@ async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) 
       if (ctx.state.id !== id) return;
       if (terminal === runTerminal) terminal = null;
       ctx.state.sessionActive = false;
+      // Whatever the session was doing when it went away, it is not doing it now.
+      ctx.state.action = undefined;
       clearPendingQuestion();
       // The workflow can already have closed the run, and how its idle session
       // then ends says nothing about the outcome it reached.
@@ -147,6 +149,7 @@ function stopRun() {
   if (ctx.state.id?.startsWith("demo-")) {
     clearDemoTimers();
     ctx.state.pendingQuestion = undefined;
+    ctx.state.action = undefined;
     ctx.state.status = "stopped";
     ctx.state.endedAt = now();
     activity("system", "Démonstration arrêtée");

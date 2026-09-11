@@ -45,8 +45,12 @@ export type StartOptions = {
 export type EngineEvent =
   | { kind: "agent.start"; agentId: string; agentName: string }
   | { kind: "agent.stop"; agentId: string; agentName: string }
-  /** Only what the harness reads from a tool call: the command it may recognise. */
-  | { kind: "tool.start"; command?: string }
+  /**
+   * What the harness reads from a tool call: the command it may recognise, and
+   * the name of the tool with a neutral `target` (a file, a pattern, an agent,
+   * a host) for the interface to say what the agent is doing right now.
+   */
+  | { kind: "tool.start"; tool: string; command?: string; target?: string }
   | { kind: "tool.end"; command?: string; response: unknown }
   | { kind: "question"; id?: string; questions: Question[]; input: Record<string, unknown> }
   | { kind: "attention"; message?: string }

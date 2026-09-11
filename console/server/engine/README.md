@@ -60,7 +60,7 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 | Événement | Effet dans le harnais |
 |---|---|
 | `agent.start` / `agent.stop` | met à jour la liste des agents, fait avancer la phase |
-| `tool.start` | journalise l'outil, détecte la création de branche |
+| `tool.start` | nomme l'action en cours dans l'interface, détecte la création de branche |
 | `tool.end` | y cherche l'adresse de la merge request |
 | `question` | **bloque l'agent** jusqu'à la réponse de l'utilisateur |
 | `attention` | l'agent réclame la main |
@@ -68,7 +68,7 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 
 Deux détails qui comptent dans la traduction :
 
-1. **La commande passe entière.** `tool.start` porte `command` non tronqué, parce que `createsBranch` et `branchFromCommand` doivent matcher dessus, et un `label` court pour l'affichage. Tronquer les deux casserait la détection de branche sur une commande longue.
+1. **La commande passe entière.** `tool.start` porte `command` non tronqué, parce que `createsBranch` et `branchFromCommand` doivent matcher dessus. Pour l'affichage, il porte le nom de l'outil et un `target` neutre, la clé d'entrée qui le désigne (`file_path`, `pattern`, `subagent_type`, `url`) variant d'un outil à l'autre. `actionLabel` dans `domain.ts` en fait la ligne « ce que Claude fait en ce moment ». Ce libellé n'entre jamais dans le journal d'activité : deux cents appels d'outils y enterreraient les jalons du workflow.
 2. **Une question déjà répondue n'est pas reposée.** Claude Code rejoue le hook sur l'appel que le harnais a lui-même complété, et ce second passage porte les réponses. `claude-code.ts` le reconnaît et ne produit aucun événement.
 
 ### La question bloquante

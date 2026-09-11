@@ -19,6 +19,8 @@ export type RunState = {
   startedAt: string | null; endedAt: string | null; agents: AgentState[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. */
   sessionActive: boolean;
+  /** What the agent is doing at this instant, from the tool it last called. Cleared as soon as it hands control back. */
+  action?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };

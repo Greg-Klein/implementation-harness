@@ -276,7 +276,7 @@ export function Harness() {
                 {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
               </div>
               <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <ConversationPanel messages={run.messages} writing={writing} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} onSend={(text) => send({ type: "instruction.send", text })} onCheckTerminal={() => setTab("terminal")} />
+                <ConversationPanel messages={run.messages} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} onSend={(text) => send({ type: "instruction.send", text })} onCheckTerminal={() => setTab("terminal")} />
               </div>
               <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
                 <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />

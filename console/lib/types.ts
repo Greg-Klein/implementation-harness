@@ -12,6 +12,8 @@ export type RunState = {
   startedAt: string | null; endedAt: string | null; agents: Agent[]; activities: Activity[]; messages: ConversationMessage[]; artifacts: string[]; branch?: string; mergeRequestUrl?: string; pendingQuestion?: PendingQuestion; error?: string;
   /** The engine process behind this run is still up, taking input, whether or not the workflow itself has finished. Absent on states built before this field existed. */
   sessionActive?: boolean;
+  /** What Claude is doing at this instant, from the tool it last called. Absent as soon as it hands control back. */
+  action?: string;
 };
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type RepositoryResponse = {

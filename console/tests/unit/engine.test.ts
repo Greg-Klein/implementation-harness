@@ -37,7 +37,18 @@ describe("engine event translation", () => {
   it("should pass the command whole, since it is matched against and never shown", () => {
     const command = `git commit -m "${"x".repeat(400)}"`;
     expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command, description: "Commit" } }))
-      .toEqual({ kind: "tool.start", command });
+      .toEqual({ kind: "tool.start", tool: "Bash", command, target: undefined });
+  });
+
+  it("should name the one field of a tool input the interface can show", () => {
+    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "/repo/console/server/domain.ts" } }))
+      .toMatchObject({ kind: "tool.start", tool: "Read", target: "/repo/console/server/domain.ts" });
+    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Grep", tool_input: { pattern: "actionLabel", output_mode: "content" } }))
+      .toMatchObject({ kind: "tool.start", tool: "Grep", target: "actionLabel" });
+    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "developer", prompt: "…" } }))
+      .toMatchObject({ kind: "tool.start", tool: "Agent", target: "developer" });
+    expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "TodoWrite", tool_input: { todos: [] } }))
+      .toMatchObject({ kind: "tool.start", tool: "TodoWrite", target: undefined });
   });
 
   it("should drop the notification that only says the session went quiet", () => {

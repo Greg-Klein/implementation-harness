@@ -1,4 +1,4 @@
-import { agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
+import { actionLabel, agentStopTarget, branchFromCommand, createsBranch, createsMergeRequest, mergeRequestUrl, normalizeAnswers, phaseForAgent, runInProgress } from "./domain.js";
 import { ctx, activity, now, publishState } from "./context.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { engine } from "./engine/index.js";
@@ -40,6 +40,7 @@ function waitForQuestionAnswer(event: Extract<EngineEvent, { kind: "question" }>
   ctx.pendingQuestionInput = event.input;
   ctx.state.pendingQuestion = { id: event.id ?? crypto.randomUUID(), questions: event.questions };
   ctx.state.status = "attention";
+  ctx.state.action = undefined;
   activity("attention", event.questions.length > 1 ? `${event.questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
 
   return new Promise<unknown>((resolve) => {
@@ -101,8 +102,11 @@ function apply(event: EngineEvent) {
   }
   // A tool call is not a milestone: two hundred of them in a run bury the dozen
   // events that tell what the workflow did. The terminal panel keeps the detail;
-  // what the feed takes from a tool call is the branch it creates.
+  // what the feed takes from a tool call is the branch it creates. The call does
+  // say what the agent is doing at this instant, and that goes to the live
+  // indicator, which holds one line and forgets it.
   if (event.kind === "tool.start") {
+    ctx.state.action = actionLabel(event.tool, event.command, event.target);
     if (createsBranch(event.command)) {
       advancePhase(3);
       rememberBranch(event.command);
@@ -122,6 +126,7 @@ function apply(event: EngineEvent) {
   }
   // The turn ends every time the agent hands back, including while it waits for
   // a background agent: the workflow is only over when nothing is still running.
+  ctx.state.action = undefined;
   if (ctx.state.agents.some((agent) => agent.status === "running")) {
     ctx.state.status = "running";
     activity("agent", "Tour terminé, un agent continue en tâche de fond");

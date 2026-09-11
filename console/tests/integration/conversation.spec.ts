@@ -35,13 +35,16 @@ test("should say a message is on its way while the session is still talking", as
 
   const conversation = page.getByRole("log", { name: "Conversation" });
   await expect(conversation.getByText("Claude réfléchit…")).toBeVisible();
+  // Waiting is not enough: the hint says what the wait is on.
+  await expect(conversation.getByText("Lecture du ticket GitLab", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await expect(conversation.getByText("Délégation à developer", { exact: true })).toBeVisible();
   await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
 
-  // The run is over: nothing is being written any more.
+  // The run is over: nothing is being written any more, and no action is claimed.
   await expect(conversation.getByText("Claude réfléchit…")).toBeHidden();
 });
 

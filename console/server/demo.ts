@@ -40,6 +40,7 @@ export function startDemoRun(isTerminalActive: boolean) {
     cwd: "~/workspace/acme-dashboard", issueUrl: "ticket-simule://IH-42",
     instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
   };
+  ctx.state.action = "Lecture du ticket GitLab";
   activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
   publishState();
   demoTerminal("Lecture du ticket GitLab simulé…");
@@ -51,6 +52,7 @@ export function startDemoRun(isTerminalActive: boolean) {
   });
   scheduleDemo(demoStepDuration * 2, () => {
     ctx.state.phase = 2;
+    ctx.state.action = undefined;
     ctx.state.status = "attention";
     ctx.state.pendingQuestion = {
       id: `demo-question-${id}`,
@@ -84,6 +86,7 @@ export function startDemoRun(isTerminalActive: boolean) {
 export function continueDemoRun() {
   scheduleDemo(0, () => {
     ctx.state.phase = 3;
+    ctx.state.action = "Création de la branche";
     ctx.state.branch = "feat/ih-42-notification-preferences";
     activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
     publishState();
@@ -98,6 +101,7 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 2, () => {
     ctx.state.phase = 5;
+    ctx.state.action = "Délégation à developer";
     ctx.state.agents = [{ id: "demo-developer", name: "developer", status: "running", startedAt: now() }];
     activity("agent", "developer démarre");
     publishState();
@@ -109,6 +113,7 @@ export function continueDemoRun() {
       ...ctx.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
       { id: "demo-reviewer", name: "senior-reviewer", status: "running" as const, startedAt: now() },
     ];
+    ctx.state.action = "Exécution des tests";
     ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
     activity("agent", "Implémentation terminée, vérifications en cours");
     publishState();
@@ -158,6 +163,7 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 9, () => {
     ctx.state.phase = 9;
+    ctx.state.action = "Ouverture de la merge request";
     ctx.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
     activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
     activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
@@ -166,6 +172,7 @@ export function continueDemoRun() {
   });
   scheduleDemo(demoStepDuration * 10, () => {
     ctx.state.phase = 10;
+    ctx.state.action = undefined;
     ctx.state.status = "completed";
     ctx.state.endedAt = now();
     activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
