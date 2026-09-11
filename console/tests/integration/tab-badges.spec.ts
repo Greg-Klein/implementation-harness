@@ -112,19 +112,22 @@ test("should keep the tab bar aligned when a dot appears on the first tab", asyn
   await expect(page.getByRole("img", { name: "nouveau message" })).toBeVisible();
 
   // Conversation is the first tab, so its dot shifts every button after it.
-  const geometry = await page.evaluate(() => {
-    const list = document.querySelector('[role="tablist"]');
-    const pill = list?.querySelector("span.absolute");
-    const selected = list?.querySelector('[aria-selected="true"]');
-    return {
-      pillLeft: pill?.getBoundingClientRect().left ?? 0,
-      selectedLeft: selected?.getBoundingClientRect().left ?? 0,
-      pillWidth: Math.round(pill?.getBoundingClientRect().width ?? 0),
-      selectedWidth: Math.round(selected?.getBoundingClientRect().width ?? 0),
-    };
-  });
-  expect(geometry.pillWidth).toBe(geometry.selectedWidth);
-  expect(Math.abs(geometry.pillLeft - geometry.selectedLeft)).toBeLessThan(2);
+  // The pill slides there over a 200ms CSS transition, so retry until it settles.
+  await expect(async () => {
+    const geometry = await page.evaluate(() => {
+      const list = document.querySelector('[role="tablist"]');
+      const pill = list?.querySelector("span.absolute");
+      const selected = list?.querySelector('[aria-selected="true"]');
+      return {
+        pillLeft: pill?.getBoundingClientRect().left ?? 0,
+        selectedLeft: selected?.getBoundingClientRect().left ?? 0,
+        pillWidth: Math.round(pill?.getBoundingClientRect().width ?? 0),
+        selectedWidth: Math.round(selected?.getBoundingClientRect().width ?? 0),
+      };
+    });
+    expect(geometry.pillWidth).toBe(geometry.selectedWidth);
+    expect(Math.abs(geometry.pillLeft - geometry.selectedLeft)).toBeLessThan(2);
+  }).toPass({ timeout: 2_000 });
 });
 
 test("should never flag the tab the user is already reading", async ({ page }) => {
