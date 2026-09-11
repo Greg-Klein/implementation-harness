@@ -40,25 +40,35 @@ export function Harness() {
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
   const previousRunRef = useRef<RunState | null>(null);
-  const tabListRef = useRef<HTMLDivElement>(null);
+  // Held in state, not in a ref: the tab bar is only rendered once a run is
+  // going, and a ref attaching later triggers no render. Keyed on a ref, the
+  // measurement below never ran for a page that loaded while the run was
+  // already in progress, and the pill stayed a zero-width sliver under the
+  // white label of the selected tab until a click on another tab measured it.
+  const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
   const tabButtonRefs = useRef<Partial<Record<typeof tab, HTMLButtonElement | null>>>({});
   const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
 
   // Measured from the DOM rather than hardcoded, so the pill lines up whatever
   // the label width ends up being (font load, locale, a tab added later).
   useLayoutEffect(() => {
-    const list = tabListRef.current;
     const button = tabButtonRefs.current[tab];
-    if (!list || !button) return;
+    if (!tabList || !button) return;
     const measure = () => {
-      const listRect = list.getBoundingClientRect();
+      const listRect = tabList.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
       setTabIndicator({ left: buttonRect.left - listRect.left, width: buttonRect.width });
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [tab]);
+    // The labels are still in a fallback face on the first paint, and the pill
+    // would keep the width they had then.
+    document.fonts?.addEventListener("loadingdone", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      document.fonts?.removeEventListener("loadingdone", measure);
+    };
+  }, [tab, tabList]);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -265,8 +275,9 @@ export function Harness() {
             <PhaseRail run={run} />
             <section className="flex min-h-135 flex-col border-y border-[var(--line)] bg-[var(--surface)] lg:border-x lg:border-y-0">
               <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--line)] px-4">
-                <div ref={tabListRef} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
-                  <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />
+                <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
+                  {/* Only once measured: mounted at its final size it never animates in from a zero-width sliver, and it still slides on every tab change after that. */}
+                  {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
                   {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => (
                     <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
                       {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
