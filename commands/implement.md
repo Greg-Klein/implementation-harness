@@ -287,6 +287,8 @@ Then commit any code the reviewers changed with a `fix(...)` or `refactor(...)` 
 
 If it comes back blocked (loop limit reached, `P0` still open), do not throw the work away: still push the branch and still open the merge request, but as a **draft**, with a `## Blocked` section at the top listing what remains open and what was tried. A draft MR with an honest blocker section is more useful than a lost branch.
 
+**Close the Playwright browser here if one is open (`browser_close`).** Step 6 or the review agents may have left it running; steps 8 to 10 never touch the running app, and a browser process left open outlives the run for nothing.
+
 ---
 
 ## Step 8 - Merge request
