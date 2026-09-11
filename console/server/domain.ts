@@ -124,6 +124,20 @@ export function gitLabProjectPath(issueUrl: string) {
   }
 }
 
+/**
+ * The agents a finished run leaves behind. A stop event can never arrive for an
+ * agent whose session is gone, so one that was still running keeps reading as
+ * running for good: the console spins a live timer on a run that ended hours
+ * ago, and the next self-audit is handed a "running" agent to diagnose. Its real
+ * outcome is unknowable at that point, and calling it completed or failed both
+ * invent one, so it is abandoned.
+ */
+export function closeAbandonedAgents(agents: AgentState[], endedAt: string) {
+  const abandoned = agents.filter((agent) => agent.status === "running");
+  if (abandoned.length === 0) return { agents, abandoned };
+  return { agents: agents.map((agent) => agent.status === "running" ? { ...agent, status: "abandoned" as const, endedAt } : agent), abandoned };
+}
+
 /** The agent a stop event closes: by id, or by name for one that reported no id. */
 export function agentStopTarget(agents: AgentState[], agentId: string, agentName: string) {
   return agents.find((agent) => agent.id === agentId)

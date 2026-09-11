@@ -1,7 +1,8 @@
 import type { Question } from "./domain.js";
 
 export type RunStatus = "idle" | "starting" | "running" | "attention" | "completed" | "stopped" | "failed";
-export type AgentStatus = "running" | "completed" | "failed";
+/** `abandoned`: the run ended before the agent ever reported an outcome, so it has none to read. */
+export type AgentStatus = "running" | "completed" | "failed" | "abandoned";
 export type AgentState = { id: string; name: string; status: AgentStatus; startedAt: string; endedAt?: string };
 export type Activity = { id: string; at: string; kind: "system" | "agent" | "tool" | "artifact" | "attention"; title: string; detail?: string };
 export type PendingQuestion = { id: string; questions: Question[] };

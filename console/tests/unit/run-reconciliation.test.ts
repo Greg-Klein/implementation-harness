@@ -51,6 +51,18 @@ describe("reconciling runs orphaned by a server restart", () => {
     expect(readRun("run-failed")).toEqual(expect.objectContaining({ status: "failed", error: "already recorded" }));
   });
 
+  it("should close the agents the interrupted run left running", async () => {
+    writeRun("run-agents", { status: "running", agents: [
+      { id: "a1", name: "implementation-harness:developer", status: "running", startedAt: "2026-09-09T08:20:00.000Z" },
+      { id: "a2", name: "Explore", status: "completed", startedAt: "2026-09-09T08:19:00.000Z", endedAt: "2026-09-09T08:19:40.000Z" },
+    ] });
+    await reconcileInterruptedRuns(runsDirectory);
+    const agents = readRun("run-agents").agents;
+    expect(agents[0]).toEqual(expect.objectContaining({ id: "a1", status: "abandoned" }));
+    expect(agents[0].endedAt).not.toBeUndefined();
+    expect(agents[1]).toEqual(expect.objectContaining({ id: "a2", status: "completed", endedAt: "2026-09-09T08:19:40.000Z" }));
+  });
+
   it("should do nothing when the runs directory does not exist yet", async () => {
     await expect(reconcileInterruptedRuns(path.join(runsDirectory, "missing"))).resolves.toBeUndefined();
   });

@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
 import { dataRoot } from "./config.js";
-import { runInProgress } from "./domain.js";
+import { closeAbandonedAgents, runInProgress } from "./domain.js";
 import type { Activity, ConversationMessage, RunState } from "./types.js";
 
 export function emptyState(): RunState {
@@ -90,6 +90,7 @@ export async function reconcileInterruptedRuns(runsDirectory: string) {
       ...state,
       status: "failed",
       endedAt,
+      agents: closeAbandonedAgents(state.agents ?? [], endedAt).agents,
       error: "Le serveur du harnais a redémarré ou s'est arrêté pendant que ce run était en cours ; son issue réelle n'a jamais été enregistrée.",
       activities: [closingEntry, ...state.activities].slice(0, ARCHIVED_ACTIVITIES),
     };
