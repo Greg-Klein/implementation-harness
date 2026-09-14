@@ -18,6 +18,14 @@ This run is **as autonomous as possible**. Step 2 is the only planned interrupti
 
 Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See "Never invent" below.
 
+**Waiting is never a shell `sleep`.** A foreground `sleep`, on its own or chained before the command you actually want, is blocked and costs you a turn for nothing. You wait a lot in this workflow: for a batch of developers, for a dev server to answer, for a `glab` call, for a reviewer to hand back its artifact. Three ways to do it, and no fourth:
+
+- an agent you launched: its completion notification comes back to you on its own, so take the next useful action and read its report when it lands
+- a condition you can test: `Monitor` with an until-loop, which is also how you enforce the 15 minute cap of step 7 without staring at the clock
+- a command you started yourself: start it with `run_in_background` and read it back
+
+Chaining shorter sleeps to get around the block does not work either. This has already cost a blocked turn in several runs.
+
 ---
 
 ## Step 1 - Read the ticket and collect every linked document
