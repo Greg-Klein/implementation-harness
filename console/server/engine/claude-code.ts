@@ -3,7 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import * as pty from "node-pty";
 import { normalizeQuestion, normalizeText, withoutBundlerVariables } from "../domain.js";
-import { pluginRoot } from "../config.js";
+import { pluginRoot, remoteControl } from "../config.js";
 import { findExecutable } from "../repository.js";
 import type { ConversationMessage, HookOutput } from "../types.js";
 import type { Engine, EngineEvent, EngineSession, StartOptions } from "./types.js";
@@ -140,7 +140,11 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
 function start({ cwd, runId, command, hookUrl, onData, onExit }: StartOptions): EngineSession {
   const executable = findExecutable("claude");
   if (!executable) throw new Error("Claude Code est introuvable dans PATH.");
-  const terminal = pty.spawn(executable, ["--plugin-dir", pluginRoot, "--name", `implementation-harness ${path.basename(cwd)}`, command], {
+  const sessionName = `implementation-harness ${path.basename(cwd)}`;
+  // --remote-control takes an optional name, so leaving it empty would let the
+  // parser swallow the prompt that follows as that name.
+  const remote = remoteControl ? ["--remote-control", sessionName] : [];
+  const terminal = pty.spawn(executable, ["--plugin-dir", pluginRoot, "--name", sessionName, ...remote, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
     env: { ...sessionEnvironment(), TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl },
   });

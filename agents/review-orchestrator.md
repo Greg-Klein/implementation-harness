@@ -48,6 +48,7 @@ Sub agents keep writing their own artifacts, a report and, for the two that meas
 - `.claude/tasks/senior-review.md`
 - `.claude/tasks/designer-review.md` and `.claude/tasks/design-evidence.json`
 - `.claude/tasks/qa-report.md` and `.claude/tasks/qa-evidence.json`
+- `.claude/tasks/developer-report-rework<N>.md` and `.claude/tasks/dev-evidence-rework<N>.json`, for a rework round
 
 Archive each artifact per round: after round N, copy it to `<name>-round<N>.<ext>`, because every reviewer overwrites its own file.
 
@@ -93,8 +94,9 @@ Continue looping while any dimension still reports **P0 or P1**, or QA is `FAIL`
 For each round with remaining P0 or P1:
 
 1. Build a single consolidated rework brief: one list of findings, deduplicated across reviewers, ordered P0 then P1, each with file, expected behaviour, and which reviewer raised it. Drop P2 from the brief.
-2. Invoke **one** `developer` agent with that brief, plus the implementation brief supplied by the caller. Never several in parallel: they would fight over the same files.
-3. Re-run only the dimensions that had findings, plus `qa-reviewer` which always re-runs last.
+2. Invoke **one** `developer` agent with that brief, plus the implementation brief supplied by the caller, and give it `rework<N>` as its artifact suffix. Never several in parallel: they would fight over the same files.
+3. Merge what it wrote into the caller's two files: append `.claude/tasks/developer-report-rework<N>.md` to `.claude/tasks/developer-report.md`, and add the `items` of `.claude/tasks/dev-evidence-rework<N>.json` to those of `.claude/tasks/dev-evidence.json`. Appending, never replacing: those two files already hold the implementation's own measurements, and overwriting them drops the evidence the run was built on.
+4. Re-run only the dimensions that had findings, plus `qa-reviewer` which always re-runs last.
 
 Stop the loop when:
 

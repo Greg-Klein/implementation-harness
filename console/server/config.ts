@@ -19,4 +19,5 @@ export const feedbackRoot = path.join(consoleRoot, "data", "feedback", "pending"
 export const port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
+export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
