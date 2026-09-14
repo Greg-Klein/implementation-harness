@@ -173,7 +173,7 @@ Carry one entry per observable criterion in the report, whatever shape the repor
 
 PASS | PASS_WITH_WARNINGS | FAIL
 
-Une ou deux phrases pour le justifier.
+One or two sentences to justify it.
 
 ## Contrôles
 
@@ -185,7 +185,7 @@ Une ou deux phrases pour le justifier.
 | Tests d'intégration | `...` | pass / fail / not run | ... |
 | Visuel (Playwright) | route et viewport | pass / fail / not run | chemins des captures, ou pourquoi l'app était inaccessible |
 
-`Résultat` n'a que trois valeurs possibles. `not run` est un résultat, pas un vide : écris-le, et dis pourquoi.
+`Résultat` has only three possible values. `not run` is a result, not a blank: write it, and say why.
 
 ## Critères observables
 
@@ -193,12 +193,12 @@ Une ou deux phrases pour le justifier.
 |---|---|---|---|
 | ... | measured live / confirmed from the developer's evidence / unverified | la valeur que tu as lue ou que l'evidence du développeur donne | chemin de la capture, ou ce qui manquait |
 
-Une ligne par critère observable. Un seul "browser check not run" qui couvre
-tout n'est pas une réponse.
+One row per observable criterion. A single "browser check not run" covering
+everything is not an answer.
 
 ## Critères d'acceptation
 
-Une ligne par critère : `AC<n>` — MET / NOT MET / UNVERIFIED, avec la preuve et son ancre `fichier:ligne`.
+One line per criterion: `AC<n>` - MET / NOT MET / UNVERIFIED, with the evidence and its `file:line` anchor.
 
 ## Problèmes
 
@@ -215,7 +215,7 @@ Une ligne par critère : `AC<n>` — MET / NOT MET / UNVERIFIED, avec la preuve 
 
 ## Non vérifiable
 
-Ce que tu n'as pas pu atteindre, et ce qu'il faudrait pour y arriver. Une réponse vide n'est valable que si c'est vraiment le cas.
+What you could not reach, and what it would take to get there. An empty answer is only valid when it is genuinely the case.
 ```
 
 ---

@@ -145,9 +145,11 @@ READY | BLOCKED
 - Tests : exécutés / partiellement exécutés / non exécutés
 - App en direct : inspectée via Playwright / inaccessible et pourquoi
 - Figma : comparé / pas de design fourni
-- Critères observables, une ligne chacun : measured live / confirmed from the developer's evidence (avec le chemin de la capture) / unverified (avec ce qui manquait). Une app inaccessible est une raison de se rabattre sur l'evidence du développeur, jamais une raison de laisser un critère non examiné
+- Critères observables, une ligne chacun : measured live / confirmed from the developer's evidence (avec le chemin de la capture) / unverified (avec ce qui manquait)
 - Tout ce qui n'a pas pu être vérifié
 ```
+
+Write one line per observable criterion. An unreachable app is a reason to fall back on the developer's evidence, never a reason to leave a criterion unexamined.
 
 ---
 

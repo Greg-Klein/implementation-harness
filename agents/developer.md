@@ -167,10 +167,10 @@ Write to `.claude/tasks/developer-report.md`:
 
 ## Preuves navigateur
 
-Une ligne par critère d'acceptation observable, qu'il affiche des pixels ou
-change seulement ce que l'application envoie, stocke ou cache. N'omets la
-section que si rien dans le changement n'est observable dans une app qui
-tourne, et dis-le en une ligne à la place.
+One row per observable acceptance criterion, whether it renders pixels or only
+changes what the application sends, stores or caches. Omit the section only when
+nothing in the change is observable in a running app, and say so in one line
+instead.
 
 | Critère | Valeur mesurée | Référence | Capture | Comment reproduire |
 | --- | --- | --- | --- | --- |

@@ -335,15 +335,15 @@ Closes #<iid>
 
 ## Résumé
 
-Deux ou trois phrases : le problème côté utilisateur, et ce qui se passe désormais à la place.
+Two or three sentences: the user facing problem, and what happens instead now.
 
 ## Changements
 
-Trois à cinq puces, une par élément marquant. Les noms de fichiers seulement quand ça aide à s'y retrouver.
+Three to five bullets, one per notable item. File names only when they help the reader find their way.
 
 ## Notes d'implémentation
 
-Seulement ce que le code ne peut pas dire tout seul : une décision qui a l'air d'une erreur et qu'on voudrait "corriger", un élargissement ou un rétrécissement volontaire du ticket, un piège. Deux ou trois au plus, et n'en avoir aucune est un résultat valable. Si une note ne fait que décrire ce que montre le diff, retire-la.
+Only what the code cannot say on its own: a decision that looks like a mistake and would get "fixed", a deliberate widening or narrowing of the ticket, a trap. Two or three at most, and having none is a valid outcome. If a note only describes what the diff shows, drop it.
 
 Hors scope selon le ticket : ...
 ```
@@ -382,11 +382,11 @@ Les revues senior, QA et design ont tourné sur N rounds. Les constats ci-dessou
 
 **issue (blocking):** `path/file.ts:42` - sujet
 
-Pourquoi c'est important, en une ou deux phrases.
+Why it matters, in one or two sentences.
 
 **suggestion (non-blocking):** `path/file.tsx:15-28` - sujet
 
-Quoi changer et pourquoi.
+What to change and why.
 
 **nitpick (non-blocking):** `path/file.tsx:60` - sujet
 
@@ -404,7 +404,7 @@ Quoi changer et pourquoi.
 
 ### Verdict
 
-`à merger` | `changements mineurs` | `à retravailler` - une ou deux phrases.
+`à merger` | `changements mineurs` | `à retravailler` - one or two sentences.
 
 N blocking - N non-blocking - N nitpicks - N praise
 ```
