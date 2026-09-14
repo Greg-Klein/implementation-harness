@@ -253,6 +253,15 @@ install-remote.sh  clone ou mise à jour depuis la commande curl
 
 Selon le ticket, `/implementation-harness:implement` peut aussi utiliser Playwright et Figma. Un MCP absent réduit les vérifications correspondantes mais n’empêche pas le harnais de démarrer.
 
+Un run type ouvre plusieurs sessions navigateur : l’agent développeur mesure son propre travail, puis la revue design et la QA repassent dessus. Déclarer le serveur MCP Playwright en `--headless` évite qu’une fenêtre Chrome prenne le premier plan à chaque fois, et écarte un mode de défaillance réel des mesures : en mode fenêtré, un viewport demandé plus large que l’écran est silencieusement rogné, et la mesure est alors rapportée à la largeur demandée et non à la largeur obtenue.
+
+```json
+"playwright": { "type": "stdio", "command": "npx",
+                "args": ["@playwright/mcp@latest", "--headless"] }
+```
+
+Le seul cas qui demande l’inverse est un parcours où l’utilisateur doit intervenir lui-même dans le navigateur, typiquement une connexion à faire à la main. Retirer `--headless` rend la fenêtre.
+
 ## Licence
 
 Implementation Harness est distribué sous [licence MIT](LICENSE). Copyright © 2026 Gregory Klein.
