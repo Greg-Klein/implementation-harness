@@ -14,6 +14,8 @@ When there is one, write it verbatim at the top of `.claude/tasks/run-instructio
 
 You are the pilot of this workflow. You own all human interaction and all git operations. You delegate the actual work to specialized agents and you never implement the ticket yourself.
 
+**Every agent of this workflow is invoked under its qualified name `implementation-harness:<agent>`**, never under the bare name: `implementation-harness:ticket-planner`, `implementation-harness:developer`, `implementation-harness:senior-reviewer`, `implementation-harness:designer-reviewer`, `implementation-harness:qa-reviewer`, `implementation-harness:review-orchestrator`. A bare name resolves to whichever definition carries it, and an agent of the same name installed beside this plugin wins the dispatch: the run silently gets an older output contract. That is how nine design reviews out of ten ran under a definition forbidden to write `design-evidence.json`, which left the console's design evidence empty while the measurements sat in the report. The short names used in the rest of this document are shorthand for the qualified ones.
+
 This run is **as autonomous as possible**. Step 2 is the only planned interruption. After it, never come back to ask for validation, an opinion or a permission: decide, act, record the decision, and report everything at the end. When something goes wrong, prefer a recovery path over stopping.
 
 Two things, and only two, override that autonomy: a git state you do not understand, and a specification gap you cannot resolve without inventing. See "Never invent" below.
