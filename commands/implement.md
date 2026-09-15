@@ -254,6 +254,8 @@ A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, 
 
 One item per gate, `label` and `actual` in French, `command` the literal command run, the JSON keys and verdict tokens in English exactly as shown. A gate you did not run is an item with `not_run` and the reason in `actual`, never a missing item.
 
+**`pass | fail | not_run` is the set a gate row takes, not the whole schema.** When a `qa-reviewer` ran, that file is its output and it carries three more tokens for the observable criteria it reports on: `measured`, `confirmed` and `unverified` (see `agents/qa-reviewer.md`). The console renders all six. So do not touch the verdicts in a file a reviewer wrote: `measured` is not a malformed `pass`, and flattening it deletes the one thing those tokens exist to record, whether QA measured a criterion itself or took it from the developer's evidence. Normalise a verdict only when it falls outside those six tokens.
+
 **Bound every tier in time, whatever the tier.** Two rules, both enforced by you:
 
 - **The review must not outlast the implementation.** Note when step 5 ended. Once the review phase has run about as long as the implementation did, stop launching new rounds: take what the running agents have produced, commit it, and put whatever is unresolved in the step 9 comment as an explicit "not verified" line.
@@ -459,6 +461,7 @@ Print a short summary in chat:
 - the review tier you picked and the diff size that justified it, plus anything you stopped early
 - review verdicts (senior, designer, QA) and number of loops
 - remaining `P2` findings, listed
+- other tickets this run updated, and what changed in each
 - questions asked and answers applied, plus obvious behaviours you deduced
 - how the run instruction was applied, and anything in it you could not honour, with the reason
 - anything still unanswered, and what part of the code it affects
@@ -605,6 +608,34 @@ What matters:
   name, never hardcode a status id.
 - **This never blocks the run.** If the status cannot be set, note it in the final report and carry
   on. A ticket left on the wrong status is a board annoyance; a halted implementation is a real cost.
+
+---
+
+## A discovery that affects another ticket
+
+A run regularly establishes something a neighbouring ticket gets wrong: a field it names does not
+exist under that name, an invariant it states holds for a different reason than the one it gives,
+an edge case does not behave the way it describes. **When something this run established contradicts
+or refines another ticket, write it into that ticket before the run ends.** Do not wait to be asked,
+and do not settle for a line in the final report: whoever implements that ticket next reads the
+ticket, not this run's artifacts.
+
+Where the discovery came from does not matter - the planner's reading, a developer report, a
+reviewer's `P2`, a measurement of your own. What matters is that it changes what another ticket
+says.
+
+Three rules, because a careless write costs more than silence:
+
+- **Read the other ticket first.** A comment or an edit that repeats what it already says is noise.
+  Write only what the run actually established and the ticket does not already contain, and if that
+  set turns out to be empty, write nothing.
+- **Edit the description when the ticket states something false**, targeted at the sentence
+  concerned, never a rewrite of the whole body. Post a comment when what you have is a remark rather
+  than a correction. Then read the result back from the API: an edit landed or it did not.
+- **Never decide for the ticket's owner.** You correct what is written. You do not change its scope,
+  its status or its assignment, and you do not remove an acceptance criterion.
+
+List every other ticket you touched, and what you changed in each, in the step 10 report.
 
 ---
 
