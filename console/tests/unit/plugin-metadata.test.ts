@@ -37,7 +37,13 @@ describe("Claude Code plugin metadata", () => {
     // Le panneau de la console est la seule porte de promotion. Une commande qui
     // fusionne elle-meme presenterait un changement deja applique a la validation,
     // et le rejet ne reviendrait alors sur rien.
-    expect(improve).not.toMatch(/AUTO_APPLY|PRIMARY_CHECKOUT|merge --ff-only/);
+    expect(improve).not.toMatch(/AUTO_APPLY|PRIMARY_CHECKOUT/);
+    expect(improve).toMatch(/Never merge it into the primary checkout/);
+    // Mettre la branche d'amelioration a niveau sur le harnais est l'inverse d'une
+    // promotion : la fusion va vers la branche, jamais vers le checkout, et
+    // `--ff-only` refuse des que la branche porte un commit a elle. Epingler la
+    // liste complete interdit toute autre forme, `--no-ff` comprise.
+    expect(improve.match(/git merge [^\n`]*/g)).toEqual(["git merge --ff-only main"]);
   });
 
   it("should publish its commands under the implementation-harness namespace", () => {
