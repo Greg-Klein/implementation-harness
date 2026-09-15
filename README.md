@@ -154,6 +154,8 @@ impl improve
 
 Cette commande lance Claude Code sur `/implementation-harness:improve`. Il regroupe les retours en attente, vérifie les preuves du run, crée une branche `self-improvement-*`, applique la plus petite amélioration durable, exécute les vérifications et crée un commit local. Il ne pousse rien et ne fusionne rien : le résultat reste inspectable et réversible.
 
+Son worktree est découpé depuis le dernier commit poussé, et la boucle ne pousse jamais : l’itération commence donc par mettre sa propre branche à niveau sur le harnais, en `--ff-only`, pour ne pas diagnostiquer un arbre auquel manquent les améliorations déjà acceptées. Une branche qui porte déjà un commit fait refuser la commande et ne bouge pas.
+
 Avant de choisir quoi corriger, il lit aussi les branches `self-improvement-*` que l’utilisateur n’a pas encore acceptées ou écartées, ainsi que les worktrees en cours. Il ne réimplémente pas un correctif déjà porté par une branche en attente : il nomme cette branche dans son rapport. Comme plusieurs itérations peuvent tourner en parallèle, son diagnostic et son rapport portent le nom de sa propre branche, `improvement-plan-<slug>.md` et `improvement-report-<slug>.md`, pour qu’aucune itération n’écrase le travail d’une autre.
 
 Les tickets, logs et retours bruts restent sous `console/data/` et ne sont jamais ajoutés au commit d’amélioration.
