@@ -9,8 +9,9 @@ export type PendingQuestion = { id: string; questions: Question[] };
 /**
  * One worktree the improvement loop left for a verdict, independent of any run: it is
  * discovered by listing worktrees, never tied to the run that happened to spawn it.
- * `mergesCleanly` is false when the branch no longer merges into the harness: the
- * promotion is not one click.
+ * `mergesCleanly` is false when the branch no longer merges into the harness even
+ * after the automatic replay, which means a conflict git cannot resolve on its own:
+ * the promotion is not one click.
  */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };

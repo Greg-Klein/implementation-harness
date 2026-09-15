@@ -106,3 +106,26 @@ export async function mergeBranch(repository: string, branch: string, message: s
   }
   return (await head()) !== before;
 }
+
+/** The commit an improvement branch has to sit on top of to merge in one click. */
+export async function headCommit(repository: string) {
+  return (await exec("git", ["-C", repository, "rev-parse", "HEAD"])).stdout.trim();
+}
+
+/** Whether the branch already carries that commit, so replaying it would change nothing. */
+export async function branchIsRebasedOn(repository: string, branch: string, commit: string) {
+  return await exec("git", ["-C", repository, "merge-base", "--is-ancestor", commit, branch]).then(() => true, () => false);
+}
+
+/**
+ * Replays the branch on top of `onto`, from inside its own worktree: the branch is
+ * checked out there, so no other checkout is allowed to rebase it. A conflict git
+ * cannot resolve leaves the worktree stopped mid-rebase, so it is aborted here and
+ * the branch is left exactly where it was rather than half-replayed.
+ */
+export async function rebaseWorktree(worktree: Worktree, onto: string) {
+  return await exec("git", ["rebase", onto], { cwd: worktree.path }).then(() => true, async () => {
+    await exec("git", ["rebase", "--abort"], { cwd: worktree.path }).catch(() => undefined);
+    return false;
+  });
+}

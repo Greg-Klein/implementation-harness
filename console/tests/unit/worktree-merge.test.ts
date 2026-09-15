@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
-import { branchIsMerged, branchMergesCleanly, mergeBranch, worktreeIsClean } from "../../server/worktree";
+import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, mergeBranch, rebaseWorktree, worktreeIsClean } from "../../server/worktree";
 
 let repository: string;
 
@@ -135,5 +135,52 @@ describe("simulating the promotion before the buttons open", () => {
     await expect(branchMergesCleanly(repository, "improvement")).resolves.toBe(false);
     expect(git("rev-parse", "HEAD")).toBe(before);
     expect(git("status", "--porcelain")).toBe("");
+  });
+});
+
+// What unblocks a queue of improvements: they are all cut from the same base, so the
+// first promotion leaves every branch behind it standing on a checkout that moved.
+describe("replaying an improvement branch on top of the harness", () => {
+  let worktreePath: string;
+
+  function inWorktree(...args: string[]) {
+    return execFileSync("git", ["-C", worktreePath, ...args], { encoding: "utf8" }).trim();
+  }
+
+  beforeEach(() => {
+    worktreePath = path.join(repository, "wt", "self-improvement-abcd1234");
+    git("worktree", "add", "-q", "-b", "improvement", worktreePath);
+    writeFileSync(path.join(worktreePath, "fix.ts"), "export const fixed = true;\n");
+    inWorktree("add", "fix.ts");
+    inWorktree("commit", "-m", "fix: something");
+  });
+
+  it("should put a branch the harness outran back on top of it", async () => {
+    commit("CHANGELOG.md", "main moved on\n", "main edit");
+    const onto = await headCommit(repository);
+    await expect(branchIsRebasedOn(repository, "improvement", onto)).resolves.toBe(false);
+
+    await expect(rebaseWorktree({ path: worktreePath, branch: "improvement" }, onto)).resolves.toBe(true);
+    await expect(branchIsRebasedOn(repository, "improvement", onto)).resolves.toBe(true);
+    await expect(branchMergesCleanly(repository, "improvement")).resolves.toBe(true);
+    expect(inWorktree("log", "-1", "--format=%s")).toBe("fix: something");
+  });
+
+  // A rebase that stops mid-way leaves the worktree unusable and the branch half
+  // replayed, which is worse than the drift it was meant to close. This is the case
+  // the console hands to an agent.
+  it("should leave the branch exactly where it was when the replay conflicts", async () => {
+    writeFileSync(path.join(worktreePath, "README.md"), "from the branch\n");
+    inWorktree("commit", "-am", "branch edit");
+    const before = inWorktree("rev-parse", "HEAD");
+    commit("README.md", "from main\n", "main edit");
+
+    await expect(rebaseWorktree({ path: worktreePath, branch: "improvement" }, await headCommit(repository))).resolves.toBe(false);
+    expect(inWorktree("rev-parse", "HEAD")).toBe(before);
+    expect(inWorktree("status", "--porcelain")).toBe("");
+  });
+
+  it("should report a branch already on top of the checkout as needing no replay", async () => {
+    await expect(branchIsRebasedOn(repository, "improvement", await headCommit(repository))).resolves.toBe(true);
   });
 });

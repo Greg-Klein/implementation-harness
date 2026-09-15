@@ -44,6 +44,7 @@ Rien au-dessus n'importe `node-pty`, ne connaît le chemin `.claude/tasks`, ne l
 | `event(payload)` | traduit un événement brut en `EngineEvent` | tout le vocabulaire de hooks |
 | `questionAnswer(input, answers)` | ce que l'agent attend en retour d'une question | `updatedInput` pour Claude Code |
 | `startSelfImprovement(options)` | lance la boucle d'auto-amélioration détachée | drapeaux de worktree et de permissions |
+| `startConflictResolution(options)` | rejoue une branche d'amélioration que git seul n'a pas pu rebaser | drapeaux de worktree et de permissions |
 
 ### EngineSession
 

@@ -12,7 +12,7 @@ import { closeTranscript, followTranscript } from "./transcript.js";
 import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
 import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, demoState, startDemoRun } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { listPendingImprovements, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
+import { listPendingImprovements, realignPendingImprovements, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
 import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
 import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
 import { engine } from "./engine/index.js";
@@ -31,8 +31,13 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
   }
   const worktree = await findWorktree(worktreeName);
   if (!worktree) throw new Error(`Aucun worktree d'auto-amélioration "${worktreeName}" à traiter.`);
+  let harnessMoved = false;
   if (merge) {
     if (!worktree.branch) throw new Error(`Le worktree "${worktreeName}" n'est sur aucune branche.`);
+    // The harness may have moved since the branch was cut, by an earlier promotion
+    // or by hand. Replaying it here is what keeps the promise the button makes:
+    // without it, a merge that conflicts is aborted and handed back to the user.
+    await realignPendingImprovements();
     // A worktree is destroyed just below, so nothing may be announced as merged
     // before the checkout actually moved.
     const merged = await mergeBranch(pluginRoot, worktree.branch, `self-improvement: apply improvements from ${worktreeName}`)
@@ -47,6 +52,7 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     if (!merged && !spent)
       throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
     activity("system", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
+    harnessMoved = merged;
   } else {
     // Merging already refuses to destroy a worktree with something uncommitted
     // on disk (see worktreeIsClean's own contract): ignoring must refuse the same
@@ -57,6 +63,9 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     activity("system", "Améliorations ignorées", worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
+  // The checkout just moved under every branch still waiting, which is exactly what
+  // left the previous improvement of a series unmergeable.
+  if (harnessMoved) await realignPendingImprovements();
   publishState();
 }
 
@@ -186,6 +195,9 @@ function respond(response: ServerResponse, status: number, body: object) {
 
 await mkdir(dataRoot, { recursive: true });
 await reconcileInterruptedRuns(dataRoot);
+// Commits landed by hand while the console was down move the harness just as a
+// promotion does, and nothing would replay the waiting branches onto them.
+await realignPendingImprovements().catch(() => undefined);
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();

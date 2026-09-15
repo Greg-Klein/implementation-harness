@@ -176,6 +176,14 @@ La revue n’est proposée qu’une fois un commit d’amélioration présent su
 
 Au moment d’ouvrir les boutons, le harnais simule la fusion avec `git merge-tree --write-tree`, qui n’écrit que dans la base d’objets. Le panneau avertit quand la branche ne fusionne plus, avant le clic : une promotion n’est jamais annoncée en un clic quand l’utilisateur découvrirait le conflit en cliquant.
 
+### Rebase automatique
+
+Les branches d’amélioration partent toutes de la même base et se fusionnent l’une après l’autre : la première promotion laisse toutes les suivantes derrière le harnais, et l’écart grandit à chaque fusion. Le harnais rejoue donc les branches en attente sur son propre `HEAD` à chaque fois qu’il bouge, c’est-à-dire au démarrage de la console et après chaque fusion. Une branche en retard d’un commit se rejoue presque toujours seule; la même branche en retard de dix ne se rejoue jamais.
+
+Trois états sont laissés intacts : une branche sans commit est un agent encore en train d’écrire, une branche déjà contenue dans le harnais n’a plus rien à rejouer, et un worktree avec des changements non commités porte le diagnostic qu’une validation ratée a laissé sur place, qu’un rebase emporterait.
+
+Quand git s’arrête sur un conflit, il est annulé et la branche reste exactement où elle était. En mode autonome (`IMPL_SELF_IMPROVEMENT_AUTORUN=true`), le harnais confie alors le rebase à un agent de fond lancé dans le worktree de la branche, sur `/implementation-harness:rebase`. Cet agent rejoue, résout en gardant les deux intentions plutôt qu’un côté, rejoue les vérifications et ne fusionne rien : la promotion reste le bouton de l’utilisateur. Hors mode autonome, le panneau signale simplement le conflit réel, à reprendre à la main.
+
 La fusion ne s’annonce que si elle a réellement déplacé la branche du harnais. Git répond « Already up to date » avec un code de sortie nul, et un conflit laisse le dépôt à moitié fusionné : le conflit est annulé et le worktree conservé. Quand git n’apporte rien, deux situations que son code de sortie ne distingue pas se départagent :
 
 - **les commits de la branche sont déjà contenus dans le harnais**, parce que le travail a été repris à la main. Le worktree n’est plus qu’un résidu : il est nettoyé, avec sa branche, et journalisé « Améliorations déjà présentes ». Le refuser ne laissait aucune sortie honnête, puisque « Fusionner » disait que rien n’avait été fusionné et « Ignorer » enregistrait comme écarté du travail qui avait en fait été gardé;
@@ -247,7 +255,7 @@ Le front utilise Next.js, React, TypeScript, Tailwind CSS et xterm.js. Le serveu
 
 ```text
 agents/       sous-agents Claude Code
-commands/     commandes /implementation-harness:implement, /implementation-harness:review et /implementation-harness:improve
+commands/     commandes /implementation-harness:implement, /implementation-harness:review, /implementation-harness:improve et /implementation-harness:rebase
 hooks/        événements envoyés au harnais local
 bin/          lanceur impl et commande impl config
 console/      interface Next.js et serveur PTY

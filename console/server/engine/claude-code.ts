@@ -195,4 +195,16 @@ export const claudeCode: Engine = {
       `/implementation-harness:improve ${feedbackDirectory}`,
     ], { cwd: pluginRoot, env: sessionEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
   },
+  startConflictResolution: ({ worktreeName, onto }) => {
+    const executable = findExecutable("claude");
+    if (!executable) return undefined;
+    return spawnChild(executable, [
+      "--background", "--worktree", worktreeName,
+      "--add-dir", pluginRoot,
+      "--plugin-dir", pluginRoot,
+      "--permission-mode", "auto",
+      "--name", `implementation-harness rebase ${worktreeName.slice(-8)}`,
+      `/implementation-harness:rebase ${onto}`,
+    ], { cwd: pluginRoot, env: sessionEnvironment(), stdio: ["ignore", "pipe", "pipe"] });
+  },
 };

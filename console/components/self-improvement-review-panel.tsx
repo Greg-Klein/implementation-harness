@@ -59,7 +59,7 @@ function ReviewCard({ review, onApprove, onReject, onViewDiff }: { review: Pendi
       {review.mergesCleanly === false && (
         <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-4 text-red-700">
           <WarningIcon size={13} className="mt-px shrink-0" />
-          Le harnais a avancé depuis : la fusion entrera en conflit et sera annulée. À reprendre à la main.
+          Le rebase automatique sur le harnais n’a pas suffi : cette branche est en conflit réel. À reprendre à la main.
         </p>
       )}
       <button type="button" onClick={onViewDiff} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">

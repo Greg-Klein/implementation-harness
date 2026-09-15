@@ -4,7 +4,7 @@ export type Agent = { id: string; name: string; status: "running" | "completed" 
 export type Activity = { id: string; at: string; kind: string; title: string; detail?: string };
 export type QuestionOption = { label: string; description?: string };
 export type PendingQuestion = { id: string; questions: { question: string; header: string; options: QuestionOption[]; multiSelect: boolean }[] };
-/** `mergesCleanly` is false when the branch no longer merges into the harness: the promotion is not one click. */
+/** `mergesCleanly` is false when the branch does not merge even after the automatic replay: a conflict only a human can settle. */
 export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {

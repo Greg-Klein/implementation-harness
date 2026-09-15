@@ -77,4 +77,6 @@ export type Engine = {
   questionAnswer(input: Record<string, unknown>, answers: Record<string, string>): unknown;
   /** Runs the self-improvement workflow on its own, detached from any run. Undefined when the agent is not installed. */
   startSelfImprovement(options: { worktreeName: string; feedbackDirectory: string; runId: string }): BackgroundProcess | undefined;
+  /** Replays an improvement branch git alone could not, inside the worktree it already lives in. Undefined when the agent is not installed. */
+  startConflictResolution(options: { worktreeName: string; onto: string }): BackgroundProcess | undefined;
 };
