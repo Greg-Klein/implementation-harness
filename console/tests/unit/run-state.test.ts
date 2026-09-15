@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { activeAgents, elapsedLabel, isDemoRun, isTranscriptStalled, isWriting, sessionAlive } from "../../lib/run-state";
+import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -18,6 +18,17 @@ describe("run state selectors", () => {
 
   it("should return an empty list when no agent is active", () => {
     expect(activeAgents([{ id: "developer", status: "completed" }])).toEqual([]);
+  });
+
+  it("should leave the evidence screenshots out of the document reader", () => {
+    expect(generatedDocuments([
+      "ticket-context.md",
+      "dev-evidence-T4.json",
+      "assets/t4-document-cards-rejected.png",
+      "assets/T12-region-selector-open.PNG",
+      "assets/design-reference.jpg",
+      "notes.txt",
+    ])).toEqual(["ticket-context.md", "dev-evidence-T4.json", "notes.txt"]);
   });
 
   it("should recognise a demonstration run from its identifier", () => {

@@ -46,6 +46,19 @@ export function isTranscriptStalled(messageCount: number, phase: number, agentCo
   return messageCount === 0 && (phase > 0 || agentCount > 0 || artifactCount > 0);
 }
 
+/** Mirrors DOCUMENT_EXTENSIONS in server/domain.ts. */
+const DOCUMENT_EXTENSION = /\.(?:md|json|txt)$/i;
+
+/**
+ * The run's artifact list doubles as the read authorization of the artifacts
+ * API, so it has to carry the evidence screenshots for the "Preuves" tab to be
+ * allowed to load them. The document reader lists the same array, and a run
+ * with a dozen captures buried its reports under them.
+ */
+export function generatedDocuments(artifacts: string[]) {
+  return artifacts.filter((name) => DOCUMENT_EXTENSION.test(name));
+}
+
 export function pendingAnswerLabel(count: number) {
   return count === 1 ? "Claude attend une réponse" : `Claude attend ${count} réponses`;
 }

@@ -2,7 +2,7 @@
 
 import { ArrowRightIcon, CheckIcon, CircleNotchIcon, FileTextIcon, RobotIcon, WarningIcon } from "@phosphor-icons/react";
 import { useState } from "react";
-import { activeAgents, elapsedLabel, isDemoRun } from "@/lib/run-state";
+import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun } from "@/lib/run-state";
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 import { DocumentViewer } from "./document-viewer";
@@ -16,6 +16,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; on
   const [queued, setQueued] = useState(false);
   const [documentsOpen, setDocumentsOpen] = useState(false);
   const demo = isDemoRun(run.id);
+  const documents = generatedDocuments(run.artifacts);
   const ended = run.status === "completed" || run.status === "stopped" || run.status === "failed";
   const submitFeedback = () => {
     if (!feedback.trim()) return;
@@ -62,9 +63,9 @@ export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; on
         })}</div>
       </section>
       <section className="shrink-0 border-t border-[var(--line)] p-5">
-        <button type="button" disabled={run.artifacts.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{run.artifacts.length}<ArrowRightIcon size={11} /></span></button>
+        <button type="button" disabled={documents.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{documents.length}<ArrowRightIcon size={11} /></span></button>
       </section>
-      {documentsOpen && <DocumentViewer documents={run.artifacts} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} />}
+      {documentsOpen && <DocumentViewer documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} />}
     </aside>
   );
 }
