@@ -41,6 +41,7 @@ describe("conversation extraction", () => {
       { type: "attachment", uuid: "t8" },
       { type: "attachment", uuid: "t9", attachment: { type: "environment", snapshot: {} } },
       { type: "attachment", uuid: "t10", attachment: { type: "queued_command", prompt: "<task-notification>\n<status>completed</status>\n</task-notification>", commandMode: "prompt", origin: { kind: "human" } } },
+      { type: "user", uuid: "t11", message: { content: "<agent-message from=\"aa16ec4cbd577bac1\">\n[Subagent hand-back] …\n</agent-message>" } },
     ];
     expect(technical.map((entry) => parseConversationLine(line(entry)))).toEqual(technical.map(() => undefined));
   });

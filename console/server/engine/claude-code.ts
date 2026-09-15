@@ -23,8 +23,13 @@ function sessionEnvironment() {
   return environment;
 }
 
-/** Slash commands, task notifications and hook output reach the session as tagged blocks. */
-const TAGGED_INPUT = /^<[a-z][a-z-]*>/;
+/**
+ * Slash commands, task notifications, hook output and the hand-back of a
+ * subagent reach the session as tagged blocks. The attributes are part of the
+ * form: `<agent-message from="…">` carries one, and a pattern that closed on the
+ * tag name alone let that whole frame through as if the user had typed it.
+ */
+const TAGGED_INPUT = /^<[a-z][a-z-]*(?:\s[^>]*)?>/;
 
 /**
  * The idle notification, matched on rather than matched away: should Claude Code
