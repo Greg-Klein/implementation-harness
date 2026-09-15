@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, watchedForArtifacts } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -51,6 +51,18 @@ describe("artifact handling", () => {
     expect(isEvidenceReport("evidence.json")).toBe(false);
     expect(isEvidenceReport("dev-evidence.md")).toBe(false);
     expect(isEvidenceReport("dev-evidence-T7-extra.json")).toBe(false);
+  });
+
+  it("should follow the task directory and nothing else beside it", () => {
+    const taskRoot = path.resolve("/Users/someone/project/.claude/tasks");
+    expect(artifactWatchRoot(taskRoot)).toBe(path.resolve("/Users/someone/project/.claude"));
+    expect(watchedForArtifacts(taskRoot, artifactWatchRoot(taskRoot))).toBe(true);
+    expect(watchedForArtifacts(taskRoot, taskRoot)).toBe(true);
+    expect(watchedForArtifacts(taskRoot, path.join(taskRoot, "qa-report.md"))).toBe(true);
+    expect(watchedForArtifacts(taskRoot, path.join(taskRoot, "assets", "shot.png"))).toBe(true);
+    expect(watchedForArtifacts(taskRoot, path.resolve("/Users/someone/project/.claude/worktrees"))).toBe(false);
+    expect(watchedForArtifacts(taskRoot, path.resolve("/Users/someone/project/.claude/settings.local.json"))).toBe(false);
+    expect(watchedForArtifacts(taskRoot, `${taskRoot}-backup`)).toBe(false);
   });
 
   it("should map generated documents to workflow phases", () => {

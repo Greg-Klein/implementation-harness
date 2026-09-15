@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
-import { belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
+import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, watchedForArtifacts } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
@@ -103,7 +103,16 @@ export async function startArtifactWatcher(cwd: string) {
   // chokidar stays inert on a path that does not exist yet, and a checkout that
   // has never run the workflow has no task directory to watch.
   await mkdir(taskRoot, { recursive: true });
-  artifactWatcher = chokidar.watch(taskRoot, { ignoreInitial: false, awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 } });
+  // Attached to the parent, never to the task directory itself: the workflow
+  // deletes that directory while the run is still going, and a watch on it
+  // never fires again once its inode is gone. Everything written afterwards
+  // was archived nowhere, and the workflow's own final cleanup then destroyed
+  // the only copy.
+  artifactWatcher = chokidar.watch(artifactWatchRoot(taskRoot), {
+    ignoreInitial: false,
+    awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 },
+    ignored: (candidate) => !watchedForArtifacts(taskRoot, candidate),
+  });
   artifactWatcher.on("add", (file, stats) => void archiveArtifact(file, stats));
   artifactWatcher.on("change", (file, stats) => void archiveArtifact(file, stats));
 }

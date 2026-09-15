@@ -298,6 +298,23 @@ export function belongsToRun(writtenAt: number, startedAt: string | null) {
   return startedAt !== null && writtenAt >= new Date(startedAt).getTime();
 }
 
+/** The directory the artifact watcher attaches to, one level above the documents. */
+export function artifactWatchRoot(taskRoot: string) {
+  return path.dirname(taskRoot);
+}
+
+/**
+ * Which paths that watch is allowed to follow. A watch attached to the task
+ * directory itself stops firing for good the moment the workflow deletes it,
+ * and the workflow does exactly that mid-run, so the watch sits on the parent
+ * and the directory becomes an ordinary entry that may come and go. The parent
+ * holds much more than documents, `.claude/worktrees` being whole checkouts, so
+ * nothing outside the task directory is ever descended into.
+ */
+export function watchedForArtifacts(taskRoot: string, candidate: string) {
+  return candidate === artifactWatchRoot(taskRoot) || candidate === taskRoot || candidate.startsWith(taskRoot + path.sep);
+}
+
 export function phaseForArtifact(relativePath: string) {
   const name = path.basename(relativePath);
   if (name === "ticket-context.md") return 1;
