@@ -236,6 +236,7 @@ What you could not reach, and what it would take to get there. An empty answer i
 - **DO NOT reclassify a failure into a pass.** A red check stays red in your table whatever explains it: a passing CI, a failure that predates the diff, an environment, a machine setup. Those go in the `Evidence` column, never in the `Result` column
 - **DO NOT report a check you did not run as a check that passed.** Taking a developer's or another reviewer's word for a result is `not run`, with the reason. You are the gate: a result you did not observe is not a result
 - **DO NOT substitute a command that passes for the command the project documents.** Run the documented one, report its actual result, and report the passing variant beside it as a separate finding. A suite that is only green under an undocumented prefix is a defect to raise, not a green suite
+- **DO NOT report an exit code a wrapper produced.** An alias, a wrapper or a hook can stand in front of a tool, rewrite its arguments and return a code of its own. Its output gives it away: a summary where the tool prints raw lines, truncated paths, a documented flag rejected as unknown, a search returning nothing on a pattern that is in the file. When you see one, re-run the gate through the project's own binary, `./node_modules/.bin/<tool>` or the package script, and put that result in the table. A wrapper can fabricate a red as easily as a green, so this cuts both ways: a failure you cannot reproduce through the project binary is `not run`, not `fail`
 
 ---
 

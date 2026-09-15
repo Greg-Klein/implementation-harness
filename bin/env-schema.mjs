@@ -62,6 +62,16 @@ export const schema = [
     validate: validateEnum(["true", "false"]),
   },
   {
+    key: "IMPL_REMOTE_CONTROL",
+    label: "Remote Control sur le terminal d'un run",
+    comment: "Set to 'false' to start a run without Remote Control, which makes its terminal reachable from claude.ai on your own account.",
+    help: "Rend le terminal d'un run joignable depuis claude.ai, sur le compte déjà authentifié.",
+    fallback: "true",
+    kind: "boolean",
+    readBy: "console",
+    validate: validateEnum(["true", "false"]),
+  },
+  {
     key: "IMPL_PORT",
     label: "Port d'écoute",
     comment: "Port the local server and the browser use.",

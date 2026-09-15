@@ -123,6 +123,7 @@ Les réglages disponibles :
 |---|---|---|
 | `IMPL_SEARCH_ROOTS` | racines où chercher les checkouts, séparées par des virgules | `~/workspace` |
 | `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `false` |
+| `IMPL_REMOTE_CONTROL` | Remote Control sur le terminal d’un run | `true` |
 | `IMPL_PORT` | port d’écoute | `3210` |
 | `IMPL_HOST` | interface d’écoute | `127.0.0.1` |
 | `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
@@ -134,6 +135,10 @@ Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur
 IMPL_PORT=4321 impl
 IMPL_NO_OPEN=1 impl
 ```
+
+### Terminal joignable à distance
+
+Un run démarre avec Remote Control activé. La session affiche son lien `claude.ai/code/session_…` dès la première seconde, et le terminal se reprend depuis un téléphone ou un autre poste sans attendre que le harnais propose quoi que ce soit. La session reste rattachée au compte déjà authentifié dans Claude Code : elle n’est pas exposée à un tiers. `IMPL_REMOTE_CONTROL=false` la démarre sans. La session d’auto-amélioration, elle, n’est jamais concernée : elle tourne en arrière-plan et n’est pas interactive.
 
 ### Détection du projet
 

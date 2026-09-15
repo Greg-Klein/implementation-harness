@@ -155,6 +155,7 @@ Whatever the batching, **commit one task at a time**: wait for the batch, verify
 Each `developer` invocation must receive:
 
 - the task id to implement and the path to `.claude/tasks/planner-output.json`
+- **the artifact suffix it writes under, which is its task id.** The agent writes `.claude/tasks/developer-report-<task-id>.md` and `.claude/tasks/dev-evidence-<task-id>.json`, never the unsuffixed names. Those two are yours, and you are the only one who writes them (see the merge below). Disjoint `file_paths` keep two agents out of each other's code; they do nothing about output files, and a shared report path is a collision the plan cannot prevent
 - **when the task runs in a parallel batch, that fact and the file scopes of its peers**, so it knows the branch is moving under it while it works. Say it plainly: other agents are editing those paths right now, a repository-wide gate run before the batch ends measures their unfinished state too, and a failure outside its own file scope is reported as non conclusive rather than diagnosed. A developer who does not know it has peers will attribute their half-written code to the codebase and hand you a finding you have to disprove
 - the path to `.claude/tasks/ticket-context.md` and to the downloaded assets
 - the Figma node URLs when the task is UI, plus the "Reading a Figma design" procedure below
@@ -183,16 +184,21 @@ Each `developer` invocation must receive:
 > - Strictly no scope creep. Spotted an unrelated problem? Report it, do not fix it.
 > - **When two specifications contradict each other, apply the precedence order: PRD, then design, then ticket.** The PRD wins over the Figma design, the design wins over the ticket description, acceptance criteria and comments. The lower source is outdated, not a refinement. Exception: an explicit later decision (a comment saying the PRD is wrong on this point, an answer given by the user) wins over everything. Silence at a higher level is not a contradiction: a design detailing what the PRD leaves open is normal. Report every contradiction you arbitrated at the top of your report, never resolve one silently.
 > - **Never invent what the specification does not say.** Obvious interaction behaviour can be deduced (a close button closes the modal, `Escape` closes an overlay, a spinner shows while loading): implement it and note the deduction. Anything that is a decision (a product rule, a user facing string, a limit, a data source, a permission, an error behaviour) is not yours to choose. Stop that part, report the question at the top of your report, and implement everything else. Never invent copy, never invent an endpoint, never bury a `// TODO: confirm` in the diff.
+> - **A gate whose result you report runs through the project's own binary**, `./node_modules/.bin/<tool>` or the package script, never through a bare global command. An alias, a wrapper or a hook can sit in front of a tool and hand back a summary and an exit code it made up, and a gate result that went through one is not a measurement. Summarized or decorated output where the tool prints raw lines, truncated paths, a documented flag rejected as unknown, a search returning nothing on a pattern that is plainly in the file: each is that wrapper showing itself, so re-run through the project binary and report that result. The same goes for reading a file: if what you read looks stripped of its comments or reformatted, read it again with the `Read` tool before you conclude anything from it.
 > - Before finishing: run lint, typecheck and tests, and check the change in the browser with Playwright whenever it is observable in the running app, which includes a change that renders nothing but alters what the app sends, stores or hides. Report failures you could not fix instead of hiding them, and report them as failures: a red check is never turned green by attributing it to the environment, to the past or to a passing CI. If you had to prefix the project's documented command with anything to get it green, that prefix is itself a finding, and the red result of the documented command is what goes in your report.
 
 If a `developer` comes back with a specification question instead of a guess, it did the right thing. Check first whether the codebase, the design or an obvious convention answers it. If not, ask the user (this is a legitimate interruption, see "Never invent"), record the answer in `.claude/tasks/open-questions.md`, and relaunch the task with the answer. Never answer a product question on the user's behalf.
 
-After each task:
+After each task, commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
 
-1. Copy `.claude/tasks/developer-report.md` to `.claude/tasks/developer-report-<task-id>.md` (the agent overwrites the same file on every run).
-2. Commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
+### Merge the developers' output, at the end of every batch
 
-When all tasks are done, concatenate the per-task reports back into `.claude/tasks/developer-report.md` for the reviewers.
+Each agent wrote under its own suffix. Two files carry the run, and both are yours to assemble:
+
+- `.claude/tasks/developer-report.md`, the concatenation of the per-task reports, each under a heading naming its task. It is a **MANDATORY** input of `senior-reviewer` and `qa-reviewer`: what is missing from it is missing from the review.
+- `.claude/tasks/dev-evidence.json`, one object `{"source": "developer", "items": [...]}` whose `items` are every per-task `items` array end to end, in task order. This is the only developer file the console's "Preuves" tab reads, and it reads it by that exact name: a measurement left in a suffixed file is a measurement nobody sees.
+
+**Merge, never replace.** A later batch, and a rework round in step 7, add their rows to what is already there. Keep the per-task files, they are the archive; the merged pair is the view. An archived run that shows seven measurements while its suffixed files hold fifty-two is the failure this contract exists to prevent, and it happened.
 
 ---
 
@@ -229,6 +235,8 @@ Give that reviewer an explicit mandate, because left unbounded it will spend twe
 Reserve about 10 minutes for it, and stop it past that. Then go to step 8 with whatever it returned. If it comes back with only out-of-scope remarks, that is the expected outcome on a diff this size, not a reason for another round.
 
 **Tier 1, one sequential pass.** A handful of files, no architectural decision. Run `senior-reviewer` with a Sonnet model override, then `qa-reviewer`, once each, and rework only `P0` and `P1`. No second pass unless a `P0` is still open. No orchestrator: you sequence the two agents yourself.
+
+A rework developer you invoke yourself gets `rework<N>` as its artifact suffix, and you merge what it wrote into `developer-report.md` and `dev-evidence.json` the same way as at the end of a batch. At tier 2 the orchestrator does that merge for you.
 
 **Tier 2, the full loop below.** Several surfaces, a data layer plus UI, a migration, or a design to conform to. This is the only tier that gets `review-orchestrator`. `senior-reviewer` keeps its default Fable model at this tier: the review spans more surfaces across up to two rework rounds, and the cost of a missed defect here is higher than the model gap.
 
@@ -323,10 +331,23 @@ Two things this single call settles, and neither is optional:
 
 The response carries `iid` and `web_url`; keep both, steps 9 and 10 need them. For the blocked case above, prefix the title with `Draft: ` - the REST call has no `--draft` flag.
 
+**Then set the reviewer, in a second call.** The merge request always goes out with one: the person who started the run. Resolve them, never hardcode an id or a login.
+
+```bash
+glab api user                                        # read "username" from the response
+glab mr update <iid> --reviewer <username>
+glab api "projects/:fullpath/merge_requests/<iid>"   # read "reviewers" back
+```
+
+- **The subcommand, not the REST field.** `glab api --method PUT … --field "reviewer_ids[]=<id>"` answers **HTTP 400**: that array form is not accepted here. `glab mr update --reviewer` answers `requested review from "@<username>"` and is the form that works.
+- `glab api` has no `--jq` flag, so read the field out of the JSON response rather than filtering it on the command line.
+- **Read it back, always.** The third call is not a formality. This field is in the same family as the `assignee_ids` that GitLab accepts and ignores, so a call that returns without error proves nothing. The reviewer is set when you have read the name back out of `reviewers`, and a reviewer you could not read back is reported as not set.
+- Reviewer and assignee are two different fields. Setting the first never sets the second, and the rule above stands: no assignee.
+
 Rules:
 
 - Title in English, conventional prefix (`feat:`, `fix:`, `refactor:`)
-- **No assignee at all.** Do not assign the MR to anyone. Do not set a reviewer either unless asked
+- **No assignee at all.** Do not assign the MR to anyone. The reviewer is a different field, set above, and that one is never skipped
 - No manual label, no estimate
 - **Always link the MR to its ticket**, without exception. Two things, both required:
   - the full ticket URL on the first line of the description, so the link is visible and clickable whatever GitLab does with keywords
@@ -488,6 +509,7 @@ A check is red or it is green. Nothing about where the failure comes from change
 This is the one place where reclassification is the failure mode rather than the fix, so the rule is mechanical.
 
 - **Run the command the project documents**, the one in its `README`, its `CLAUDE.md` or its CI configuration. That command's result is the result. Discovering a variant that passes is useful and gets reported, but it never replaces the documented command's outcome.
+- **The command you typed is not always the command that ran.** A shell alias, a wrapper or a hook can stand in front of a tool, rewrite its arguments, summarize its output and return an exit code of its own making. That breaks this rule from underneath: a gate whose exit code was synthesized by something other than the tool is not a measurement, green or red. Read the output for the signs, they are unmistakable - a summary or a decorated recap where the tool prints raw lines, truncated paths, a flag the tool documents rejected as unknown, a search that returns nothing on a pattern you can see in the file, a builtin behaving like an unrelated program. When you see one, re-run the gate through the project's own binary, `./node_modules/.bin/<tool>` or the package script that wraps it, and report that result. A wrapper masking a green is the same defect as one masking a red; only the direction of the lie changes.
 - **If a prefix, a flag or an exported variable was needed to get green, the prefix is itself a finding.** Report it as "the documented command is red, this variant is green, here is the difference", never as "the suite passes". A suite that only passes under an undocumented incantation is a defect of the project or of the harness, and it is reported as one.
 - **Name the cause down to the mechanism, or say you did not find it.** "Environmental", "local resolution problem", "pre-existing" are categories, not causes. A cause is the version, the module, the resolution path, the config key. An unproven cause written as a fact is worse than an honest "cause not found": it gets recorded, it gets trusted, and the next run stops looking.
 - **Never write a diagnosis into project memory, a report or an MR without the evidence that proves it.** A wrong diagnosis recorded as settled costs more than the red check it was meant to excuse.

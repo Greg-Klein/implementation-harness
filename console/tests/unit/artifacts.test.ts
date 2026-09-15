@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import path from "node:path";
-import { belongsToRun, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
+import { belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "../../server/domain";
 
 describe("artifact handling", () => {
   it("should resolve files located inside the run directory", () => {
@@ -38,6 +38,19 @@ describe("artifact handling", () => {
     expect(isPanelEvidence("qa-evidence-round1.json")).toBe(false);
     expect(isPanelEvidence("qa-report.md")).toBe(false);
     expect(isPanelEvidence("evidence.json")).toBe(false);
+  });
+
+  it("should archive the screenshots of a per-task or per-round evidence file too", () => {
+    expect(isEvidenceReport("dev-evidence.json")).toBe(true);
+    // One developer per task, one file per developer: waiting for the merged
+    // file would leave these screenshots out of the archive.
+    expect(isEvidenceReport("dev-evidence-T7.json")).toBe(true);
+    expect(isEvidenceReport("dev-evidence-rework1.json")).toBe(true);
+    expect(isEvidenceReport("qa-evidence-round1.json")).toBe(true);
+    expect(isEvidenceReport("design-evidence-round2.json")).toBe(true);
+    expect(isEvidenceReport("evidence.json")).toBe(false);
+    expect(isEvidenceReport("dev-evidence.md")).toBe(false);
+    expect(isEvidenceReport("dev-evidence-T7-extra.json")).toBe(false);
   });
 
   it("should map generated documents to workflow phases", () => {

@@ -26,14 +26,16 @@ You execute — you do NOT redesign.
 
 ## Output Files (MANDATORY)
 
+**Your caller gives you an artifact suffix**: the task id you are implementing, or the rework label when you are invoked to fix review findings. Both of your output files carry it. Ask for it rather than inventing one, and never fall back to the unsuffixed names: those two belong to the caller, which merges every agent's output into them, and an agent writing them directly erases work that is not its own.
+
 You MUST produce:
 
 1. Code changes directly in the repository
 2. A report written to:
 
-.claude/tasks/developer-report.md
+.claude/tasks/developer-report-<suffix>.md
 
-3. `.claude/tasks/dev-evidence.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Preuves" tab. Schema:
+3. `.claude/tasks/dev-evidence-<suffix>.json`, the same rows as the `## Preuves navigateur` table below, as data for the console's "Preuves" tab. Schema:
 
 ```json
 {
@@ -51,8 +53,8 @@ One item per row of the `## Preuves navigateur` table — write this file only w
 ## Output Rules
 
 - The report MUST be valid Markdown
-- Overwrite the file completely
-- Do NOT create additional report files beyond `dev-evidence.json`
+- Overwrite your own two files completely, and write no others
+- Never write, append to or delete `.claude/tasks/developer-report.md` or `.claude/tasks/dev-evidence.json`
 
 ---
 
@@ -135,7 +137,7 @@ Before finishing:
 
 ## Report Format (MANDATORY)
 
-Write to `.claude/tasks/developer-report.md`:
+Write to `.claude/tasks/developer-report-<suffix>.md`:
 
 ```md
 # Rapport développeur

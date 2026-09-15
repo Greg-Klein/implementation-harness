@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { Stats } from "node:fs";
-import { belongsToRun, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
+import { belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath } from "./domain.js";
 import { ctx, activity, publishState } from "./context.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
@@ -11,9 +11,6 @@ import { dataRoot } from "./config.js";
 let artifactWatcher: FSWatcher | null = null;
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
-
-/** The evidence files a reviewer or the developer writes for the console's "Preuves" tab, round archives included. */
-const EVIDENCE_FILE = /^(qa|design|dev)-evidence(-round\d+)?\.json$/;
 
 export async function readArtifact(artifactPath: string) {
   if (!ctx.state.id || !ctx.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
@@ -80,7 +77,7 @@ async function archiveArtifact(source: string, stats?: Stats) {
   // only thing saying the content moved. Taken from the file's own mtime, so a
   // watcher firing twice on one write does not read as a second change.
   if (isPanelEvidence(relative)) ctx.state.evidenceUpdatedAt = new Date(writtenAt).toISOString();
-  if (EVIDENCE_FILE.test(path.basename(relative))) await archiveEvidenceScreenshots(source, taskRoot);
+  if (isEvidenceReport(relative)) await archiveEvidenceScreenshots(source, taskRoot);
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
   if (completedPhase) ctx.state.phase = Math.max(ctx.state.phase, completedPhase + 1);

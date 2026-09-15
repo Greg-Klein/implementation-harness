@@ -67,6 +67,18 @@ export function isPanelEvidence(relativePath: string) {
   return PANEL_EVIDENCE.test(path.basename(relativePath));
 }
 
+/**
+ * Wider than PANEL_EVIDENCE on purpose: a screenshot is archived the moment any
+ * evidence file names it, and the developers write one per task while the
+ * reviewers keep one per round. Waiting for the merged file would make the
+ * archive depend on a merge that has already been skipped once.
+ */
+const EVIDENCE_REPORT = /^(?:qa|design|dev)-evidence(?:-[A-Za-z0-9]+)?\.json$/;
+
+export function isEvidenceReport(relativePath: string) {
+  return EVIDENCE_REPORT.test(path.basename(relativePath));
+}
+
 export function positiveDuration(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
