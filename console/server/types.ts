@@ -13,7 +13,7 @@ export type PendingQuestion = { id: string; questions: Question[] };
  * after the automatic replay, which means a conflict git cannot resolve on its own:
  * the promotion is not one click.
  */
-export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" };
+export type PendingSelfImprovementReview = { worktreeName: string; branch?: string; commits: number; mergesCleanly?: boolean; status: "analyzing" | "ready" | "orphaned" };
 export type ConversationMessage = { id: string; at: string; author: "claude" | "user"; text: string; pending?: boolean };
 export type RunState = {
   id: string | null; status: RunStatus; phase: number; cwd: string; issueUrl: string; instruction: string;

@@ -51,6 +51,18 @@ function AnalyzingCard({ review }: { review: PendingSelfImprovementReview }) {
   );
 }
 
+function OrphanedCard({ review, onClean }: { review: PendingSelfImprovementReview; onClean: () => void }) {
+  return (
+    <div className="rounded-3 border border-[var(--line)] bg-[var(--paper)] p-4">
+      <p className="mb-1 text-[11px] font-semibold text-[var(--muted)]">Auto-amélioration déjà intégrée</p>
+      <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName} · aucun commit à fusionner, déjà présent dans le harnais</p>
+      <button type="button" onClick={onClean} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium text-[var(--muted)] transition hover:text-red-700 active:translate-y-px">
+        <TrashIcon size={12} /> Nettoyer
+      </button>
+    </div>
+  );
+}
+
 function ReviewCard({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
   return (
     <div className="rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
@@ -87,6 +99,8 @@ export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { r
       <div className="mx-4 mt-4 space-y-3">
         {reviews.map((review) => review.status === "analyzing"
           ? <AnalyzingCard key={review.worktreeName} review={review} />
+          : review.status === "orphaned"
+          ? <OrphanedCard key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} />
           : <ReviewCard key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />)}
       </div>
       {diffWorktree && <DiffModal worktreeName={diffWorktree} onClose={() => setDiffWorktree(null)} />}

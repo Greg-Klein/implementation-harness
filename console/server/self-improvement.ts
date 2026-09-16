@@ -14,7 +14,9 @@ const auditedRuns = new Set<string>();
  * Every self-improvement worktree, whichever run spawned it and however long ago,
  * including one the background agent has just opened and not committed to yet: the
  * console shows it as "analyzing" rather than staying silent until the first commit
- * lands. Computed fresh on every call instead of watched: a timer that gives up after
+ * lands. A worktree with nothing ahead of the harness whose branch the harness
+ * already contains is shown as "orphaned" instead, since no agent is writing to
+ * it. Computed fresh on every call instead of watched: a timer that gives up after
  * a fixed delay can only ever miss a slow commit, and one that never re-checks a
  * worktree it already gave up on loses it for good.
  */
@@ -24,7 +26,13 @@ export async function listPendingImprovements(): Promise<PendingSelfImprovementR
   for (const worktree of worktrees) {
     const commits = await worktreeCommitCount(worktree).catch(() => 0);
     if (commits === 0) {
-      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: "analyzing" });
+      // A branch with nothing ahead of the harness is either an agent that
+      // has not committed yet, or one whose commits the harness already
+      // contains (merged by hand, or by an earlier promotion that left the
+      // worktree behind). The two look identical from the commit count
+      // alone; only branchIsMerged tells them apart.
+      const alreadyMerged = worktree.branch ? await branchIsMerged(pluginRoot, worktree.branch).catch(() => false) : false;
+      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: alreadyMerged ? "orphaned" : "analyzing" });
       continue;
     }
     const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;
