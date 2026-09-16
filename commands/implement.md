@@ -405,6 +405,14 @@ glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
   --field "body=@.claude/tasks/mr-review-comment.md"
 ```
 
+**A screenshot that backs a claim travels with the comment, not just in words.** `.claude/tasks/assets/` is only a path on this machine; nobody reading the merge request can open it, so a verification described in prose with no image reachable from there is unverifiable to that reader, whatever proof sat in the run's evidence. Before posting, upload every screenshot that backs a claim in the report (skip a debug capture nobody cites) to the project, one call per file:
+
+```bash
+glab api --method POST "projects/<id>/uploads" --field "file=@.claude/tasks/assets/<name>.png"
+```
+
+The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves.
+
 Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-harness:review`:
 
 ```md
@@ -436,6 +444,10 @@ What to change and why.
 - Vérification navigateur : routes et viewports, ou pourquoi ça n'a pas pu tourner
 - Revue design : comparée à Figma / ignorée et pourquoi
 
+### Captures
+
+![légende décrivant ce que la capture prouve](lien markdown renvoyé par l'upload)
+
 ### Verdict
 
 `à merger` | `changements mineurs` | `à retravailler` - one or two sentences.
@@ -449,6 +461,7 @@ Rules for this comment:
 - Only what survived the loop, plus what was fixed. No speculation, no hypothetical future problems
 - Honest about what could not be verified. Never claim a browser or design check that did not happen
 - One single comment, not one per finding
+- Every screenshot cited as evidence is uploaded and embedded, never left as a local path GitLab cannot resolve; omit the `### Captures` section entirely when no browser evidence exists to back it
 - If the API call fails, fall back to `glab mr note <mr_iid> --message "$(cat .claude/tasks/mr-review-comment.md)"` and report the fallback
 
 ---
