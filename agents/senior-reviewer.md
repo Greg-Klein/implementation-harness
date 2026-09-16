@@ -185,6 +185,7 @@ PASS | PASS_WITH_CHANGES | FAIL
 - DO NOT modify .claude/tasks/developer-report.md
 - DO NOT change functional scope unless justified
 - DO NOT introduce unnecessary complexity
+- **DO NOT trust a wrapped command's output without checking it.** A local shell hook or alias can stand in front of `git diff`, `cat`, `tsc`, a lint runner and rewrite what they return. Two archived reviews hit a `git diff` truncated by such a wrapper and only caught it because the file count looked wrong; they re-ran it unwrapped before writing the report. Read file contents with the `Read` tool, and rerun any gate whose result looks inconsistent with the diff you reviewed through the project's own binary (`./node_modules/.bin/<tool>` or the package script) before reporting it.
 
 ## Allowed Actions
 
