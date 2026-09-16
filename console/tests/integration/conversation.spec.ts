@@ -95,3 +95,37 @@ test("should clear the launch form fields when starting a new run", async ({ pag
   await expect(page.getByLabel("Répertoire du projet")).toHaveValue("");
   await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
 });
+
+test("should size the instruction field when the run starts on another tab", async ({ page }) => {
+  await runDemoToCompletion(page);
+
+  // The tab the user leaves the run on is the tab the next run starts on, and
+  // the conversation is mounted hidden for as long as it lasts.
+  await page.getByRole("tab", { name: "Terminal" }).click();
+  await page.getByRole("button", { name: "Nouveau run" }).click();
+  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
+
+  // Through the socket, not a navigation: reloading the page would put the
+  // user back on the Conversation tab and take the defect with it.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    const timeout = window.setTimeout(() => { socket.close(); reject(new Error("demo.start timeout")); }, 3_000);
+    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "demo.start" })));
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "state" && message.state.status !== "idle") {
+        window.clearTimeout(timeout);
+        socket.close();
+        resolve();
+      }
+    });
+  }));
+
+  await page.getByRole("tab", { name: "Conversation" }).click();
+  const composer = page.getByLabel("Instruction pour Claude");
+  await expect(composer).toBeVisible();
+  // The placeholder fits on its line: a field measured while hidden is written
+  // down to its own padding and scrolls over a single empty line.
+  expect(await composer.evaluate((field) => field.scrollHeight > field.clientHeight)).toBe(false);
+});

@@ -26,7 +26,7 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, writing, action, stalled, canSend, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; action?: string; stalled: boolean; canSend: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, writing, action, stalled, canSend, visible, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; action?: string; stalled: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
@@ -42,12 +42,17 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
 
   useEffect(() => {
     const composer = composerRef.current;
-    if (!composer) return;
+    // The panel stays mounted under `display: none` for as long as another tab
+    // is selected, and every measurement taken there reads zero: the field
+    // would be written down to the height of its own padding, and only a
+    // keystroke would ever undo it. Measuring again when the tab comes back is
+    // the other half of the same rule, since the draft has not changed.
+    if (!composer || !visible) return;
     composer.style.height = "auto";
     // The field is border-box, so its borders have to be added back or the
     // textarea ends up two pixels short and shows a scrollbar when empty.
     composer.style.height = `${composer.scrollHeight + composer.offsetHeight - composer.clientHeight}px`;
-  }, [draft]);
+  }, [draft, visible]);
 
   const send = () => {
     if (!draft.trim() || !canSend) return;
