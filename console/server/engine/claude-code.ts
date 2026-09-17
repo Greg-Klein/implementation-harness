@@ -149,7 +149,7 @@ function start({ cwd, runId, command, hookUrl, onData, onExit }: StartOptions): 
   // --remote-control takes an optional name, so leaving it empty would let the
   // parser swallow the prompt that follows as that name.
   const remote = remoteControl ? ["--remote-control", sessionName] : [];
-  const terminal = pty.spawn(executable, ["--plugin-dir", pluginRoot, "--name", sessionName, ...remote, command], {
+  const terminal = pty.spawn(executable, ["--plugin-dir", pluginRoot, "--model", "opus", "--name", sessionName, ...remote, command], {
     name: "xterm-256color", cols: 120, rows: 34, cwd,
     env: { ...sessionEnvironment(), TERM: "xterm-256color", COLORTERM: "truecolor", IMPL_RUN_ID: runId, IMPL_HARNESS_HOOK_URL: hookUrl },
   });
