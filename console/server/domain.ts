@@ -128,6 +128,20 @@ export function improvementWorktreeInFlight(worktreePaths: string[]) {
   return worktreePaths.find(isImprovementWorktree);
 }
 
+/**
+ * What the console says about an improvement worktree holding no commit ahead of
+ * the harness: an agent still writing, or work the harness already has. A branch
+ * that never received a commit is an ancestor of the harness exactly like one
+ * already merged, so `merged` on its own cannot separate the two, and it
+ * labelled a worktree being written to as already integrated, offering to clean
+ * it up as the only way out. The disk separates them, an agent at work being the
+ * one of the two holding something uncommitted. Same pair the promotion path
+ * takes before it destroys anything.
+ */
+export function commitlessImprovementStatus(worktree: { merged: boolean; clean: boolean }) {
+  return worktree.merged && worktree.clean ? ("orphaned" as const) : ("analyzing" as const);
+}
+
 // The console is itself a Next server, and Next writes its bundler choice and
 // NODE_ENV into the environment. Handing those down to an agent that runs a
 // build makes it abort on conflicting bundler flags, whatever the code checked.

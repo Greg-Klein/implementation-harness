@@ -3,7 +3,7 @@ import path from "node:path";
 import { ctx, activity, now, publishState } from "./context.js";
 import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
 import { demoState } from "./demo.js";
-import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
 import type { PendingSelfImprovementReview, RunState } from "./types.js";
@@ -14,9 +14,10 @@ const auditedRuns = new Set<string>();
  * Every self-improvement worktree, whichever run spawned it and however long ago,
  * including one the background agent has just opened and not committed to yet: the
  * console shows it as "analyzing" rather than staying silent until the first commit
- * lands. A worktree with nothing ahead of the harness whose branch the harness
- * already contains is shown as "orphaned" instead, since no agent is writing to
- * it. Computed fresh on every call instead of watched: a timer that gives up after
+ * lands. A worktree with nothing ahead of the harness, whose branch the harness
+ * already contains and with nothing uncommitted under it, is shown as "orphaned"
+ * instead: nobody is writing to it and there is nothing left to take from it.
+ * Computed fresh on every call instead of watched: a timer that gives up after
  * a fixed delay can only ever miss a slow commit, and one that never re-checks a
  * worktree it already gave up on loses it for good.
  */
@@ -29,10 +30,11 @@ export async function listPendingImprovements(): Promise<PendingSelfImprovementR
       // A branch with nothing ahead of the harness is either an agent that
       // has not committed yet, or one whose commits the harness already
       // contains (merged by hand, or by an earlier promotion that left the
-      // worktree behind). The two look identical from the commit count
-      // alone; only branchIsMerged tells them apart.
-      const alreadyMerged = worktree.branch ? await branchIsMerged(pluginRoot, worktree.branch).catch(() => false) : false;
-      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: alreadyMerged ? "orphaned" : "analyzing" });
+      // worktree behind). The commit count cannot tell them apart, and neither
+      // can branchIsMerged on its own: see commitlessImprovementStatus.
+      const merged = worktree.branch ? await branchIsMerged(pluginRoot, worktree.branch).catch(() => false) : false;
+      const clean = await worktreeIsClean(worktree).catch(() => false);
+      reviews.push({ worktreeName: path.basename(worktree.path), branch: worktree.branch, commits: 0, status: commitlessImprovementStatus({ merged, clean }) });
       continue;
     }
     const mergesCleanly = worktree.branch ? await branchMergesCleanly(pluginRoot, worktree.branch).catch(() => true) : true;

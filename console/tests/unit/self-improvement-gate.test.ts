@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
+import { commitlessImprovementStatus, hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, withoutBundlerVariables } from "../../server/domain";
 
 describe("autonomous audit evidence", () => {
   it("should audit a run that delegated an agent", () => {
@@ -71,5 +71,25 @@ describe("environment handed to the improvement agent", () => {
   it("should leave the harness configuration alone", () => {
     const cleaned = withoutBundlerVariables({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
     expect(cleaned).toEqual({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true", HOME: "/Users/x" });
+  });
+});
+
+// The contradiction this guards: on 18 September the console showed
+// self-improvement-32506e8f as "déjà intégrée" while an agent was still writing
+// to it, and the only button it offered, Nettoyer, refused to run because the
+// worktree held uncommitted work.
+describe("reading a worktree that holds no commit ahead of the harness", () => {
+  it("should call an agent still writing an analysis, not an integrated one", () => {
+    expect(commitlessImprovementStatus({ merged: true, clean: false })).toBe("analyzing");
+  });
+
+  it("should call a worktree the harness already contains, with nothing left on disk, orphaned", () => {
+    expect(commitlessImprovementStatus({ merged: true, clean: true })).toBe("orphaned");
+  });
+
+  // A branch the harness does not contain yet has something to give, whatever the disk says.
+  it("should wait on a branch the harness does not contain", () => {
+    expect(commitlessImprovementStatus({ merged: false, clean: true })).toBe("analyzing");
+    expect(commitlessImprovementStatus({ merged: false, clean: false })).toBe("analyzing");
   });
 });
