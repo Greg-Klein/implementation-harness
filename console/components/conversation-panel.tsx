@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
+import { ArrowDownIcon, ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { messageBlocks } from "@/lib/conversation";
 import type { ConversationMessage } from "@/lib/types";
@@ -34,6 +34,9 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const pinnedRef = useRef(true);
+  // The ref is read inside an effect that must not re-run on it; the state is
+  // what the jump button renders from.
+  const [pinned, setPinned] = useState(true);
 
   useEffect(() => {
     const list = listRef.current;
@@ -54,50 +57,72 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
     composer.style.height = `${composer.scrollHeight + composer.offsetHeight - composer.clientHeight}px`;
   }, [draft, visible]);
 
+  const pin = () => { pinnedRef.current = true; setPinned(true); };
+
+  const jumpToBottom = () => {
+    const list = listRef.current;
+    if (!list) return;
+    pin();
+    list.scrollTop = list.scrollHeight;
+  };
+
   const send = () => {
     if (!draft.trim() || !canSend) return;
-    pinnedRef.current = true;
+    pin();
     onSend(draft.trim());
     setDraft("");
   };
 
   return (
     <>
-      <div
-        ref={listRef}
-        role="log"
-        aria-label="Conversation"
-        onScroll={() => { const list = listRef.current; if (list) pinnedRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; }}
-        className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 md:px-7"
-      >
-        {messages.length === 0 ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-          <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
-          {stalled ? (
-            <>
-              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Le run progresse mais aucun message n’a pu être lu depuis le transcript. La session peut attendre une confirmation invisible ici, comme la confiance du dossier.</p>
-              <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Vérifier l’onglet Terminal</button>
-            </>
-          ) : (
-            <>
-              <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Les échanges avec Claude apparaissent ici. Les appels d’outils et les agents restent dans l’onglet Terminal.</p>
-              {busy && <WritingHint action={action} />}
-            </>
-          )}
-        </div> : messages.map((message, index) => (
-          <article key={message.id} className={`reveal flex flex-col ${message.author === "user" ? "items-end" : "items-start"}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
-            <div className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
-              {message.author === "claude" && <span className="size-1.5 rounded-full bg-[var(--accent)]" />}
-              <span>{message.author === "claude" ? "Claude" : "Toi"}</span>
-              <span aria-hidden="true">·</span>
-              <span>{new Date(message.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
-              {message.pending && <span title="Claude prendra cette instruction à la fin de son tour" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">en attente</span>}
-            </div>
-            <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-white shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
-              <MessageBody text={message.text} />
-            </div>
-          </article>
-        ))}
-        {messages.length > 0 && busy && <WritingHint action={action} />}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={listRef}
+          role="log"
+          aria-label="Conversation"
+          onScroll={() => { const list = listRef.current; if (!list) return; pinnedRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; setPinned(pinnedRef.current); }}
+          className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 md:px-7"
+        >
+          {messages.length === 0 ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
+            {stalled ? (
+              <>
+                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Le run progresse mais aucun message n’a pu être lu depuis le transcript. La session peut attendre une confirmation invisible ici, comme la confiance du dossier.</p>
+                <button type="button" onClick={onCheckTerminal} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px">Vérifier l’onglet Terminal</button>
+              </>
+            ) : (
+              <>
+                <p className="max-w-70 text-xs leading-5 text-[var(--muted)]">Les échanges avec Claude apparaissent ici. Les appels d’outils et les agents restent dans l’onglet Terminal.</p>
+                {busy && <WritingHint action={action} />}
+              </>
+            )}
+          </div> : messages.map((message, index) => (
+            <article key={message.id} className={`reveal flex flex-col ${message.author === "user" ? "items-end" : "items-start"}`} style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}>
+              <div className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[9px] uppercase tracking-[.08em] text-[var(--muted)]">
+                {message.author === "claude" && <span className="size-1.5 rounded-full bg-[var(--accent)]" />}
+                <span>{message.author === "claude" ? "Claude" : "Toi"}</span>
+                <span aria-hidden="true">·</span>
+                <span>{new Date(message.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span>
+                {message.pending && <span title="Claude prendra cette instruction à la fin de son tour" className="rounded-full bg-amber-100 px-1.5 py-0.5 text-amber-800">en attente</span>}
+              </div>
+              <div className={`max-w-[min(680px,92%)] rounded-3 px-4 py-3 ${message.author === "user" ? "bg-[var(--accent-soft)] text-[var(--ink)]" : "border border-[var(--line)] bg-white shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]"}`}>
+                <MessageBody text={message.text} />
+              </div>
+            </article>
+          ))}
+          {messages.length > 0 && busy && <WritingHint action={action} />}
+        </div>
+        {!pinned && (
+          <button
+            type="button"
+            onClick={jumpToBottom}
+            title="Aller au dernier message"
+            aria-label="Aller au dernier message"
+            className="reveal absolute bottom-4 right-5 grid size-9 place-items-center rounded-full border border-[var(--line)] bg-white text-[var(--ink)] shadow-[0_10px_24px_-14px_rgba(30,42,35,.55)] transition hover:bg-[#f7f8f4] active:translate-y-px md:right-7"
+          >
+            <ArrowDownIcon size={15} />
+          </button>
+        )}
       </div>
       <form
         onSubmit={(event) => { event.preventDefault(); send(); }}

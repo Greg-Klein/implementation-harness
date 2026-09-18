@@ -129,3 +129,19 @@ test("should size the instruction field when the run starts on another tab", asy
   // down to its own padding and scrolls over a single empty line.
   expect(await composer.evaluate((field) => field.scrollHeight > field.clientHeight)).toBe(false);
 });
+
+test("should offer a jump back to the last message after scrolling up", async ({ page }) => {
+  await runDemoToCompletion(page);
+
+  const conversation = page.getByRole("log", { name: "Conversation" });
+  const jump = page.getByRole("button", { name: "Aller au dernier message" });
+  await expect(jump).toBeHidden();
+  expect(await conversation.evaluate((list) => list.scrollHeight > list.clientHeight + 80)).toBe(true);
+
+  await conversation.evaluate((list) => { list.scrollTop = 0; });
+  await expect(jump).toBeVisible();
+
+  await jump.click();
+  await expect(jump).toBeHidden();
+  expect(await conversation.evaluate((list) => list.scrollHeight - list.scrollTop - list.clientHeight)).toBeLessThan(80);
+});
