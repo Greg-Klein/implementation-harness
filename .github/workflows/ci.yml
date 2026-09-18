@@ -46,5 +46,6 @@ jobs:
       - run: npx electron-builder --config electron-builder.cjs --mac --dir --publish never
       - name: Test the packaged application
         run: |
-          desktop_executable="$(rg --files release | rg '/Contents/MacOS/Implementation Harness$')"
-          IMPL_DESKTOP_EXECUTABLE="$PWD/$desktop_executable" npm run test:desktop
+          desktop_executable="$(find "$PWD/release" -type f -path '*/Contents/MacOS/Implementation Harness' -print -quit)"
+          test -x "$desktop_executable"
+          IMPL_DESKTOP_EXECUTABLE="$desktop_executable" npm run test:desktop
