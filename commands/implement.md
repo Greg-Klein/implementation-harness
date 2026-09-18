@@ -55,7 +55,7 @@ How to read each kind of resource:
 | Resource | How |
 |---|---|
 | Figma | See "Reading a Figma design" below |
-| GitLab uploads | `glab api "projects/<url-encoded-project-path>/uploads/<secret>/<filename>" > .claude/tasks/assets/<name>` then `Read` the file to actually look at it. The secret and the filename are the two segments of the upload URL itself (`/uploads/<secret>/<filename>`), and the project path is URL encoded (`group%2Fproject`). Never rebuild the request by hand with `curl` and a token read from `glab`: `glab auth token` is not a subcommand, it prints its own help page on standard output and exits `0`, so the header carries help text instead of a credential and the failure looks like a network error. Name each file after what it shows and confirm it by reading the file, never by trusting the order of the downloads |
+| GitLab uploads | `glab api "projects/<url-encoded-project-path>/uploads/<secret>/<filename>" > .claude/tasks/assets/<name>` then `Read` the file to actually look at it. The secret and the filename are the two segments of the upload URL itself (`/uploads/<secret>/<filename>`), and the project path is URL encoded (`group%2Fproject`). Downloading needs no `curl`: `glab api` signs the request itself. The one call in this workflow that does need the token is the screenshot upload of step 9, and the token is read with `glab config get token --host <host>`. Never with `glab auth token`: it is not a subcommand, it prints its own help page on standard output and exits `0`, so the header carries help text instead of a credential and the failure looks like a network error. Name each file after what it shows and confirm it by reading the file, never by trusting the order of the downloads |
 | Epic / linked issues | `glab issue view`, `glab api groups/<group>/epics/<iid>` |
 | Anything with no API and no MCP (Notion, Docs, random web page) | **Playwright**: `browser_navigate` + `browser_snapshot` + `browser_take_screenshot`. This is the default fallback, never WebFetch |
 
@@ -422,10 +422,15 @@ glab api --method POST projects/<id>/merge_requests/<mr_iid>/notes \
 **A screenshot that backs a claim travels with the comment, not just in words.** `.claude/tasks/assets/` is only a path on this machine; nobody reading the merge request can open it, so a verification described in prose with no image reachable from there is unverifiable to that reader, whatever proof sat in the run's evidence. Before posting, upload every screenshot that backs a claim in the report (skip a debug capture nobody cites) to the project, one call per file:
 
 ```bash
-glab api --method POST "projects/<id>/uploads" --field "file=@.claude/tasks/assets/<name>.png"
+curl -sS --request POST \
+  --header "PRIVATE-TOKEN: $(glab config get token --host <host>)" \
+  --form "file=@.claude/tasks/assets/<name>.png" \
+  "https://<host>/api/v4/projects/<url-encoded-project-path>/uploads"
 ```
 
-The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves.
+`<host>` is the GitLab host of the ticket URL, `gitlab.com` in the normal case. **This is the one call in the workflow that `glab api` cannot make.** `POST /uploads` only accepts `multipart/form-data`, while `--field` and `--raw-field` only ever build a JSON body: `glab api --method POST .../uploads --field "file=@<path>"` sends the bytes of the PNG as a JSON string and GitLab answers `400 Bad Request`, on every project and every file. Reaching for `glab mr note` instead does not help either, because the image has to exist on the project before any comment can link to it.
+
+The response's `markdown` field is already a ready-to-embed image link. Paste each one under `### Captures`, with a one-line caption naming what it proves. An upload that fails leaves its claim without an image: say so in the `### Validation` section rather than dropping the caption silently or pointing at a local path.
 
 Use [conventional comments](https://conventionalcomments.org/) for each finding, exactly like `/implementation-harness:review`:
 
