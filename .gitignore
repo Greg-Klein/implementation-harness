@@ -7,3 +7,4 @@ console/data/
 console/*.tsbuildinfo
 *.log
 tasks/
+.playwright-mcp/
