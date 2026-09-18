@@ -192,6 +192,8 @@ If a `developer` comes back with a specification question instead of a guess, it
 
 After each task, commit: `<type>(<scope>): <description>`, conventional commits, one commit per task. Never commit a broken state.
 
+**Nothing this run publishes carries a trace of the session that produced it.** No link to the engine's session (`claude.ai/code/session_…`), and no `Co-Authored-By` trailer, in a commit message, a commit trailer, a merge request description or a comment. That URL points at a transcript nobody on the merge request can open, and a commit message is permanent: taking it back means rewriting pushed history on a branch a merge request already tracks. The engine appends both on its own, so this rule overrides it, and it covers the `fix(...)` commits of step 7 as much as the ones here. Read the message back with `git log -1 --format=%B` right after committing: a trailer added behind you shows up there and nowhere else, certainly not in what you typed.
+
 ### Merge the developers' output, at the end of every batch
 
 Each agent wrote under its own suffix. Two files carry the run, and both are yours to assemble:
@@ -391,6 +393,8 @@ What does **not** belong in the description, because it is noise for the reviewe
 - the reasoning history: what was asked, what was deduced, what was arbitrated
 
 All of that either belongs in the review comment of step 9, or nowhere. The description answers "what changed and why", nothing else.
+
+One more thing is banned here, for a different reason than noise: **the link to the engine's session**, and the `Co-Authored-By` trailer. That is the step 5 rule, and it holds for this description and for the step 9 comment exactly as it holds for a commit message.
 
 ---
 
