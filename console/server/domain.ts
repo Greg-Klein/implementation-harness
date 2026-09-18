@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { AgentState, RunState, RunStatus } from "./types.js";
+import type { AgentState, QueuedRun, QueuedRunView, RunState, RunStatus, RunSummary } from "./types.js";
 
 export type QuestionOption = { label: string; description?: string };
 export type Question = { question: string; header: string; options: QuestionOption[]; multiSelect: boolean };
@@ -340,4 +340,71 @@ export function phaseForArtifact(relativePath: string) {
   if (name === "mr-description.md") return 8;
   if (name === "mr-review-comment.md") return 9;
   return 0;
+}
+
+export function emptyState(): RunState {
+  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false };
+}
+
+/**
+ * Whether a run still holds the checkout it was started on. The workflow reaching
+ * its last phase does not release it: the session stays open at its prompt, the
+ * user keeps talking to it and it keeps writing to the same working tree. Only a
+ * session that is gone frees the repository, which is what the queue waits on.
+ */
+export function runHoldsRepository(state: Pick<RunState, "status" | "sessionActive">) {
+  return runInProgress(state.status) || state.sessionActive;
+}
+
+/**
+ * The run as the side list sees it: everything a row, a dot or a notification
+ * needs, and nothing that grows with the length of the run. See RunSummary.
+ */
+export function summarizeRun(state: RunState): RunSummary {
+  const lastMessage = state.messages.at(-1);
+  return {
+    id: state.id ?? "",
+    status: state.status,
+    phase: state.phase,
+    cwd: state.cwd,
+    issueUrl: state.issueUrl,
+    startedAt: state.startedAt,
+    endedAt: state.endedAt,
+    branch: state.branch,
+    mergeRequestUrl: state.mergeRequestUrl,
+    error: state.error,
+    action: state.action,
+    sessionActive: state.sessionActive,
+    pendingQuestionId: state.pendingQuestion?.id,
+    pendingQuestionCount: state.pendingQuestion?.questions.length ?? 0,
+    runningAgents: state.agents.filter((agent) => agent.status === "running").length,
+    lastMessageId: lastMessage?.id,
+    lastMessageAuthor: lastMessage?.author,
+    evidenceUpdatedAt: state.evidenceUpdatedAt,
+    holdsRepository: runHoldsRepository(state),
+  };
+}
+
+/**
+ * How many runs may hold a session at once. A run is a full Claude Code session
+ * with its own quota and its own CPU, so the ceiling exists to stop the console
+ * from opening more of them than the machine, or the user, can follow.
+ */
+export function concurrencyLimit(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : fallback;
+}
+
+/**
+ * Why a queued launch is still waiting, and what it is waiting for. A checkout
+ * held by a run always wins over the slot count: naming the free slot as the
+ * blocker when the real one is a run on the same repository sends the user to
+ * stop the wrong session. The queue is drained the moment either frees up, so an
+ * entry still in it is always blocked by one of the two.
+ */
+export function describeQueue(queue: QueuedRun[], holders: Map<string, string>): QueuedRunView[] {
+  return queue.map((entry) => {
+    const blockedBy = holders.get(entry.cwd);
+    return blockedBy ? { ...entry, reason: "repository" as const, blockedBy } : { ...entry, reason: "slot" as const };
+  });
 }

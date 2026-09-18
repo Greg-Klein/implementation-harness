@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun, runDemoToCompletion } from "./helpers";
+import { currentRunState, resetRun, runDemoToCompletion } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -24,8 +24,8 @@ test("should offer a simulated feedback field once the demonstration ends", asyn
   await expect(page.getByText("Retour simulé. Rien n’a été enregistré.")).toBeVisible();
   await expect(field).toHaveValue("");
 
-  const { state } = await (await request.get("/api/state")).json();
+  const state = await currentRunState(request) as { status: string; activities: { title: string }[] };
   expect(state.status).toBe("completed");
-  expect(state.activities.map((item: { title: string }) => item.title))
+  expect(state.activities.map((item) => item.title))
     .not.toContain("Retour ajouté à la boucle d’auto-amélioration");
 });

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { pendingAnswerLabel } from "@/lib/run-state";
 import type { ArtifactResponse } from "@/lib/types";
 
-export function DocumentViewer({ documents, workflowActive, pendingQuestionCount, onClose }: { documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void }) {
+export function DocumentViewer({ runId, documents, workflowActive, pendingQuestionCount, onClose }: { runId: string; documents: string[]; workflowActive: boolean; pendingQuestionCount: number; onClose: () => void }) {
   const [selected, setSelected] = useState(() => documents.at(-1) ?? "");
   const [document, setDocument] = useState<ArtifactResponse>();
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,7 @@ export function DocumentViewer({ documents, workflowActive, pendingQuestionCount
     const controller = new AbortController();
     setLoading(true);
     setDocument(undefined);
-    fetch(`/api/artifacts?path=${encodeURIComponent(selected)}`, { signal: controller.signal })
+    fetch(`/api/artifacts?runId=${encodeURIComponent(runId)}&path=${encodeURIComponent(selected)}`, { signal: controller.signal })
       .then(async (response) => {
         const result = await response.json() as ArtifactResponse;
         if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
@@ -23,7 +23,7 @@ export function DocumentViewer({ documents, workflowActive, pendingQuestionCount
       .catch((error) => { if (!controller.signal.aborted) setDocument({ path: selected, content: error instanceof Error ? error.message : "Impossible de charger ce document." }); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [selected]);
+  }, [runId, selected]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };

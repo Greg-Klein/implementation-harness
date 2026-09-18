@@ -1,0 +1,134 @@
+"use client";
+
+import { ChatCircleDotsIcon, ShieldCheckIcon, SignOutIcon, StopIcon, TerminalWindowIcon, TrashIcon } from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { holdsIdleSession, isClosable, isTranscriptStalled, runInProgress, sessionAlive } from "@/lib/run-state";
+import type { RunState } from "@/lib/types";
+import { ActivityPanel } from "./activity-panel";
+import { ConversationPanel } from "./conversation-panel";
+import { EvidencePanel } from "./evidence-panel";
+import { PhaseRail } from "./phase-rail";
+import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
+
+type Tab = "conversation" | "terminal" | "preuves";
+
+export type RunViewActions = {
+  terminalInput: (data: string) => void;
+  terminalResize: (cols: number, rows: number) => void;
+  sendInstruction: (text: string) => void;
+  answer: (answers: Record<string, string>) => void;
+  feedback: (body: string) => void;
+  stop: () => void;
+  close: () => void;
+};
+
+export function RunView({ run, connected, writing, terminalRef, actions }: {
+  run: RunState;
+  connected: boolean;
+  writing: boolean;
+  terminalRef: RefObject<TerminalHandle | null>;
+  actions: RunViewActions;
+}) {
+  const [tab, setTab] = useState<Tab>("conversation");
+  const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
+  const tabButtonRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  // What the user was last shown in each tab. A review round overwrites the same
+  // evidence files, so the write stamp is the only thing that says the Preuves
+  // tab holds something new; for the dialogue it is the last message.
+  const [seenEvidenceAt, setSeenEvidenceAt] = useState<string>();
+  const [seenMessageId, setSeenMessageId] = useState<string>();
+  const lastMessage = run.messages.at(-1);
+  /**
+   * The dot on a tab the user is not reading, and what it is about. Read in
+   * render, not in an effect: it widens the tab button, so it has to be gone in
+   * the very commit that selects the tab, before the measurement below runs on
+   * a button that is about to get narrower. A message the user typed themselves
+   * is not news to them.
+   */
+  const unread: Partial<Record<Tab, string>> = {
+    conversation: tab !== "conversation" && lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
+    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
+  };
+
+  // Switching run switches subject: what had been read in the previous one says
+  // nothing about this one, and the tab returns to the dialogue.
+  useEffect(() => {
+    setTab("conversation");
+    setSeenEvidenceAt(undefined);
+    setSeenMessageId(undefined);
+  }, [run.id]);
+
+  useEffect(() => {
+    if (tab === "preuves") setSeenEvidenceAt(run.evidenceUpdatedAt);
+  }, [tab, run.evidenceUpdatedAt]);
+
+  useEffect(() => {
+    if (tab === "conversation") setSeenMessageId(lastMessage?.id);
+  }, [tab, lastMessage?.id]);
+
+  // Measured from the DOM rather than hardcoded, so the pill lines up whatever
+  // the label width ends up being (font load, locale, a tab added later).
+  useLayoutEffect(() => {
+    const button = tabButtonRefs.current[tab];
+    if (!tabList || !button) return;
+    const measure = () => {
+      const listRect = tabList.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      setTabIndicator({ left: buttonRect.left - listRect.left, width: buttonRect.width });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    document.fonts?.addEventListener("loadingdone", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      document.fonts?.removeEventListener("loadingdone", measure);
+    };
+  }, [tab, tabList, unread.conversation, unread.preuves]);
+
+  const active = runInProgress(run.status);
+  const idleSession = holdsIdleSession(run);
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[196px_minmax(0,1fr)_300px]">
+      <PhaseRail run={run} />
+      <section className="flex min-h-135 flex-col border-b border-[var(--line)] bg-[var(--surface)] lg:min-h-0 lg:border-b-0 lg:border-r xl:border-l">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-4 py-2 sm:h-12 sm:flex-nowrap sm:py-0">
+          <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
+            {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
+            {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
+              const fresh = unread[value];
+              return (
+                <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+                  {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
+                  {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} depuis ta dernière visite de cet onglet`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              A workflow that reached its end still holds its checkout while the
+              session sits at its prompt, and the queue waits on exactly that.
+              Closing the session is therefore an action of its own, named for
+              what it frees rather than for what it stops.
+            */}
+            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient ce dépôt. La fermer libère une place pour la file." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
+            {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
+            {isClosable(run) && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-white hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
+          </div>
+        </div>
+        <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+          <ConversationPanel messages={run.messages} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onCheckTerminal={() => setTab("terminal")} />
+        </div>
+        <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
+          <TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} />
+        </div>
+        <div className={tab === "preuves" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+          <EvidencePanel run={run} />
+        </div>
+      </section>
+      <ActivityPanel run={run} onFeedback={actions.feedback} onAnswer={actions.answer} />
+    </div>
+  );
+}

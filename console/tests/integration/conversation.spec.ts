@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun, runDemoToCompletion } from "./helpers";
+import { expectDemoCompleted, resetRun, runDemoToCompletion, startDemoRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -42,7 +42,7 @@ test("should say a message is on its way while the session is still talking", as
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
   await expect(conversation.getByText("Délégation à developer", { exact: true })).toBeVisible();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
 
   // The run is over: nothing is being written any more, and no action is claimed.
   await expect(conversation.getByText("Claude réfléchit…")).toBeHidden();
@@ -68,26 +68,13 @@ test("should clear the launch form fields when starting a new run", async ({ pag
 
   // Trigger the demo through the socket directly: a fresh navigation to
   // /?demo=1 would reload the page and lose the values just typed above.
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    const timeout = window.setTimeout(() => { socket.close(); reject(new Error("demo.start timeout")); }, 3_000);
-    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "demo.start" })));
-    socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "state" && message.state.status !== "idle") {
-        window.clearTimeout(timeout);
-        socket.close();
-        resolve();
-      }
-    });
-  }));
+  await startDemoRun(page);
 
   await expect(page.getByText("Décision requise")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
 
   await page.getByRole("button", { name: "Nouveau run" }).click();
 
@@ -96,33 +83,18 @@ test("should clear the launch form fields when starting a new run", async ({ pag
   await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
 });
 
-test("should size the instruction field when the run starts on another tab", async ({ page }) => {
-  await runDemoToCompletion(page);
-
-  // The tab the user leaves the run on is the tab the next run starts on, and
-  // the conversation is mounted hidden for as long as it lasts.
+test("should size the instruction field when another run is opened from another tab", async ({ page }) => {
+  await page.goto("/?demo=1");
+  // The tab the user leaves a run on is the tab the next one is opened on, and
+  // the conversation is mounted hidden for as long as that lasts.
   await page.getByRole("tab", { name: "Terminal" }).click();
-  await page.getByRole("button", { name: "Nouveau run" }).click();
-  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
+  await page.getByRole("button", { name: "Arrêter" }).click();
 
-  // Through the socket, not a navigation: reloading the page would put the
-  // user back on the Conversation tab and take the defect with it.
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    const timeout = window.setTimeout(() => { socket.close(); reject(new Error("demo.start timeout")); }, 3_000);
-    socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "demo.start" })));
-    socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "state" && message.state.status !== "idle") {
-        window.clearTimeout(timeout);
-        socket.close();
-        resolve();
-      }
-    });
-  }));
+  // A second simulated run, which the page does not open on its own: with two
+  // runs in the list, picking one for the user would be guessing.
+  await startDemoRun(page);
+  await page.getByRole("button", { name: /^Ouvrir le run/ }).first().click();
 
-  await page.getByRole("tab", { name: "Conversation" }).click();
   const composer = page.getByLabel("Instruction pour Claude");
   await expect(composer).toBeVisible();
   // The placeholder fits on its line: a field measured while hidden is written

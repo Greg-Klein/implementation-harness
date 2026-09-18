@@ -1,76 +1,43 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { WebSocket } from "ws";
-import { dataRoot } from "./config.js";
 import { closeAbandonedAgents, runInProgress } from "./domain.js";
-import type { Activity, ConversationMessage, RunState } from "./types.js";
-
-export function emptyState(): RunState {
-  return { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false };
-}
-
-export const ctx = {
-  state: emptyState(),
-  terminalBuffer: "",
-  sockets: new Set<WebSocket>(),
-  pendingQuestionInput: null as Record<string, unknown> | null,
-  /** Resolved with whatever the active engine expects back, which only that engine knows. */
-  resolvePendingQuestion: null as ((output?: unknown) => void) | null,
-};
+import type { Activity, RunState, ServerMessage } from "./types.js";
 
 /**
- * Every event pushes the whole state to the clients, so the feed they receive
- * stays a window. The archive is the only history a later audit can read, and
- * writing that same window to it destroyed the rest: a run of an hour kept
- * eighty events and lost its first thirty-four minutes.
+ * Every open page, with the run it has opened. The list of runs goes to all of
+ * them; the state of a run and the output of its terminal go only to the pages
+ * showing it, so a console with three runs does not push three transcripts and
+ * three terminals into every tab.
  */
-const BROADCAST_ACTIVITIES = 80;
-/** Bounded too, because the archive is rewritten in full on every event. */
-const ARCHIVED_ACTIVITIES = 1_000;
-let archive = { runId: null as string | null, activities: [] as Activity[] };
+export const clients = new Map<WebSocket, { runId?: string }>();
 
 export function now() { return new Date().toISOString(); }
 
-export function activity(kind: Activity["kind"], title: string, detail?: string) {
-  const entry: Activity = { id: crypto.randomUUID(), at: now(), kind, title, detail };
-  // Starting a run replaces the state wholesale, so the run an archive belongs
-  // to is the only thing telling the current one from the previous.
-  if (archive.runId !== ctx.state.id) archive = { runId: ctx.state.id, activities: [] };
-  archive.activities = [entry, ...archive.activities].slice(0, ARCHIVED_ACTIVITIES);
-  ctx.state.activities = [entry, ...ctx.state.activities].slice(0, BROADCAST_ACTIVITIES);
+function deliver(socket: WebSocket, serialized: string) {
+  if (socket.readyState === WebSocket.OPEN) socket.send(serialized);
 }
 
-/** The run as it is archived: the same state, with the history the clients never received. */
-export function archivedState(): RunState {
-  return archive.runId === ctx.state.id ? { ...ctx.state, activities: archive.activities } : ctx.state;
+export function send(socket: WebSocket, message: ServerMessage) {
+  deliver(socket, JSON.stringify(message));
 }
 
-/** Late transcript reads can repeat a message the input already showed, so the local echo is replaced rather than doubled. */
-export function conversationMessage(message: ConversationMessage) {
-  const echoed = message.author === "user"
-    ? ctx.state.messages.findLast((entry) => entry.id.startsWith("local-") && entry.text === message.text)
-    : undefined;
-  ctx.state.messages = echoed
-    ? ctx.state.messages.map((entry) => (entry === echoed ? message : entry))
-    : [...ctx.state.messages, message].slice(-400);
-}
-
-export function broadcast(message: object) {
+export function broadcast(message: ServerMessage) {
   const serialized = JSON.stringify(message);
-  for (const socket of ctx.sockets) if (socket.readyState === WebSocket.OPEN) socket.send(serialized);
+  for (const socket of clients.keys()) deliver(socket, serialized);
 }
 
-async function persistState() {
-  if (!ctx.state.id || ctx.state.id.startsWith("demo-")) return;
-  const runDir = path.join(dataRoot, ctx.state.id);
-  await mkdir(runDir, { recursive: true });
-  await writeFile(path.join(runDir, "run.json"), JSON.stringify(archivedState(), null, 2));
+/** To the pages showing this run, and to nobody else. */
+export function broadcastToViewers(runId: string, message: ServerMessage) {
+  const serialized = JSON.stringify(message);
+  for (const [socket, subscription] of clients) if (subscription.runId === runId) deliver(socket, serialized);
 }
 
-export function publishState() { broadcast({ type: "state", state: ctx.state }); void persistState(); }
+/** Bounded, because the archive is rewritten in full on every event. */
+export const ARCHIVED_ACTIVITIES = 1_000;
 
 /**
- * `ctx.state` starts empty on every process boot, but a run archived on disk
+ * `RunSession` starts empty on every process boot, but a run archived on disk
  * mid-flight keeps whatever status it last persisted. A crash or a restart
  * between two events leaves it reading "running" forever: nothing was left
  * to ever write its outcome. Read at startup, before any new run can begin,
@@ -90,6 +57,7 @@ export async function reconcileInterruptedRuns(runsDirectory: string) {
       ...state,
       status: "failed",
       endedAt,
+      sessionActive: false,
       agents: closeAbandonedAgents(state.agents ?? [], endedAt).agents,
       error: "Le serveur du harnais a redémarré ou s'est arrêté pendant que ce run était en cours ; son issue réelle n'a jamais été enregistrée.",
       activities: [closingEntry, ...state.activities].slice(0, ARCHIVED_ACTIVITIES),

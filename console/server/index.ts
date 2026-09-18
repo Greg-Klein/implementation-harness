@@ -1,32 +1,27 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { appendFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
-import { ctx, activity, conversationMessage, emptyState, now, publishState, reconcileInterruptedRuns } from "./context.js";
-import { closeAbandonedAgents, runInProgress, terminalExitStatus } from "./domain.js";
+import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./context.js";
 import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
-import { clearTaskDirectory, closeArtifactWatcher, readArtifact, startArtifactWatcher } from "./artifacts.js";
-import { closeTranscript, followTranscript } from "./transcript.js";
-import { answerQuestion, clearPendingQuestion, processHook } from "./hooks.js";
-import { acknowledgeDemoInstruction, clearDemoTimers, continueDemoRun, demoState, startDemoRun } from "./demo.js";
+import { readArtifact } from "./artifacts.js";
+import { followTranscript } from "./transcript.js";
+import { answerQuestion, processHook } from "./hooks.js";
+import { demoState } from "./demo.js";
 import { demoSelfImprovementDiff } from "./demo-data.js";
-import { listPendingImprovements, realignPendingImprovements, saveFeedback, scheduleAutonomousReview } from "./self-improvement.js";
-import { detectProjectDirectory, discoverRepositories, resolveProjectDirectory } from "./repository.js";
+import { listPendingImprovements, notice, realignPendingImprovements, saveFeedback } from "./self-improvement.js";
+import { detectProjectDirectory, discoverRepositories } from "./repository.js";
 import { branchIsMerged, findWorktree, mergeBranch, removeWorktree, worktreeDiff, worktreeIsClean } from "./worktree.js";
+import { registry } from "./registry.js";
 import { engine } from "./engine/index.js";
-import type { EngineSession } from "./engine/index.js";
 import type { ClientMessage } from "./types.js";
-
-let terminal: EngineSession | null = null;
-const intentionallyStoppedRuns = new Set<string>();
 
 async function applySelfImprovementReview(worktreeName: string, merge: boolean) {
   if (worktreeName.startsWith("demo-")) {
     demoState.pendingImprovement = undefined;
-    activity("system", merge ? "Améliorations fusionnées (démo)" : "Améliorations ignorées (démo)", worktreeName);
-    publishState();
+    notice("info", merge ? "Améliorations fusionnées (démo)" : "Améliorations ignorées (démo)", worktreeName);
     return;
   }
   const worktree = await findWorktree(worktreeName);
@@ -51,7 +46,7 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     const spent = !merged && await branchIsMerged(pluginRoot, worktree.branch) && await worktreeIsClean(worktree);
     if (!merged && !spent)
       throw new Error(`${worktreeName} n'apporte aucun commit à fusionner. Rien n'a été fusionné, le worktree est conservé.`);
-    activity("system", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
+    notice("info", merged ? "Améliorations fusionnées" : "Améliorations déjà présentes", worktreeName);
     harnessMoved = merged;
   } else {
     // Merging already refuses to destroy a worktree with something uncommitted
@@ -60,124 +55,23 @@ async function applySelfImprovementReview(worktreeName: string, merge: boolean) 
     // validation step deliberately left uncommitted after a failed check.
     if (!(await worktreeIsClean(worktree)))
       throw new Error(`${worktreeName} contient des changements non validés : les ignorer les détruirait. Rien n'a été touché.`);
-    activity("system", "Améliorations ignorées", worktreeName);
+    notice("info", "Améliorations ignorées", worktreeName);
   }
   await removeWorktree(pluginRoot, worktree);
   // The checkout just moved under every branch still waiting, which is exactly what
   // left the previous improvement of a series unmergeable.
   if (harnessMoved) await realignPendingImprovements();
-  publishState();
-}
-
-async function startRun(message: Extract<ClientMessage, { type: "run.start" }>) {
-  if (terminal) throw new Error(`Une session ${engine.label} est déjà active.`);
-  clearDemoTimers();
-  const cwd = await resolveProjectDirectory(message.cwd, message.issueUrl);
-  if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
-  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
-  ctx.state = { ...emptyState(), id, status: "starting", phase: 1, cwd, issueUrl: message.issueUrl.trim(), instruction: message.instruction?.trim() ?? "", startedAt: now() };
-  ctx.terminalBuffer = "";
-  activity("system", "Session créée", path.basename(cwd));
-  publishState();
-  await clearTaskDirectory(cwd);
-  await startArtifactWatcher(cwd);
-  await closeTranscript();
-  const command = engine.command(ctx.state.issueUrl, ctx.state.instruction);
-  const runTerminal = engine.start({
-    cwd, runId: id, command,
-    hookUrl: `http://${hostname}:${port}/api/hooks`,
-    onData: (data) => {
-      ctx.terminalBuffer = (ctx.terminalBuffer + data).slice(-600_000);
-      for (const socket of ctx.sockets) if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "terminal.output", data }));
-      void appendFile(path.join(dataRoot, id, "terminal.log"), data).catch(() => undefined);
-    },
-    onExit: (exitCode) => {
-      const intentionallyStopped = intentionallyStoppedRuns.delete(id);
-      if (ctx.state.id !== id) return;
-      if (terminal === runTerminal) terminal = null;
-      ctx.state.sessionActive = false;
-      // Whatever the session was doing when it went away, it is not doing it now.
-      ctx.state.action = undefined;
-      clearPendingQuestion();
-      // The workflow can already have closed the run, and how its idle session
-      // then ends says nothing about the outcome it reached.
-      if (runInProgress(ctx.state.status)) {
-        ctx.state.status = terminalExitStatus(exitCode, intentionallyStopped);
-        ctx.state.endedAt = now();
-        if (ctx.state.status === "failed") ctx.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
-      }
-      activity("system", intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
-      closeAgentsLeftBehind();
-      publishState();
-      scheduleAutonomousReview(id);
-    },
-  });
-  terminal = runTerminal;
-  ctx.state.status = "running";
-  ctx.state.sessionActive = true;
-  activity("system", `${engine.label} démarré`, command);
-  publishState();
 }
 
 /**
- * Called on every path that ends a run, and before the self-audit reads the
- * state: an agent the session can no longer report on must stop reading as
- * running, in the console and in the signals the improvement loop is given.
+ * Every hook event names the run it belongs to and the transcript of the session
+ * that emitted it, which is where that run's dialogue is read from.
  */
-function closeAgentsLeftBehind() {
-  const { agents, abandoned } = closeAbandonedAgents(ctx.state.agents, now());
-  if (abandoned.length === 0) return;
-  ctx.state.agents = agents;
-  activity("agent", abandoned.length === 1 ? "Un agent n'a jamais rapporté sa fin" : `${abandoned.length} agents n'ont jamais rapporté leur fin`, abandoned.map((agent) => agent.name).join(" · "));
-}
-
-function sendInstruction(text: string) {
-  const instruction = text.trim();
-  if (!instruction) throw new Error("L'instruction est vide.");
-  if (!terminal && !ctx.state.id?.startsWith("demo-")) throw new Error(`Aucune session ${engine.label} n'est active.`);
-  terminal?.submit(instruction);
-  conversationMessage({ id: `local-${crypto.randomUUID()}`, at: now(), author: "user", text: instruction, pending: terminal !== null });
-  activity("system", "Instruction transmise", instruction);
-  publishState();
-  if (!terminal) acknowledgeDemoInstruction();
-}
-
-async function resetRun() {
-  if (runInProgress(ctx.state.status)) throw new Error("Arrête la session en cours avant de démarrer un nouveau run.");
-  // The workflow can be over with the agent session still open at its
-  // prompt, and a new run needs the terminal free.
-  stopRun();
-  clearDemoTimers();
-  await closeTranscript();
-  ctx.state = emptyState();
-  ctx.terminalBuffer = "";
-  publishState();
-}
-
-function stopRun() {
-  if (ctx.state.id?.startsWith("demo-")) {
-    clearDemoTimers();
-    ctx.state.pendingQuestion = undefined;
-    ctx.state.action = undefined;
-    ctx.state.status = "stopped";
-    ctx.state.endedAt = now();
-    activity("system", "Démonstration arrêtée");
-    closeAgentsLeftBehind();
-    publishState();
-    return;
-  }
-  if (!terminal) return;
-  const runId = ctx.state.id;
-  clearPendingQuestion();
-  if (runId) intentionallyStoppedRuns.add(runId);
-  terminal.kill(); terminal = null;
-}
-
-/** Every event names the transcript of the session, which is where the dialogue is read from. */
-function followRunTranscript(body: Record<string, unknown>) {
-  if (!ctx.state.id || body.runId !== ctx.state.id) return;
+function followRunTranscript(runId: string, body: Record<string, unknown>) {
+  const session = registry.get(runId);
+  if (!session) return;
   const transcript = engine.transcriptPath(body);
-  if (transcript) void followTranscript(transcript);
+  if (transcript) void followTranscript(session, transcript);
 }
 
 function readBody(request: IncomingMessage) {
@@ -193,11 +87,69 @@ function respond(response: ServerResponse, status: number, body: object) {
   response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(body));
 }
 
+async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
+  if (message.type === "run.subscribe") {
+    const subscription = clients.get(socket);
+    if (!subscription) return;
+    subscription.runId = message.runId ?? undefined;
+    const session = registry.get(subscription.runId);
+    if (!session) return;
+    send(socket, { type: "run", state: session.state });
+    if (session.terminalBuffer) send(socket, { type: "terminal.output", runId: session.id, data: session.terminalBuffer });
+    return;
+  }
+  if (message.type === "run.start") {
+    const outcome = await registry.launch(message);
+    // The page clears its terminal and opens whichever run it just created, so
+    // it has to be told which one that is, or whether it is only queued.
+    if ("started" in outcome) {
+      const subscription = clients.get(socket);
+      if (subscription) subscription.runId = outcome.started.id;
+      send(socket, { type: "run", state: outcome.started.state });
+      return;
+    }
+    send(socket, {
+      type: "notice", level: "info", at: now(),
+      title: "Run mis en file",
+      detail: `${path.basename(outcome.queued.cwd)} démarrera dès qu'une place et son dépôt seront libres.`,
+    });
+    return;
+  }
+  if (message.type === "demo.start") {
+    const session = registry.startDemo();
+    const subscription = clients.get(socket);
+    if (subscription) subscription.runId = session.id;
+    send(socket, { type: "run", state: session.state });
+    return;
+  }
+  if (message.type === "terminal.input") { registry.get(message.runId)?.engine?.write(message.data); return; }
+  if (message.type === "terminal.resize") { registry.get(message.runId)?.engine?.resize(message.cols, message.rows); return; }
+  if (message.type === "instruction.send") { registry.sendInstruction(message.runId, message.text); return; }
+  if (message.type === "run.stop") { registry.stop(message.runId); return; }
+  if (message.type === "run.close") { await registry.close(message.runId); return; }
+  if (message.type === "queue.cancel") { registry.cancelQueued(message.queuedId); return; }
+  if (message.type === "question.answer") {
+    const session = registry.get(message.runId);
+    if (!session) throw new Error("Ce run n'existe plus.");
+    answerQuestion(session, message.answers);
+    return;
+  }
+  if (message.type === "feedback.submit") {
+    const session = registry.get(message.runId);
+    if (!session) throw new Error("Ce run n'existe plus.");
+    await saveFeedback(session, message.body);
+    return;
+  }
+  if (message.type === "selfImprovement.approve") { await applySelfImprovementReview(message.worktreeName, true); return; }
+  if (message.type === "selfImprovement.reject") { await applySelfImprovementReview(message.worktreeName, false); return; }
+}
+
 await mkdir(dataRoot, { recursive: true });
 await reconcileInterruptedRuns(dataRoot);
 // Commits landed by hand while the console was down move the harness just as a
 // promotion does, and nothing would replay the waiting branches onto them.
 await realignPendingImprovements().catch(() => undefined);
+await registry.restoreQueue();
 const app = next({ dev, hostname, port, dir: consoleRoot });
 const handle = app.getRequestHandler();
 await app.prepare();
@@ -206,16 +158,29 @@ const server = createServer(async (request, response) => {
   if (request.method === "POST" && request.url === "/api/hooks") {
     try {
       const body = await readBody(request);
-      followRunTranscript(body);
-      const hookOutput = await processHook(body);
+      const runId = typeof body.runId === "string" ? body.runId : undefined;
+      const session = registry.get(runId);
+      // A hook from a run the console no longer holds is not an error: the user
+      // closed it, or the server restarted under a session still alive.
+      if (!session || !runId) { respond(response, 200, { ok: true, hookOutput: null }); return; }
+      followRunTranscript(runId, body);
+      const hookOutput = await processHook(session, body);
       respond(response, 200, { ok: true, hookOutput: hookOutput ?? null });
     } catch { respond(response, 400, { ok: false }); }
     return;
   }
-  if (request.method === "GET" && request.url === "/api/state") { respond(response, 200, { state: ctx.state }); return; }
+  if (request.method === "GET" && request.url === "/api/runs") { respond(response, 200, registry.snapshot()); return; }
+  if (request.method === "GET" && request.url?.startsWith("/api/runs/")) {
+    const session = registry.get(decodeURIComponent(request.url.slice("/api/runs/".length).split("?")[0]));
+    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    respond(response, 200, { state: session.state });
+    return;
+  }
   if (request.method === "GET" && request.url?.startsWith("/api/artifacts")) {
     const requestUrl = new URL(request.url, `http://${hostname}:${port}`);
-    try { respond(response, 200, await readArtifact(requestUrl.searchParams.get("path") ?? "")); }
+    const session = registry.get(requestUrl.searchParams.get("runId") ?? undefined);
+    if (!session) { respond(response, 404, { error: "Ce run n'existe plus." }); return; }
+    try { respond(response, 200, await readArtifact(session, requestUrl.searchParams.get("path") ?? "")); }
     catch (error) { respond(response, 404, { error: error instanceof Error ? error.message : "Document introuvable." }); }
     return;
   }
@@ -257,38 +222,29 @@ server.on("upgrade", (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, (websocket) => wss.emit("connection", websocket, request));
 });
 wss.on("connection", (socket) => {
-  ctx.sockets.add(socket);
-  socket.send(JSON.stringify({ type: "state", state: ctx.state }));
-  if (ctx.terminalBuffer) socket.send(JSON.stringify({ type: "terminal.output", data: ctx.terminalBuffer }));
+  clients.set(socket, {});
+  send(socket, { type: "harness", snapshot: registry.snapshot() });
   socket.on("message", async (raw) => {
     let message: ClientMessage | undefined;
     try {
       message = JSON.parse(raw.toString()) as ClientMessage;
-      if (message.type === "run.start") await startRun(message);
-      if (message.type === "terminal.input") terminal?.write(message.data);
-      if (message.type === "instruction.send") sendInstruction(message.text);
-      if (message.type === "terminal.resize") terminal?.resize(message.cols, message.rows);
-      if (message.type === "run.stop") stopRun();
-      if (message.type === "run.reset") await resetRun();
-      if (message.type === "demo.start") startDemoRun(terminal !== null);
-      if (message.type === "feedback.submit") await saveFeedback(message.body);
-      if (message.type === "question.answer") answerQuestion(message.answers, continueDemoRun);
-      if (message.type === "selfImprovement.approve") await applySelfImprovementReview(message.worktreeName, true);
-      if (message.type === "selfImprovement.reject") await applySelfImprovementReview(message.worktreeName, false);
+      await handleClientMessage(socket, message);
     } catch (error) {
-      ctx.state.error = error instanceof Error ? error.message : "Impossible d'exécuter cette action.";
-      // Only a failed launch is the run's own failure. A panel action that fails
-      // must not rewrite the status of a run that already ended cleanly, nor be
-      // archived as its verdict.
-      if (message?.type === "run.start") { ctx.state.status = "failed"; ctx.state.endedAt = now(); }
-      activity("system", "Erreur", ctx.state.error); publishState();
+      const text = error instanceof Error ? error.message : "Impossible d'exécuter cette action.";
+      // Answered to the page that asked, never written into a run's state: a
+      // panel action that fails must not rewrite the status of a run that
+      // already ended cleanly, nor be archived as its verdict.
+      send(socket, { type: "error", message: text, runId: message && "runId" in message ? message.runId ?? undefined : undefined });
+      if (message?.type === "run.start" || message?.type === "demo.start") broadcast({ type: "notice", level: "attention", title: "Lancement refusé", detail: text, at: now() });
     }
   });
-  socket.on("close", () => ctx.sockets.delete(socket));
+  socket.on("close", () => clients.delete(socket));
 });
 
 server.listen(port, hostname, () => console.log(`Implementation Harness: http://${hostname}:${port}`));
+// Launches accepted before the last shutdown start now that the server is up.
+void registry.drain();
 
-async function shutdown() { clearDemoTimers(); terminal?.kill(); await closeArtifactWatcher(); await closeTranscript(); server.close(); }
+async function shutdown() { await registry.shutdown(); server.close(); }
 process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
 process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));

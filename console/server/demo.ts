@@ -1,61 +1,57 @@
-import { ctx, activity, broadcast, conversationMessage, emptyState, now, publishState } from "./context.js";
 import { demoStepDuration } from "./config.js";
+import { now } from "./context.js";
+import type { RunSession } from "./run-session.js";
 import type { PendingSelfImprovementReview } from "./types.js";
-
-const demoTimers = new Set<ReturnType<typeof setTimeout>>();
 
 /** The demo has no real worktree to list, so it fakes one entry alongside the real ones. */
 export const demoState: { pendingImprovement?: PendingSelfImprovementReview } = {};
 
-function scheduleDemo(delay: number, callback: () => void) {
-  const timer = setTimeout(() => { demoTimers.delete(timer); callback(); }, delay);
-  demoTimers.add(timer);
+function scheduleDemo(session: RunSession, delay: number, callback: () => void) {
+  const timer = setTimeout(() => { session.demoTimers.delete(timer); callback(); }, delay);
+  session.demoTimers.add(timer);
 }
 
-export function clearDemoTimers() {
-  for (const timer of demoTimers) clearTimeout(timer);
-  demoTimers.clear();
-  demoState.pendingImprovement = undefined;
+function demoTerminal(session: RunSession, message: string) {
+  session.appendTerminal(`\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`);
+  session.conversationMessage({ id: `demo-${crypto.randomUUID()}`, at: now(), author: "claude", text: message });
+  session.publish();
 }
 
-function demoTerminal(message: string) {
-  const line = `\r\n\x1b[38;5;108m●\x1b[0m ${message}\r\n`;
-  ctx.terminalBuffer = (ctx.terminalBuffer + line).slice(-600_000);
-  broadcast({ type: "terminal.output", data: line });
-  conversationMessage({ id: `demo-${crypto.randomUUID()}`, at: now(), author: "claude", text: message });
-  publishState();
+export function acknowledgeDemoInstruction(session: RunSession) {
+  demoTerminal(session, "Instruction prise en compte. La démonstration ne modifie aucun dépôt.");
 }
 
-export function acknowledgeDemoInstruction() {
-  demoTerminal("Instruction prise en compte. La démonstration ne modifie aucun dépôt.");
-}
+/**
+ * The state a demo run starts from. The registry gives it a slot and a place in
+ * the queue like any other run, so the simulated checkout is a real address as
+ * far as the repository lock is concerned.
+ */
+export const DEMO_CWD = "~/workspace/acme-dashboard";
 
-export function startDemoRun(isTerminalActive: boolean) {
-  if (isTerminalActive || ctx.state.status === "running" || ctx.state.status === "starting" || ctx.state.status === "attention") throw new Error("Une session est déjà active.");
-  clearDemoTimers();
-  ctx.terminalBuffer = "";
-  const id = `demo-${crypto.randomUUID().slice(0, 8)}`;
-  ctx.state = {
-    ...emptyState(), id, status: "running", phase: 1,
-    cwd: "~/workspace/acme-dashboard", issueUrl: "ticket-simule://IH-42",
+export function demoLaunchState() {
+  return {
+    status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42",
     instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
+    action: "Lecture du ticket GitLab",
   };
-  ctx.state.action = "Lecture du ticket GitLab";
-  activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
-  publishState();
-  demoTerminal("Lecture du ticket GitLab simulé…");
-  scheduleDemo(demoStepDuration, () => {
-    ctx.state.artifacts = ["ticket-context.md"];
-    activity("artifact", "Contexte du ticket consolidé", "ticket-context.md");
-    publishState();
-    demoTerminal("Critères d’acceptation et cas limites extraits.");
+}
+
+export function startDemoRun(session: RunSession) {
+  session.activity("system", "Ticket simulé chargé", "IH-42 · Ajouter les préférences de notification");
+  session.publish();
+  demoTerminal(session, "Lecture du ticket GitLab simulé…");
+  scheduleDemo(session, demoStepDuration, () => {
+    session.state.artifacts = ["ticket-context.md"];
+    session.activity("artifact", "Contexte du ticket consolidé", "ticket-context.md");
+    session.publish();
+    demoTerminal(session, "Critères d’acceptation et cas limites extraits.");
   });
-  scheduleDemo(demoStepDuration * 2, () => {
-    ctx.state.phase = 2;
-    ctx.state.action = undefined;
-    ctx.state.status = "attention";
-    ctx.state.pendingQuestion = {
-      id: `demo-question-${id}`,
+  scheduleDemo(session, demoStepDuration * 2, () => {
+    session.state.phase = 2;
+    session.state.action = undefined;
+    session.state.status = "attention";
+    session.state.pendingQuestion = {
+      id: `demo-question-${session.id}`,
       questions: [
         {
           header: "Branche de base",
@@ -77,116 +73,116 @@ export function startDemoRun(isTerminalActive: boolean) {
         },
       ],
     };
-    activity("attention", "Deux décisions attendent ta réponse");
-    publishState();
-    demoTerminal("Claude attend tes décisions dans le panneau de droite.");
+    session.activity("attention", "Deux décisions attendent ta réponse");
+    session.publish();
+    demoTerminal(session, "Claude attend tes décisions dans le panneau de droite.");
   });
 }
 
-export function continueDemoRun() {
-  scheduleDemo(0, () => {
-    ctx.state.phase = 3;
-    ctx.state.action = "Création de la branche";
-    ctx.state.branch = "feat/ih-42-notification-preferences";
-    activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
-    publishState();
-    demoTerminal("Branche et plan de travail préparés.");
+export function continueDemoRun(session: RunSession) {
+  scheduleDemo(session, 0, () => {
+    session.state.phase = 3;
+    session.state.action = "Création de la branche";
+    session.state.branch = "feat/ih-42-notification-preferences";
+    session.activity("system", "Branche de démonstration préparée", "feat/ih-42-notification-preferences");
+    session.publish();
+    demoTerminal(session, "Branche et plan de travail préparés.");
   });
-  scheduleDemo(demoStepDuration, () => {
-    ctx.state.phase = 4;
-    ctx.state.artifacts = [...ctx.state.artifacts, "implementation-plan.md"];
-    activity("artifact", "Plan d’implémentation validé", "implementation-plan.md");
-    publishState();
-    demoTerminal("Plan découpé en composants, tests et migration de données.");
+  scheduleDemo(session, demoStepDuration, () => {
+    session.state.phase = 4;
+    session.state.artifacts = [...session.state.artifacts, "implementation-plan.md"];
+    session.activity("artifact", "Plan d’implémentation validé", "implementation-plan.md");
+    session.publish();
+    demoTerminal(session, "Plan découpé en composants, tests et migration de données.");
   });
-  scheduleDemo(demoStepDuration * 2, () => {
-    ctx.state.phase = 5;
-    ctx.state.action = "Délégation à developer";
-    ctx.state.agents = [{ id: "demo-developer", name: "developer", status: "running", startedAt: now() }];
-    activity("agent", "developer démarre");
-    publishState();
-    demoTerminal("Délégation de l'implémentation à l'agent developer…");
+  scheduleDemo(session, demoStepDuration * 2, () => {
+    session.state.phase = 5;
+    session.state.action = "Délégation à developer";
+    session.state.agents = [{ id: "demo-developer", name: "developer", status: "running", startedAt: now() }];
+    session.activity("agent", "developer démarre");
+    session.publish();
+    demoTerminal(session, "Délégation de l'implémentation à l'agent developer…");
   });
-  scheduleDemo(demoStepDuration * 3, () => {
-    ctx.state.phase = 6;
-    ctx.state.agents = [
-      ...ctx.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
+  scheduleDemo(session, demoStepDuration * 3, () => {
+    session.state.phase = 6;
+    session.state.agents = [
+      ...session.state.agents.map((agent) => ({ ...agent, status: "completed" as const, endedAt: now() })),
       { id: "demo-reviewer", name: "senior-reviewer", status: "running" as const, startedAt: now() },
     ];
-    ctx.state.action = "Exécution des tests";
-    ctx.state.artifacts = [...ctx.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
-    ctx.state.evidenceUpdatedAt = now();
-    activity("agent", "Implémentation terminée, vérifications en cours");
-    publishState();
-    demoTerminal("Tests unitaires et contrôle TypeScript terminés. Passage en review…");
+    session.state.action = "Exécution des tests";
+    session.state.artifacts = [...session.state.artifacts, "developer-report.md", "test-report.json", "dev-evidence.json", "assets/panneau-preferences.png"];
+    session.state.evidenceUpdatedAt = now();
+    session.activity("agent", "Implémentation terminée, vérifications en cours");
+    session.publish();
+    demoTerminal(session, "Tests unitaires et contrôle TypeScript terminés. Passage en review…");
   });
-  scheduleDemo(demoStepDuration * 4, () => {
-    ctx.state.phase = 7;
-    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "failed" as const, endedAt: now() } : agent);
-    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-1.md"];
-    activity("attention", "Review : corrections demandées", "Le fallback critique ignore le fuseau horaire · un test de régression manque");
-    publishState();
-    demoTerminal("Review 1/2 : changements demandés sur le fallback et sa couverture de test.");
+  scheduleDemo(session, demoStepDuration * 4, () => {
+    session.state.phase = 7;
+    session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "failed" as const, endedAt: now() } : agent);
+    session.state.artifacts = [...session.state.artifacts, "senior-review-round-1.md"];
+    session.activity("attention", "Review : corrections demandées", "Le fallback critique ignore le fuseau horaire · un test de régression manque");
+    session.publish();
+    demoTerminal(session, "Review 1/2 : changements demandés sur le fallback et sa couverture de test.");
   });
-  scheduleDemo(demoStepDuration * 5, () => {
-    ctx.state.phase = 5;
-    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-developer" ? { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined } : agent);
-    activity("agent", "developer reprend l’implémentation", "Application des deux retours de review");
-    publishState();
-    demoTerminal("Boucle vers l’implémentation : correction du fallback et ajout du test manquant…");
+  scheduleDemo(session, demoStepDuration * 5, () => {
+    session.state.phase = 5;
+    session.state.agents = session.state.agents.map((agent) => agent.id === "demo-developer" ? { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined } : agent);
+    session.activity("agent", "developer reprend l’implémentation", "Application des deux retours de review");
+    session.publish();
+    demoTerminal(session, "Boucle vers l’implémentation : correction du fallback et ajout du test manquant…");
   });
-  scheduleDemo(demoStepDuration * 6, () => {
-    ctx.state.phase = 6;
-    ctx.state.agents = ctx.state.agents.map((agent) => {
+  scheduleDemo(session, demoStepDuration * 6, () => {
+    session.state.phase = 6;
+    session.state.agents = session.state.agents.map((agent) => {
       if (agent.id === "demo-developer") return { ...agent, status: "completed" as const, endedAt: now() };
       if (agent.id === "demo-reviewer") return { ...agent, status: "running" as const, startedAt: now(), endedAt: undefined };
       return agent;
     });
-    ctx.state.artifacts = [...ctx.state.artifacts, "test-report-round-2.json"];
-    activity("agent", "Corrections vérifiées", "12 tests passent, dont le nouveau test de régression");
-    publishState();
-    demoTerminal("Corrections terminées. Les 12 tests passent, nouvelle review demandée.");
+    session.state.artifacts = [...session.state.artifacts, "test-report-round-2.json"];
+    session.activity("agent", "Corrections vérifiées", "12 tests passent, dont le nouveau test de régression");
+    session.publish();
+    demoTerminal(session, "Corrections terminées. Les 12 tests passent, nouvelle review demandée.");
   });
-  scheduleDemo(demoStepDuration * 7, () => {
-    ctx.state.phase = 7;
-    ctx.state.agents = ctx.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
-    ctx.state.artifacts = [...ctx.state.artifacts, "senior-review-round-2.md", "qa-report.md", "qa-evidence.json"];
+  scheduleDemo(session, demoStepDuration * 7, () => {
+    session.state.phase = 7;
+    session.state.agents = session.state.agents.map((agent) => agent.id === "demo-reviewer" ? { ...agent, status: "completed" as const, endedAt: now() } : agent);
+    session.state.artifacts = [...session.state.artifacts, "senior-review-round-2.md", "qa-report.md", "qa-evidence.json"];
     // A second write, the way a review round overwrites the file: the badge has to light again.
-    ctx.state.evidenceUpdatedAt = now();
-    activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
-    publishState();
-    demoTerminal("Review 2/2 : approuvée. Les retours ont bien été pris en compte.");
+    session.state.evidenceUpdatedAt = now();
+    session.activity("agent", "Review 2/2 approuvée", "Les retours du premier passage sont résolus");
+    session.publish();
+    demoTerminal(session, "Review 2/2 : approuvée. Les retours ont bien été pris en compte.");
   });
-  scheduleDemo(demoStepDuration * 8, () => {
-    ctx.state.phase = 8;
-    ctx.state.artifacts = [...ctx.state.artifacts, "mr-description.md"];
-    activity("artifact", "Merge request préparée", "mr-description.md");
-    publishState();
-    demoTerminal("Description et checklist de merge request générées.");
+  scheduleDemo(session, demoStepDuration * 8, () => {
+    session.state.phase = 8;
+    session.state.artifacts = [...session.state.artifacts, "mr-description.md"];
+    session.activity("artifact", "Merge request préparée", "mr-description.md");
+    session.publish();
+    demoTerminal(session, "Description et checklist de merge request générées.");
   });
-  scheduleDemo(demoStepDuration * 9, () => {
-    ctx.state.phase = 9;
-    ctx.state.action = "Ouverture de la merge request";
-    ctx.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
-    activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
-    activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
-    publishState();
-    demoTerminal("Rapport final publié dans la merge request simulée.");
+  scheduleDemo(session, demoStepDuration * 9, () => {
+    session.state.phase = 9;
+    session.state.action = "Ouverture de la merge request";
+    session.state.mergeRequestUrl = "ticket-simule://acme-dashboard/-/merge_requests/128";
+    session.activity("system", "Merge request ouverte (démo)", "acme-dashboard/-/merge_requests/128");
+    session.activity("system", "Rapport de review publié", "Review 2/2 · approuvée");
+    session.publish();
+    demoTerminal(session, "Rapport final publié dans la merge request simulée.");
   });
-  scheduleDemo(demoStepDuration * 10, () => {
-    ctx.state.phase = 10;
-    ctx.state.action = undefined;
-    ctx.state.status = "completed";
-    ctx.state.endedAt = now();
-    activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
-    publishState();
-    demoTerminal("Merge request simulée prête. Fin de la démonstration.");
+  scheduleDemo(session, demoStepDuration * 10, () => {
+    session.state.phase = 10;
+    session.state.action = undefined;
+    session.state.status = "completed";
+    session.state.endedAt = now();
+    session.activity("system", "Démonstration terminée", "Aucun dépôt ni ticket n’a été modifié.");
+    session.publish();
+    demoTerminal(session, "Merge request simulée prête. Fin de la démonstration.");
   });
-  scheduleDemo(demoStepDuration * 11, () => {
+  scheduleDemo(session, demoStepDuration * 11, () => {
     const worktreeName = `demo-self-improvement-${crypto.randomUUID().slice(0, 8)}`;
     demoState.pendingImprovement = { worktreeName, commits: 1, status: "ready" };
-    activity("agent", "Améliorations prêtes — en attente de validation");
-    publishState();
-    demoTerminal("Auto-audit terminé. Des améliorations sont proposées dans le panneau de droite.");
+    session.activity("agent", "Améliorations prêtes — en attente de validation");
+    session.publish();
+    demoTerminal(session, "Auto-audit terminé. Des améliorations sont proposées dans le panneau de droite.");
   });
 }

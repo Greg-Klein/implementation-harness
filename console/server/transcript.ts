@@ -1,52 +1,54 @@
 import { open } from "node:fs/promises";
-import chokidar, { type FSWatcher } from "chokidar";
-import { ctx, conversationMessage, publishState } from "./context.js";
+import chokidar from "chokidar";
 import { engine } from "./engine/index.js";
+import type { RunSession } from "./run-session.js";
 
-let watcher: FSWatcher | null = null;
-let watchedPath: string | undefined;
-let offset = 0;
-let carry = "";
-
-async function readNewMessages(file: string) {
+async function readNewMessages(session: RunSession, file: string) {
+  const follow = session.transcript;
   const handle = await open(file, "r").catch(() => null);
   if (!handle) return;
   try {
     const { size } = await handle.stat();
-    if (size < offset) { offset = 0; carry = ""; }
-    if (size === offset) return;
-    const buffer = Buffer.alloc(size - offset);
-    await handle.read(buffer, 0, buffer.byteLength, offset);
-    offset = size;
-    const lines = (carry + buffer.toString("utf8")).split("\n");
-    carry = lines.pop() ?? "";
+    if (size < follow.offset) { follow.offset = 0; follow.carry = ""; }
+    if (size === follow.offset) return;
+    const buffer = Buffer.alloc(size - follow.offset);
+    await handle.read(buffer, 0, buffer.byteLength, follow.offset);
+    follow.offset = size;
+    const lines = (follow.carry + buffer.toString("utf8")).split("\n");
+    follow.carry = lines.pop() ?? "";
     let published = false;
     for (const line of lines) {
       const message = engine.conversationLine(line);
-      if (!message || ctx.state.messages.some((entry) => entry.id === message.id)) continue;
-      conversationMessage(message);
+      if (!message || session.state.messages.some((entry) => entry.id === message.id)) continue;
+      session.conversationMessage(message);
       published = true;
     }
-    if (published) publishState();
+    if (published) session.publish();
   } finally {
     await handle.close();
   }
 }
 
-/** The agent appends every message of the session to this file, so it is the only faithful source for the dialogue. */
-export async function followTranscript(transcriptPath: string) {
-  if (watchedPath === transcriptPath) return;
-  await closeTranscript();
-  watchedPath = transcriptPath;
-  watcher = chokidar.watch(transcriptPath, { ignoreInitial: false });
-  watcher.on("add", () => void readNewMessages(transcriptPath));
-  watcher.on("change", () => void readNewMessages(transcriptPath));
+/**
+ * The agent appends every message of the session to this file, so it is the only
+ * faithful source for the dialogue. One follower per run: two runs each have
+ * their own transcript, and a single shared reader would have kept the offset of
+ * whichever spoke last.
+ */
+export async function followTranscript(session: RunSession, transcriptPath: string) {
+  if (session.transcript.path === transcriptPath) return;
+  await closeTranscript(session);
+  session.transcript.path = transcriptPath;
+  const watcher = chokidar.watch(transcriptPath, { ignoreInitial: false });
+  session.transcript.watcher = watcher;
+  watcher.on("add", () => void readNewMessages(session, transcriptPath));
+  watcher.on("change", () => void readNewMessages(session, transcriptPath));
 }
 
-export async function closeTranscript() {
-  await watcher?.close();
-  watcher = null;
-  watchedPath = undefined;
-  offset = 0;
-  carry = "";
+export async function closeTranscript(session: RunSession) {
+  await session.transcript.watcher?.close().catch(() => undefined);
+  session.transcript.watcher = null;
+  session.transcript.path = undefined;
+  session.transcript.offset = 0;
+  session.transcript.carry = "";
 }

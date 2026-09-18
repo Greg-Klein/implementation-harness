@@ -25,17 +25,78 @@ export type RunState = {
   /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
 };
+
+/**
+ * A run as the list of runs shows it. Deliberately not a `RunState`: the list is
+ * broadcast to every open page on every event of every run, and carrying four
+ * hundred messages, a thousand activities and every artifact path of each run
+ * through that would make one busy run slow the whole console down. Everything
+ * the side list needs to draw a row, raise a dot or ring a notification is here;
+ * the rest arrives only for the run the page has opened.
+ */
+export type RunSummary = {
+  id: string; status: RunStatus; phase: number; cwd: string; issueUrl: string;
+  startedAt: string | null; endedAt: string | null;
+  branch?: string; mergeRequestUrl?: string; error?: string; action?: string;
+  sessionActive: boolean;
+  /** How many decisions this run is blocked on, and which batch they belong to, so an alert fires once per batch. */
+  pendingQuestionId?: string;
+  pendingQuestionCount: number;
+  runningAgents: number;
+  /** What the unread dots of this row are measured against, same pair as inside the run view. */
+  lastMessageId?: string;
+  lastMessageAuthor?: ConversationMessage["author"];
+  evidenceUpdatedAt?: string;
+  /** Whether this run still holds its slot and its checkout, which is what the queue waits on. */
+  holdsRepository: boolean;
+};
+
+/** A launch the console accepted but has not started yet, kept in the order it was asked. */
+export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
+/**
+ * Why a queued launch has not started, computed when the queue is read rather
+ * than stored: a run ending changes the answer for every entry behind it.
+ */
+export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
+
+/** Everything every open page is told about, whichever run it has opened. */
+export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number };
+
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };
 export type HookOutput = { hookSpecificOutput: { hookEventName: "PreToolUse"; permissionDecision: "allow"; updatedInput: Record<string, unknown> } };
+
+/**
+ * Every message that acts on a run names it. The console holds several at once
+ * and the page that sends this one is not necessarily showing the run the user
+ * last opened, so nothing is ever applied to an implicit "current" run.
+ */
 export type ClientMessage =
   | { type: "run.start"; cwd: string; issueUrl: string; instruction?: string }
-  | { type: "terminal.input"; data: string }
-  | { type: "instruction.send"; text: string }
-  | { type: "terminal.resize"; cols: number; rows: number }
-  | { type: "run.stop" }
-  | { type: "run.reset" }
+  | { type: "run.subscribe"; runId: string | null }
+  | { type: "terminal.input"; runId: string; data: string }
+  | { type: "instruction.send"; runId: string; text: string }
+  | { type: "terminal.resize"; runId: string; cols: number; rows: number }
+  | { type: "run.stop"; runId: string }
+  | { type: "run.close"; runId: string }
+  | { type: "queue.cancel"; queuedId: string }
   | { type: "demo.start" }
-  | { type: "feedback.submit"; body: string }
-  | { type: "question.answer"; answers: Record<string, string> }
+  | { type: "feedback.submit"; runId: string; body: string }
+  | { type: "question.answer"; runId: string; answers: Record<string, string> }
   | { type: "selfImprovement.approve"; worktreeName: string }
   | { type: "selfImprovement.reject"; worktreeName: string };
+
+export type ServerMessage =
+  /** The list of runs and the queue, sent to every page on every change. */
+  | { type: "harness"; snapshot: HarnessSnapshot }
+  /** The full state of one run, sent only to the pages that opened it. */
+  | { type: "run"; state: RunState }
+  | { type: "terminal.output"; runId: string; data: string }
+  /**
+   * Something the harness did that belongs to no run: the improvement loop
+   * replaying a branch, a queued launch that could not start. It used to land in
+   * the activity feed of whichever run happened to be current, which with
+   * several runs means a feed picked at random.
+   */
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string }
+  /** A launch or a panel action that failed, answered to the page that asked for it. */
+  | { type: "error"; message: string; runId?: string };

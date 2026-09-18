@@ -102,6 +102,16 @@ export const schema = [
     validate: validateEnum(["0", "1"]),
   },
   {
+    key: "IMPL_MAX_CONCURRENT_RUNS",
+    label: "Runs tenus en parallèle",
+    comment: "How many Claude Code sessions the console holds at once; further launches wait in a queue.",
+    help: "Nombre de sessions Claude Code tenues en même temps. Au-delà, les lancements attendent en file.",
+    fallback: "3",
+    kind: "text",
+    readBy: "console",
+    validate: validateInteger(1, 10),
+  },
+  {
     key: "IMPL_DEMO_STEP_MS",
     label: "Durée d'une étape du mode démo, en millisecondes",
     comment: "Duration of each step of the simulated scenario, in milliseconds.",

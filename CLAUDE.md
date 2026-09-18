@@ -32,15 +32,20 @@ CI (`.github/workflows/ci.yml`) runs typecheck, unit, build, integration. Run th
 
 ## Architecture
 
-Flow: Claude Code session (PTY) -> plugin hooks (`hooks/hooks.json` -> `hooks/emit.mjs` POSTs to the local server) -> `server/engine` translates raw hook payloads into `EngineEvent`s -> `server/hooks.ts` applies them to run state -> WebSocket -> React UI (`components/harness.tsx` and panels).
+Flow: Claude Code session (PTY) -> plugin hooks (`hooks/hooks.json` -> `hooks/emit.mjs` POSTs to the local server, carrying `IMPL_RUN_ID`) -> `server/engine` translates raw hook payloads into `EngineEvent`s -> `server/hooks.ts` applies them to the `RunSession` the hook names -> WebSocket -> React UI (`components/harness.tsx` shell, `run-rail.tsx` sidebar, `run-view.tsx` and panels).
+
+Several runs go at once. Nothing run-specific is module state any more: everything a run owns lives on its `RunSession`, and every client message and HTTP route that acts on a run names it by `runId`.
 
 - `server/engine/` is **the only code that knows the driven agent is Claude Code**: binary, hook vocabulary, transcript JSONL format, how to submit input, `.claude/tasks` path, `hookSpecificOutput`. Nothing above it may import `node-pty` or read `hook_event_name`. Contract in `engine/types.ts`, rationale in `engine/README.md`. Keep new agent-specific logic there.
 - Blocking questions: the `PreToolUse` hook on `AskUserQuestion` (timeout 3600s) waits for the UI answer, which returns as `updatedInput`. Claude Code replays the hook with answers; the engine ignores that second pass.
 - `server/domain.ts`: pure logic, no FS/agent. Prefer putting logic here or in `engine/` so it is unit-testable.
-- `server/context.ts`: shared mutable `ctx.state` + `activity()`/`publishState()`. On boot, non-terminal runs are reclassified `failed`.
+- `server/run-session.ts`: one run and everything it owns (state, archive, engine session, terminal buffer, artifact and transcript watchers, pending-question bridge, demo timers), with `activity()`/`publish()`.
+- `server/registry.ts`: every run the console holds plus the launch queue (`data/queue.json`, restored on boot). Enforces one run per checkout (`runHoldsRepository`: in progress or session still open) and `IMPL_MAX_CONCURRENT_RUNS`, and drains the queue whenever a run lets go.
+- `server/context.ts`: the open sockets with the run each one is subscribed to, `broadcast()` (list of runs, notices) vs `broadcastToViewers()` (one run's state and terminal). On boot, non-terminal archived runs are reclassified `failed`.
+- WebSocket protocol: `harness` (summaries + queue, to every page), `run` and `terminal.output` (to the pages that opened that run via `run.subscribe`), `notice` (harness-level events), `error` (answered to the page that asked). HTTP: `/api/runs`, `/api/runs/<id>`, `/api/artifacts?runId=&path=`.
 - `server/artifacts.ts`: watches the target repo's `.claude/` (restricted to `tasks/`, because the workflow deletes and recreates `tasks/`) and copies documents into the run archive. Only files written since run start count.
 - `server/transcript.ts`: tails the session transcript for the conversation panel (lags behind the terminal by design).
-- `server/self-improvement.ts` + `worktree.ts`: feedback/self-audit storage, `self-improvement-*` worktrees, auto-rebase on HEAD moves, merge simulation via `git merge-tree --write-tree`, one improvement in flight at a time. Nothing is ever pushed or auto-merged; the UI merge button is the only promotion path.
+- `server/self-improvement.ts` + `worktree.ts`: feedback/self-audit storage, `self-improvement-*` worktrees, auto-rebase on HEAD moves, merge simulation via `git merge-tree --write-tree`, one improvement in flight at a time (autonomous audits are queued and launched one after another, so runs finishing together cannot each open a branch). Nothing is ever pushed or auto-merged; the UI merge button is the only promotion path.
 - `server/repository.ts`: finds the GitLab checkout for a ticket by scanning `IMPL_SEARCH_ROOTS` two levels deep and reading `.git/config`.
 - `lib/`: client-side helpers (run-state derivation, conversation, notifications, sound).
 

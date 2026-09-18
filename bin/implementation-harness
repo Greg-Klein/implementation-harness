@@ -69,6 +69,7 @@ Configuration ($env_file) :
   IMPL_HOST                      interface d'écoute (effective : $app_host)
   IMPL_NO_OPEN=1                 ne pas ouvrir le navigateur
   IMPL_DEMO_STEP_MS              durée d'une étape du mode démo
+  IMPL_MAX_CONCURRENT_RUNS       runs tenus en parallèle (1 à 10)
 
 Une variable posée dans le shell l'emporte sur le .env, qui l'emporte sur le
 défaut. Modifier ces valeurs : $program config
@@ -170,12 +171,24 @@ status_report() {
     return 0
   fi
 
-  if ! curl -fsS "$app_url/api/state" 2>/dev/null | grep -q '"state"'; then
-    printf 'API       : /api/state ne répond pas comme le harnais.\n' >&2
+  local runs
+  if ! runs="$(curl -fsS "$app_url/api/runs" 2>/dev/null)" || ! printf '%s' "$runs" | grep -q '"runs"'; then
+    printf 'API       : /api/runs ne répond pas comme le harnais.\n' >&2
     printf 'Un autre programme occupe peut-être le port %s.\n' "$app_port" >&2
     return 1
   fi
   printf 'API       : répond\n'
+  # Un harnais tient plusieurs runs : le statut dit combien occupent une place,
+  # combien attendent, et sur combien de places.
+  if command -v node >/dev/null 2>&1; then
+    printf '%s' "$runs" | node -e '
+      let raw = ""; process.stdin.on("data", (chunk) => { raw += chunk; });
+      process.stdin.on("end", () => {
+        const { runs = [], queued = [], maxConcurrentRuns = 0 } = JSON.parse(raw);
+        const holding = runs.filter((run) => run.holdsRepository).length;
+        console.log(`Runs      : ${holding}/${maxConcurrentRuns} places occupées, ${runs.length} affiché(s), ${queued.length} en file`);
+      });' 2>/dev/null || true
+  fi
 
   local page assets missing=0 total=0 asset
   page="$(curl -fsS "$app_url/" 2>/dev/null || true)"
@@ -233,7 +246,7 @@ open_app() {
   fi
 }
 
-if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/state" >/dev/null 2>&1; then
+if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/runs" >/dev/null 2>&1; then
   open_app
   printf 'Implementation Harness est déjà disponible sur %s\n' "$app_url"
   exit 0
@@ -241,7 +254,7 @@ fi
 
 (
   for _ in {1..40}; do
-    if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/state" >/dev/null 2>&1; then
+    if command -v curl >/dev/null 2>&1 && curl -fsS "$app_url/api/runs" >/dev/null 2>&1; then
       open_app
       exit 0
     fi

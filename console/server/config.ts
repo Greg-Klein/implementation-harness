@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { positiveDuration } from "./domain.js";
+import { concurrencyLimit, positiveDuration } from "./domain.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const pluginRoot = path.resolve(consoleRoot, "..");
@@ -16,8 +16,11 @@ try {
 }
 export const dataRoot = path.join(consoleRoot, "data", "runs");
 export const feedbackRoot = path.join(consoleRoot, "data", "feedback", "pending");
+/** The launches accepted but not started, kept across a restart of the console. */
+export const queueFile = path.join(consoleRoot, "data", "queue.json");
 export const port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
+export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);

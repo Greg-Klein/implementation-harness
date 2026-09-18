@@ -69,3 +69,37 @@ export function elapsedLabel(start: string, end: string | undefined, now: number
   const seconds = Math.floor((milliseconds % 60_000) / 1_000);
   return minutes ? `${minutes} min ${seconds.toString().padStart(2, "0")} s` : `${seconds} s`;
 }
+
+/**
+ * How a run is named everywhere it is not alone: in the side list, in a
+ * notification, in the reason a queued launch gives for waiting. The checkout is
+ * what tells two runs apart at a glance, and the ticket number is what tells two
+ * runs on the same checkout apart.
+ */
+export function runLabel(run: { cwd: string; issueUrl: string }) {
+  const project = run.cwd.replace(/\/+$/, "").split("/").filter(Boolean).pop();
+  const ticket = run.issueUrl.split(/[?#]/)[0].split("/").filter(Boolean).pop();
+  const reference = ticket && /^\d+$/.test(ticket) ? `#${ticket}` : ticket;
+  return [project, reference].filter(Boolean).join(" ") || run.issueUrl || "run";
+}
+
+/** Whether a run is finished and no longer holds its session: the only state it can be closed from. */
+export function isClosable(run: { status: Status; sessionActive?: boolean }) {
+  return !runInProgress(run.status) && run.sessionActive !== true;
+}
+
+/** A run whose workflow is over but whose agent session is still up, holding its checkout against the queue. */
+export function holdsIdleSession(run: { status: Status; sessionActive?: boolean }) {
+  return !runInProgress(run.status) && run.sessionActive === true;
+}
+
+/** What the row of a run says it is doing, in two or three words. */
+export function statusLabel(status: Status) {
+  if (status === "starting") return "Démarrage";
+  if (status === "running") return "En cours";
+  if (status === "attention") return "À toi de jouer";
+  if (status === "completed") return "Terminé";
+  if (status === "stopped") return "Arrêté";
+  if (status === "failed") return "Erreur";
+  return "Disponible";
+}

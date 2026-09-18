@@ -1,27 +1,25 @@
 import { copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import chokidar, { type FSWatcher } from "chokidar";
+import chokidar from "chokidar";
 import type { Stats } from "node:fs";
 import { artifactWatchRoot, belongsToRun, isEvidenceReport, isPanelEvidence, isRunDocument, phaseForArtifact, resolveArtifactPath, watchedForArtifacts } from "./domain.js";
-import { ctx, activity, publishState } from "./context.js";
 import { engine } from "./engine/index.js";
 import { demoArtifactContents } from "./demo-data.js";
 import { dataRoot } from "./config.js";
-
-let artifactWatcher: FSWatcher | null = null;
+import type { RunSession } from "./run-session.js";
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 
-export async function readArtifact(artifactPath: string) {
-  if (!ctx.state.id || !ctx.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
-  if (ctx.state.id.startsWith("demo-")) {
+export async function readArtifact(session: RunSession, artifactPath: string) {
+  if (!session.state.artifacts.includes(artifactPath)) throw new Error("Document introuvable pour ce run.");
+  if (session.demo) {
     const content = demoArtifactContents[artifactPath];
     if (content === undefined) throw new Error("Document de démonstration introuvable.");
     const demoContentType = IMAGE_CONTENT_TYPES[path.extname(artifactPath).toLowerCase()];
     if (demoContentType) return { path: artifactPath, content, encoding: "base64" as const, contentType: demoContentType };
     return { path: artifactPath, content };
   }
-  const root = path.resolve(dataRoot, ctx.state.id, "artifacts");
+  const root = path.resolve(dataRoot, session.id, "artifacts");
   const target = resolveArtifactPath(root, artifactPath);
   if (!target) throw new Error("Chemin de document invalide.");
   const buffer = await readFile(target);
@@ -36,8 +34,7 @@ export async function readArtifact(artifactPath: string) {
  * to every file under assets/ would pull in every Figma download and debug
  * capture, exactly what isRunDocument's extension filter was written to avoid.
  */
-async function archiveEvidenceScreenshots(evidenceSource: string, taskRoot: string) {
-  if (!ctx.state.id) return;
+async function archiveEvidenceScreenshots(session: RunSession, evidenceSource: string, taskRoot: string) {
   let items: unknown;
   try { items = JSON.parse(await readFile(evidenceSource, "utf8")).items; } catch { return; }
   if (!Array.isArray(items)) return;
@@ -46,42 +43,41 @@ async function archiveEvidenceScreenshots(evidenceSource: string, taskRoot: stri
     if (typeof screenshot !== "string" || !screenshot) continue;
     const source = path.resolve(taskRoot, screenshot);
     const relative = path.relative(taskRoot, source);
-    if (relative.startsWith("..") || path.isAbsolute(relative) || ctx.state.artifacts.includes(relative)) continue;
-    const target = path.join(dataRoot, ctx.state.id, "artifacts", relative);
+    if (relative.startsWith("..") || path.isAbsolute(relative) || session.state.artifacts.includes(relative)) continue;
+    const target = path.join(dataRoot, session.id, "artifacts", relative);
     await mkdir(path.dirname(target), { recursive: true });
     const copied = await copyFile(source, target).then(() => true, () => false);
-    if (copied && !ctx.state.artifacts.includes(relative)) {
-      ctx.state.artifacts = [...ctx.state.artifacts, relative];
-      activity("artifact", "Capture archivée", relative);
+    if (copied && !session.state.artifacts.includes(relative)) {
+      session.state.artifacts = [...session.state.artifacts, relative];
+      session.activity("artifact", "Capture archivée", relative);
     }
   }
 }
 
-async function archiveArtifact(source: string, stats?: Stats) {
-  if (!ctx.state.id) return;
+async function archiveArtifact(session: RunSession, source: string, stats?: Stats) {
   const writtenAt = stats?.mtimeMs ?? await stat(source).then(({ mtimeMs }) => mtimeMs, () => 0);
-  if (!belongsToRun(writtenAt, ctx.state.startedAt)) return;
-  const taskRoot = engine.taskDirectory(ctx.state.cwd);
+  if (!belongsToRun(writtenAt, session.state.startedAt)) return;
+  const taskRoot = engine.taskDirectory(session.state.cwd);
   const relative = path.relative(taskRoot, source);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return;
   if (!isRunDocument(relative)) return;
-  const target = path.join(dataRoot, ctx.state.id, "artifacts", relative);
+  const target = path.join(dataRoot, session.id, "artifacts", relative);
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(source, target);
-  if (!ctx.state.artifacts.includes(relative)) {
-    ctx.state.artifacts = [...ctx.state.artifacts, relative];
-    activity("artifact", "Nouvel artefact", relative);
+  if (!session.state.artifacts.includes(relative)) {
+    session.state.artifacts = [...session.state.artifacts, relative];
+    session.activity("artifact", "Nouvel artefact", relative);
   }
   // Every reviewer overwrites its own file on each round, so the list of
   // artifacts is identical from one round to the next and this stamp is the
   // only thing saying the content moved. Taken from the file's own mtime, so a
   // watcher firing twice on one write does not read as a second change.
-  if (isPanelEvidence(relative)) ctx.state.evidenceUpdatedAt = new Date(writtenAt).toISOString();
-  if (isEvidenceReport(relative)) await archiveEvidenceScreenshots(source, taskRoot);
+  if (isPanelEvidence(relative)) session.state.evidenceUpdatedAt = new Date(writtenAt).toISOString();
+  if (isEvidenceReport(relative)) await archiveEvidenceScreenshots(session, source, taskRoot);
   // A document is the output of its step, so its arrival opens the next one.
   const completedPhase = phaseForArtifact(relative);
-  if (completedPhase) ctx.state.phase = Math.max(ctx.state.phase, completedPhase + 1);
-  publishState();
+  if (completedPhase) session.state.phase = Math.max(session.state.phase, completedPhase + 1);
+  session.publish();
 }
 
 /**
@@ -91,15 +87,16 @@ async function archiveArtifact(source: string, stats?: Stats) {
  * run to misread as its own (`ticket-context.md`, `planner-output.json`, a
  * stale `developer-report-*.md`). Every run therefore starts from an empty
  * task directory itself, rather than trusting the previous one to have ended
- * cleanly.
+ * cleanly. Safe with several runs going, because a checkout is held by one run
+ * at a time: see runHoldsRepository and the registry that enforces it.
  */
 export async function clearTaskDirectory(cwd: string) {
   await rm(engine.taskDirectory(cwd), { recursive: true, force: true });
 }
 
-export async function startArtifactWatcher(cwd: string) {
-  await artifactWatcher?.close();
-  const taskRoot = engine.taskDirectory(cwd);
+export async function startArtifactWatcher(session: RunSession) {
+  await closeArtifactWatcher(session);
+  const taskRoot = engine.taskDirectory(session.state.cwd);
   // chokidar stays inert on a path that does not exist yet, and a checkout that
   // has never run the workflow has no task directory to watch.
   await mkdir(taskRoot, { recursive: true });
@@ -108,16 +105,17 @@ export async function startArtifactWatcher(cwd: string) {
   // never fires again once its inode is gone. Everything written afterwards
   // was archived nowhere, and the workflow's own final cleanup then destroyed
   // the only copy.
-  artifactWatcher = chokidar.watch(artifactWatchRoot(taskRoot), {
+  const watcher = chokidar.watch(artifactWatchRoot(taskRoot), {
     ignoreInitial: false,
     awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 },
     ignored: (candidate) => !watchedForArtifacts(taskRoot, candidate),
   });
-  artifactWatcher.on("add", (file, stats) => void archiveArtifact(file, stats));
-  artifactWatcher.on("change", (file, stats) => void archiveArtifact(file, stats));
+  session.artifactWatcher = watcher;
+  watcher.on("add", (file, stats) => void archiveArtifact(session, file, stats));
+  watcher.on("change", (file, stats) => void archiveArtifact(session, file, stats));
 }
 
-export async function closeArtifactWatcher() {
-  await artifactWatcher?.close();
-  artifactWatcher = null;
+export async function closeArtifactWatcher(session: RunSession) {
+  await session.artifactWatcher?.close().catch(() => undefined);
+  session.artifactWatcher = null;
 }

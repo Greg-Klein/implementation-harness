@@ -1,36 +1,37 @@
 "use client";
 
-import { ChatCircleDotsIcon, CodeIcon, ShieldCheckIcon, SpeakerHighIcon, SpeakerSlashIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { documentTitle, faviconColor, faviconDataUri, runAlert } from "@/lib/notifications";
-import { isTranscriptStalled, isWriting, runInProgress, sessionAlive } from "@/lib/run-state";
+import { CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
+import { isWriting, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
-import type { PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState } from "@/lib/types";
-import { ActivityPanel } from "./activity-panel";
-import { ConversationPanel } from "./conversation-panel";
-import { EvidencePanel } from "./evidence-panel";
+import type { HarnessSnapshot, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
-import { PhaseRail } from "./phase-rail";
+import { NoticeStrip } from "./notice-strip";
+import { RunRail } from "./run-rail";
+import { RunView } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
-import { TerminalPanel, type TerminalHandle } from "./terminal-panel";
+import type { TerminalHandle } from "./terminal-panel";
 
 const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 // Independent of any run, so a slow improvement agent is caught however long it takes.
 const PENDING_IMPROVEMENTS_POLL_MS = 20_000;
 
-const initialState: RunState = { id: null, status: "idle", phase: 0, cwd: "", issueUrl: "", instruction: "", startedAt: null, endedAt: null, agents: [], activities: [], messages: [], artifacts: [], sessionActive: false };
+const emptySnapshot: HarnessSnapshot = { runs: [], queued: [], maxConcurrentRuns: 1 };
 
 export function Harness() {
-  const [run, setRun] = useState<RunState>(initialState);
+  const [snapshot, setSnapshot] = useState<HarnessSnapshot>(emptySnapshot);
+  const [run, setRun] = useState<RunState | null>(null);
   const [connected, setConnected] = useState(false);
   const [cwd, setCwd] = useState("");
   const [issueUrl, setIssueUrl] = useState("");
-  const [tab, setTab] = useState<"conversation" | "terminal" | "preuves">("conversation");
   const [instruction, setInstruction] = useState("");
   const [repositories, setRepositories] = useState<RepositoryOption[]>([]);
   const [pendingImprovements, setPendingImprovements] = useState<PendingSelfImprovementReview[]>([]);
   const [detectedProject, setDetectedProject] = useState<string>();
   const [detectingProject, setDetectingProject] = useState(false);
+  const [notice, setNotice] = useState<Notice>();
+  const [error, setError] = useState<string>();
   // Read after mount: the server renders this page and has no localStorage.
   const [sound, setSound] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -39,63 +40,32 @@ export function Harness() {
   const demoStartedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
-  const previousRunRef = useRef<RunState | null>(null);
-  // Held in state, not in a ref: the tab bar is only rendered once a run is
-  // going, and a ref attaching later triggers no render. Keyed on a ref, the
-  // measurement below never ran for a page that loaded while the run was
-  // already in progress, and the pill stayed a zero-width sliver under the
-  // white label of the selected tab until a click on another tab measured it.
-  const [tabList, setTabList] = useState<HTMLDivElement | null>(null);
-  const tabButtonRefs = useRef<Partial<Record<typeof tab, HTMLButtonElement | null>>>({});
-  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
-  // What the user was last shown in each tab. A review round overwrites the same
-  // evidence files, so the write stamp is the only thing that says the Preuves
-  // tab holds something new; for the dialogue it is the last message.
-  const [seenEvidenceAt, setSeenEvidenceAt] = useState<string>();
-  const [seenMessageId, setSeenMessageId] = useState<string>();
-  const lastMessage = run.messages.at(-1);
+  const previousRunsRef = useRef<RunSummary[]>([]);
   /**
-   * The dot on a tab the user is not reading, and what it is about. Read in
-   * render, not in an effect: it widens the tab button, so it has to be gone in
-   * the very commit that selects the tab, before the measurement below runs on
-   * a button that is about to get narrower. A message the user typed themselves
-   * is not news to them.
+   * The run this page is showing. Held in a ref as well as in state because the
+   * socket handler reads it: the server only pushes a run to the pages that
+   * opened it, and a message still in flight for the previous one must not
+   * overwrite the one the user just clicked.
    */
-  const unread: Partial<Record<typeof tab, string>> = {
-    conversation: tab !== "conversation" && lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
-    preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
-  };
+  const openRunRef = useRef<string | null>(null);
+  const [openRunId, setOpenRunId] = useState<string | null>(null);
+  /** A launch adopts whichever run the server creates for it, whose id the page cannot know beforehand. */
+  const adoptNextRunRef = useRef(false);
+  /**
+   * The user asked for the launch form and is looking at it. Without this, the
+   * rule below would reopen the only run of the console the instant they asked
+   * to start a second one.
+   */
+  const [composingRun, setComposingRun] = useState(false);
 
-  useEffect(() => {
-    if (tab === "preuves") setSeenEvidenceAt(run.evidenceUpdatedAt);
-  }, [tab, run.evidenceUpdatedAt]);
-
-  useEffect(() => {
-    if (tab === "conversation") setSeenMessageId(lastMessage?.id);
-  }, [tab, lastMessage?.id]);
-
-  // Measured from the DOM rather than hardcoded, so the pill lines up whatever
-  // the label width ends up being (font load, locale, a tab added later).
-  useLayoutEffect(() => {
-    const button = tabButtonRefs.current[tab];
-    if (!tabList || !button) return;
-    const measure = () => {
-      const listRect = tabList.getBoundingClientRect();
-      const buttonRect = button.getBoundingClientRect();
-      setTabIndicator({ left: buttonRect.left - listRect.left, width: buttonRect.width });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    // The labels are still in a fallback face on the first paint, and the pill
-    // would keep the width they had then.
-    document.fonts?.addEventListener("loadingdone", measure);
-    return () => {
-      window.removeEventListener("resize", measure);
-      document.fonts?.removeEventListener("loadingdone", measure);
-    };
-    // The badges too: each one widens its tab button, and Conversation being the
-    // first tab, a dot there shifts every button after it.
-  }, [tab, tabList, unread.conversation, unread.preuves]);
+  const openRun = useCallback((runId: string | null) => {
+    openRunRef.current = runId;
+    setOpenRunId(runId);
+    setComposingRun(runId === null);
+    if (runId === null) setRun(null);
+    terminalRef.current?.clear();
+    if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "run.subscribe", runId }));
+  }, []);
 
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
@@ -104,16 +74,30 @@ export function Harness() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
       socketRef.current = socket;
-      socket.onopen = () => { if (socketRef.current === socket) setConnected(true); };
+      socket.onopen = () => {
+        if (socketRef.current !== socket) return;
+        setConnected(true);
+        // A reconnection has to say again which run this page is reading.
+        if (openRunRef.current) socket.send(JSON.stringify({ type: "run.subscribe", runId: openRunRef.current }));
+      };
       socket.onmessage = (event) => {
-        const message = JSON.parse(event.data) as { type: string; state?: RunState; data?: string };
-        if (message.type === "state" && message.state) setRun(message.state);
-        if (message.type === "terminal.output" && message.data) {
-          // Output arrives in bursts, so it stays out of the React state: only
-          // the interval below turns it into a boolean, and only when it flips.
+        const message = JSON.parse(event.data) as ServerMessage;
+        if (message.type === "harness") setSnapshot(message.snapshot);
+        if (message.type === "run") {
+          const incoming = message.state;
+          if (adoptNextRunRef.current && incoming.id) {
+            adoptNextRunRef.current = false;
+            openRunRef.current = incoming.id;
+            setOpenRunId(incoming.id);
+          }
+          if (incoming.id === openRunRef.current) setRun(incoming);
+        }
+        if (message.type === "terminal.output" && message.runId === openRunRef.current) {
           lastOutputRef.current = Date.now();
           terminalRef.current?.write(message.data);
         }
+        if (message.type === "notice") setNotice({ level: message.level, title: message.title, detail: message.detail, at: message.at });
+        if (message.type === "error") setError(message.message);
       };
       socket.onclose = () => {
         if (socketRef.current !== socket) return;
@@ -125,6 +109,22 @@ export function Harness() {
     return () => { disposed = true; window.clearTimeout(initialConnection); if (retry) clearTimeout(retry); socketRef.current?.close(); };
   }, []);
 
+  // A run the console no longer holds cannot stay open in front of the user.
+  useEffect(() => {
+    if (openRunId && !snapshot.runs.some((summary) => summary.id === openRunId)) openRun(null);
+  }, [snapshot.runs, openRunId, openRun]);
+
+  /**
+   * A page showing nothing, next to a console holding exactly one run, is
+   * showing the wrong thing: that run is what the user came for, and a reload
+   * or a second tab would otherwise land on the launch form. Only for a single
+   * run: with several, picking one for the user would be guessing.
+   */
+  useEffect(() => {
+    if (openRunId !== null || composingRun || snapshot.runs.length !== 1) return;
+    openRun(snapshot.runs[0].id);
+  }, [snapshot.runs, openRunId, composingRun, openRun]);
+
   const refreshPendingImprovements = useCallback(() => {
     fetch("/api/self-improvement/pending")
       .then((response) => response.json() as Promise<PendingImprovementsResponse>)
@@ -132,9 +132,6 @@ export function Harness() {
       .catch(() => undefined);
   }, []);
 
-  // Independent of the current run: a worktree the improvement loop produced hours ago,
-  // or while no run was active, must surface just the same. Polled, never watched: the
-  // list is always exactly what git has right now, however long a background agent took.
   useEffect(() => {
     refreshPendingImprovements();
     const timer = window.setInterval(refreshPendingImprovements, PENDING_IMPROVEMENTS_POLL_MS);
@@ -174,37 +171,31 @@ export function Harness() {
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [issueUrl]);
 
-  // A notification is only useful for what the window cannot show: the tab keeps
-  // the state readable when it is visible, the system notification calls back
-  // when it is not.
+  /**
+   * The tab, the favicon and the alerts speak for every run at once, not for the
+   * one on screen: the run that needs the user is rarely the one they are
+   * reading, and an alert raised only for the open run left the others silent.
+   */
   useEffect(() => {
-    const previous = previousRunRef.current;
-    previousRunRef.current = run;
-    document.title = documentTitle(run);
+    const previous = previousRunsRef.current;
+    previousRunsRef.current = snapshot.runs;
+    document.title = documentTitle(snapshot.runs);
     const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
-    icon.href = faviconDataUri(faviconColor(run));
-    const alert = runAlert(previous, run);
-    if (!alert) return;
-    // The sound is not gated on visibility: a window sitting behind the editor
-    // is not hidden, and that is exactly when the user needs to be called back.
-    playCue(alert.cue);
-    if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    new Notification(alert.title, { body: alert.body, tag: alert.tag });
-  }, [run]);
+    icon.href = faviconDataUri(faviconColor(snapshot.runs));
+    for (const alert of runAlerts(previous, snapshot.runs)) {
+      playCue(alert.cue);
+      if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") continue;
+      new Notification(alert.title, { body: alert.body, tag: alert.tag });
+    }
+  }, [snapshot.runs]);
 
-  // Nothing here can make the dialogue arrive sooner, so it says that it is
-  // late: the flow of terminal output is the only live proof that the last
-  // message shown is not the last one Claude wrote.
   useEffect(() => {
-    const alive = sessionAlive(run.status, run.sessionActive);
+    const alive = run ? sessionAlive(run.status, run.sessionActive) : false;
     if (!alive) { setWriting(false); return; }
     const timer = window.setInterval(() => setWriting(isWriting(alive, lastOutputRef.current, Date.now())), 500);
     return () => window.clearInterval(timer);
-  }, [run.status, run.sessionActive]);
+  }, [run?.status, run?.sessionActive]);
 
-  // A page may only emit sound after a real interaction. Starting a run is the
-  // usual one, but the demonstration starts from a URL and would stay mute, so
-  // any first gesture on the page opens the channel.
   useEffect(() => {
     setSound(isSoundEnabled());
     const unlock = () => unlockSound();
@@ -231,13 +222,13 @@ export function Harness() {
   useEffect(() => {
     if (!connected || demoStartedRef.current || new URLSearchParams(window.location.search).get("demo") !== "1") return;
     demoStartedRef.current = true;
+    setComposingRun(false);
+    adoptNextRunRef.current = true;
     terminalRef.current?.clear();
     send({ type: "demo.start" });
     window.history.replaceState({}, "", window.location.pathname);
   }, [connected, send]);
 
-  // The panel drops the card immediately for a responsive click; the next poll
-  // reconciles from the server, which stays the source of truth either way.
   const approveImprovement = useCallback((worktreeName: string) => {
     setPendingImprovements((items) => items.filter((item) => item.worktreeName !== worktreeName));
     send({ type: "selfImprovement.approve", worktreeName });
@@ -247,90 +238,97 @@ export function Harness() {
     send({ type: "selfImprovement.reject", worktreeName });
   }, [send]);
 
-  const terminalInput = useCallback((data: string) => send({ type: "terminal.input", data }), [send]);
-  const terminalResize = useCallback((cols: number, rows: number) => send({ type: "terminal.resize", cols, rows }), [send]);
   const changeCwd = useCallback((value: string, project?: string) => {
     cwdRef.current = value;
     setCwd(value);
     setDetectedProject(project);
   }, []);
-  const startNewRun = useCallback(() => {
-    send({ type: "run.reset" });
+
+  const newRun = useCallback(() => {
+    openRun(null);
     setIssueUrl("");
     setInstruction("");
+    setError(undefined);
     changeCwd("");
-  }, [send, changeCwd]);
-  // Both channels need this gesture: a browser only prompts for notifications
-  // and only lets a page emit sound from a real interaction. Starting a run is
-  // also the moment the user says they are about to walk away.
+  }, [openRun, changeCwd]);
+
   const start = () => {
+    setError(undefined);
+    setComposingRun(false);
+    adoptNextRunRef.current = true;
     terminalRef.current?.clear();
     unlockSound();
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
     send({ type: "run.start", cwd, issueUrl, instruction });
   };
-  const active = runInProgress(run.status);
-  const canStart = connected && !active && issueUrl.trim().length > 0;
+
+  const canStart = connected && issueUrl.trim().length > 0;
+  const runId = run?.id ?? "";
 
   return (
     <main className="min-h-[100dvh] bg-[var(--paper)] p-3 md:p-5">
-      <div className="mx-auto max-w-395 overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)]">
-        <header className="flex min-h-16 items-center justify-between border-b border-[var(--line)] px-5 md:px-7">
-          <div className="flex items-center gap-3">
-            <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
-            <div>
-              <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Harness</h1>
-              <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">by Gregory Klein</span></p>
+      {/* A sidebar of runs on the left, the one that is open on the right. */}
+      <div className="mx-auto grid max-w-425 grid-cols-1 items-start gap-3 lg:grid-cols-[224px_minmax(0,1fr)] lg:gap-4">
+        <RunRail
+          runs={snapshot.runs}
+          queued={snapshot.queued}
+          maxConcurrentRuns={snapshot.maxConcurrentRuns}
+          selectedRunId={openRunId}
+          onOpen={openRun}
+          onNew={newRun}
+          onClose={(closedRunId) => send({ type: "run.close", runId: closedRunId })}
+          onCancelQueued={(queuedId) => send({ type: "queue.cancel", queuedId })}
+        />
+
+        <div className="flex min-w-0 flex-col overflow-hidden rounded-6.5 border border-[var(--line)] bg-[var(--surface)] shadow-[0_26px_70px_-42px_rgba(38,50,43,.42)] lg:h-[calc(100dvh-40px)]">
+          <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-[var(--line)] px-5 md:px-7">
+            <div className="flex items-center gap-3">
+              <div className="grid size-8 place-items-center rounded-2.5 bg-[var(--ink)] text-white"><CodeIcon size={18} weight="bold" /></div>
+              <div>
+                <h1 className="text-[15px] font-semibold tracking-[-.02em]">Implementation Harness</h1>
+                <p className="flex items-center gap-1.5 text-[10px] text-[var(--muted)]"><span className="hidden sm:inline">Claude Code workflow harness</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">/</span><span className="text-[#7c847f]">by Gregory Klein</span></p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-            <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-white active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
-              {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
-            </button>
-            <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
-            <span>Serveur local</span><span aria-hidden="true" className="text-[var(--line)]">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
-            {run.status !== "idle" && !active && <button type="button" disabled={!connected} onClick={startNewRun} className="ml-3 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">Nouveau run</button>}
-          </div>
-        </header>
+            <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+              <button type="button" role="switch" aria-checked={sound} aria-label="Son des alertes" onClick={toggleSound} title={sound ? "Son des alertes activé, cliquer pour couper" : "Son des alertes coupé, cliquer pour activer"} className={`mr-1 grid size-7 place-items-center rounded-lg border border-[var(--line)] transition hover:bg-white active:translate-y-px ${sound ? "text-[var(--accent)]" : "text-[var(--muted)]"}`}>
+                {sound ? <SpeakerHighIcon size={14} /> : <SpeakerSlashIcon size={14} />}
+              </button>
+              <span title="Connexion temps réel entre cette page et le serveur local du harnais" className={`size-1.5 rounded-full ${connected ? "bg-[var(--accent)] status-breathe" : "bg-red-500"}`} />
+              <span className="hidden sm:inline">Serveur local</span><span aria-hidden="true" className="hidden text-[var(--line)] sm:inline">·</span><span className={connected ? "text-[var(--accent)]" : "text-red-600"}>{connected ? "connecté" : "reconnexion…"}</span>
+            </div>
+          </header>
 
-        <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
-
-        {run.status === "idle" ? (
-          <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
-        ) : (
-          <div className="grid min-h-[calc(100dvh-106px)] grid-cols-1 lg:h-[calc(100dvh-106px)] lg:grid-cols-[236px_minmax(0,1fr)_320px]">
-            <PhaseRail run={run} />
-            <section className="flex min-h-135 flex-col border-y border-[var(--line)] bg-[var(--surface)] lg:border-x lg:border-y-0">
-              <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--line)] px-4">
-                <div ref={setTabList} role="tablist" aria-label="Vue de la session" className="relative flex items-center gap-0.5 rounded-full border border-[var(--line)] bg-[#f1f3ee] p-0.5">
-                  {/* Only once measured: mounted at its final size it never animates in from a zero-width sliver, and it still slides on every tab change after that. */}
-                  {tabIndicator.width > 0 && <span aria-hidden className="absolute inset-y-0.5 left-0 rounded-full bg-[var(--ink)] transition-[transform,width] duration-200 ease-out" style={{ width: tabIndicator.width, transform: `translateX(${tabIndicator.left}px)` }} />}
-                  {([["conversation", "Conversation"], ["terminal", "Terminal"], ["preuves", "Preuves"]] as const).map(([value, label]) => {
-                    const fresh = unread[value];
-                    return (
-                      <button key={value} ref={(el) => { tabButtonRefs.current[value] = el; }} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={`relative z-10 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors duration-200 ${tab === value ? "text-white" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
-                        {value === "conversation" ? <ChatCircleDotsIcon size={13} /> : value === "terminal" ? <TerminalWindowIcon size={13} /> : <ShieldCheckIcon size={13} />}{label}
-                        {/* Named, not decorative: the dot is the whole message, and it is also what the tab announces. */}
-                        {fresh && <span role="img" aria-label={fresh} title={`${fresh[0].toUpperCase()}${fresh.slice(1)} depuis ta dernière visite de cet onglet`} className="status-breathe size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                {active && <button type="button" disabled={!connected} onClick={() => send({ type: "run.stop" })} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
+          <div className="shrink-0">
+            {error && (
+              <div role="alert" className="flex items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-red-800 md:px-7">
+                <p className="flex min-w-0 items-start gap-2.5 text-[11px] leading-5"><WarningIcon className="mt-0.5 shrink-0" size={14} weight="fill" />{error}</p>
+                <button type="button" onClick={() => setError(undefined)} aria-label="Masquer l'erreur" className="grid size-6 shrink-0 place-items-center rounded-md transition hover:bg-white/70 active:translate-y-px"><XIcon size={12} /></button>
               </div>
-              <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <ConversationPanel messages={run.messages} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={(text) => send({ type: "instruction.send", text })} onCheckTerminal={() => setTab("terminal")} />
-              </div>
-              <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
-                <TerminalPanel ref={terminalRef} onInput={terminalInput} onResize={terminalResize} />
-              </div>
-              <div className={tab === "preuves" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <EvidencePanel run={run} />
-              </div>
-            </section>
-            <ActivityPanel run={run} onFeedback={(body) => send({ type: "feedback.submit", body })} onAnswer={(answers) => send({ type: "question.answer", answers })} />
+            )}
+            <NoticeStrip notice={notice} onDismiss={() => setNotice(undefined)} />
+            <SelfImprovementReviewPanel reviews={pendingImprovements} onApprove={approveImprovement} onReject={rejectImprovement} />
           </div>
-        )}
+
+          {run ? (
+            <RunView
+              run={run}
+              connected={connected}
+              writing={writing}
+              terminalRef={terminalRef}
+              actions={{
+                terminalInput: (data) => send({ type: "terminal.input", runId, data }),
+                terminalResize: (cols, rows) => send({ type: "terminal.resize", runId, cols, rows }),
+                sendInstruction: (text) => send({ type: "instruction.send", runId, text }),
+                answer: (answers) => send({ type: "question.answer", runId, answers }),
+                feedback: (body) => send({ type: "feedback.submit", runId, body }),
+                stop: () => send({ type: "run.stop", runId }),
+                close: () => send({ type: "run.close", runId }),
+              }}
+            />
+          ) : (
+            <LaunchForm cwd={cwd} setCwd={changeCwd} issueUrl={issueUrl} setIssueUrl={setIssueUrl} instruction={instruction} setInstruction={setInstruction} repositories={repositories} detectedProject={detectedProject} detectingProject={detectingProject} canStart={canStart} onStart={start} />
+          )}
+        </div>
       </div>
     </main>
   );

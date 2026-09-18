@@ -19,8 +19,8 @@ const VERDICT_STYLE: Record<EvidenceVerdict, { label: string; className: string;
   unverified: { label: "Non vérifié", className: "bg-amber-50 text-amber-700", icon: WarningCircleIcon },
 };
 
-async function fetchArtifact(path: string): Promise<ArtifactResponse> {
-  const response = await fetch(`/api/artifacts?path=${encodeURIComponent(path)}`);
+async function fetchArtifact(runId: string, path: string): Promise<ArtifactResponse> {
+  const response = await fetch(`/api/artifacts?runId=${encodeURIComponent(runId)}&path=${encodeURIComponent(path)}`);
   const result = await response.json() as ArtifactResponse;
   if (!response.ok) throw new Error(result.error ?? "Impossible de charger ce document.");
   return result;
@@ -47,16 +47,16 @@ function Lightbox({ image, label, onClose }: { image: string; label: string; onC
  * tab shows the base64 payload instead of the capture, so it is enlarged in
  * place.
  */
-function Screenshot({ path }: { path: string }) {
+function Screenshot({ runId, path }: { runId: string; path: string }) {
   const [image, setImage] = useState<string>();
   const [enlarged, setEnlarged] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    fetchArtifact(path)
+    fetchArtifact(runId, path)
       .then((result) => { if (!cancelled && result.encoding === "base64" && result.contentType) setImage(`data:${result.contentType};base64,${result.content}`); })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [path]);
+  }, [runId, path]);
   if (!image) return null;
   return (
     <>
@@ -68,7 +68,7 @@ function Screenshot({ path }: { path: string }) {
   );
 }
 
-function Row({ item }: { item: EvidenceItem }) {
+function Row({ runId, item }: { runId: string; item: EvidenceItem }) {
   const style = VERDICT_STYLE[item.verdict] ?? VERDICT_STYLE.unverified;
   const Icon = style.icon;
   return (
@@ -85,7 +85,7 @@ function Row({ item }: { item: EvidenceItem }) {
       )}
       {item.command && <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">{item.command}</p>}
       {item.note && <p className="mt-1 text-[10px] text-[var(--muted)]">{item.note}</p>}
-      {item.screenshot && <Screenshot path={item.screenshot} />}
+      {item.screenshot && <Screenshot runId={runId} path={item.screenshot} />}
     </li>
   );
 }
@@ -98,7 +98,7 @@ function Section({ title, file, run }: { title: string; file: string; run: RunSt
   useEffect(() => {
     if (!present) { setReport(undefined); setError(undefined); return; }
     let cancelled = false;
-    fetchArtifact(file)
+    fetchArtifact(run.id ?? "", file)
       .then((result) => { if (cancelled) return; try { setReport(JSON.parse(result.content) as EvidenceReport); } catch { setError("Document illisible."); } })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Erreur."); });
     return () => { cancelled = true; };
@@ -117,7 +117,7 @@ function Section({ title, file, run }: { title: string; file: string; run: RunSt
         : error ? <p className="text-[11px] text-red-700">{error}</p>
         : !report ? <p className="text-[11px] text-[var(--muted)]">Chargement…</p>
         : report.items.length === 0 ? <p className="text-[11px] text-[var(--muted)]">Aucun élément rapporté.</p>
-        : <ul>{report.items.map((item, index) => <Row key={index} item={item} />)}</ul>}
+        : <ul>{report.items.map((item, index) => <Row key={index} runId={run.id ?? ""} item={item} />)}</ul>}
     </section>
   );
 }

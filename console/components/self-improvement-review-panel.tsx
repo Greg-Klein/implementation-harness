@@ -40,52 +40,72 @@ function DiffModal({ worktreeName, onClose }: { worktreeName: string; onClose: (
   );
 }
 
-function AnalyzingCard({ review }: { review: PendingSelfImprovementReview }) {
+/**
+ * One strip per pending improvement, above the runs. Each used to be a stacked
+ * card with buttons spanning the whole console: a review prompt that took a
+ * quarter of the window and pushed the run it belonged next to off the bottom.
+ * The card now owns the viewport height, so anything above the runs has to earn
+ * its pixels, and this earns one line.
+ */
+function Strip({ tone, children }: { tone: "accent" | "muted"; children: React.ReactNode }) {
   return (
-    <div className="rounded-3 border border-[var(--line)] bg-[var(--paper)] p-4">
-      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)]">
-        <CircleNotchIcon size={13} className="animate-spin" /> Auto-amélioration en cours d’analyse
+    <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-5 py-2.5 md:px-7 ${tone === "accent" ? "border-[var(--line)] bg-[var(--accent-soft)]" : "border-[var(--line)] bg-[var(--paper)]"}`}>
+      {children}
+    </div>
+  );
+}
+
+function Name({ children }: { children: React.ReactNode }) {
+  return <span className="truncate font-mono text-[9px] text-[var(--muted)]">{children}</span>;
+}
+
+const ACTION = "flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-[11px] font-medium transition hover:bg-[var(--paper)] active:translate-y-px";
+
+function AnalyzingRow({ review }: { review: PendingSelfImprovementReview }) {
+  return (
+    <Strip tone="muted">
+      <p className="flex min-w-0 items-center gap-2 text-[11px]">
+        <CircleNotchIcon size={12} className="shrink-0 animate-spin text-[var(--muted)]" />
+        <span className="font-semibold text-[var(--muted)]">Auto-amélioration en cours d’analyse</span>
+        <Name>{review.worktreeName}</Name>
       </p>
-      <p className="font-mono text-[9px] text-[var(--muted)]">{review.worktreeName}</p>
-    </div>
+    </Strip>
   );
 }
 
-function OrphanedCard({ review, onClean }: { review: PendingSelfImprovementReview; onClean: () => void }) {
+function OrphanedRow({ review, onClean }: { review: PendingSelfImprovementReview; onClean: () => void }) {
   return (
-    <div className="rounded-3 border border-[var(--line)] bg-[var(--paper)] p-4">
-      <p className="mb-1 text-[11px] font-semibold text-[var(--muted)]">Auto-amélioration déjà intégrée</p>
-      <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName} · aucun commit à fusionner, déjà présent dans le harnais</p>
-      <button type="button" onClick={onClean} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium text-[var(--muted)] transition hover:text-red-700 active:translate-y-px">
-        <TrashIcon size={12} /> Nettoyer
-      </button>
-    </div>
+    <Strip tone="muted">
+      <p className="flex min-w-0 items-center gap-2 text-[11px]">
+        <span className="font-semibold text-[var(--muted)]">Auto-amélioration déjà intégrée</span>
+        <Name>{review.worktreeName} · aucun commit à fusionner</Name>
+      </p>
+      <button type="button" onClick={onClean} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Nettoyer</button>
+    </Strip>
   );
 }
 
-function ReviewCard({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
+function ReviewRow({ review, onApprove, onReject, onViewDiff }: { review: PendingSelfImprovementReview; onApprove: () => void; onReject: () => void; onViewDiff: () => void }) {
   return (
-    <div className="rounded-3 border border-[var(--accent)] bg-[var(--accent-soft)] p-4">
-      <p className="mb-1 text-[11px] font-semibold text-[var(--accent)]">Améliorations prêtes</p>
-      <p className="mb-3 font-mono text-[9px] text-[var(--muted)]">{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</p>
-      {review.mergesCleanly === false && (
-        <p className="mb-3 flex items-start gap-1.5 text-[11px] leading-4 text-red-700">
-          <WarningIcon size={13} className="mt-px shrink-0" />
-          Le rebase automatique sur le harnais n’a pas suffi : cette branche est en conflit réel. À reprendre à la main.
+    <Strip tone="accent">
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="flex min-w-0 items-center gap-2 text-[11px]">
+          <span className="font-semibold text-[var(--accent)]">Améliorations prêtes</span>
+          <Name>{review.worktreeName} · {review.commits} commit{review.commits > 1 ? "s" : ""}</Name>
         </p>
-      )}
-      <button type="button" onClick={onViewDiff} className="mb-3 flex w-full items-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium transition hover:bg-[var(--paper)]">
-        <CodeIcon size={13} /> Voir les changements
-      </button>
-      <div className="flex gap-2">
-        <button type="button" onClick={onApprove} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px">
-          <CheckIcon size={12} weight="bold" /> Fusionner
-        </button>
-        <button type="button" onClick={onReject} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium text-[var(--muted)] transition hover:text-red-700 active:translate-y-px">
-          <TrashIcon size={12} /> Ignorer
-        </button>
+        {review.mergesCleanly === false && (
+          <p className="flex items-start gap-1.5 text-[10px] leading-4 text-red-700">
+            <WarningIcon size={12} className="mt-px shrink-0" />
+            Le rebase automatique sur le harnais n’a pas suffi : cette branche est en conflit réel. À reprendre à la main.
+          </p>
+        )}
       </div>
-    </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={onViewDiff} className={ACTION}><CodeIcon size={12} /> Voir les changements</button>
+        <button type="button" onClick={onApprove} className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px"><CheckIcon size={12} weight="bold" /> Fusionner</button>
+        <button type="button" onClick={onReject} className={`${ACTION} text-[var(--muted)] hover:text-red-700`}><TrashIcon size={12} /> Ignorer</button>
+      </div>
+    </Strip>
   );
 }
 
@@ -96,13 +116,11 @@ export function SelfImprovementReviewPanel({ reviews, onApprove, onReject }: { r
 
   return (
     <>
-      <div className="mx-4 mt-4 space-y-3">
-        {reviews.map((review) => review.status === "analyzing"
-          ? <AnalyzingCard key={review.worktreeName} review={review} />
-          : review.status === "orphaned"
-          ? <OrphanedCard key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} />
-          : <ReviewCard key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />)}
-      </div>
+      {reviews.map((review) => review.status === "analyzing"
+        ? <AnalyzingRow key={review.worktreeName} review={review} />
+        : review.status === "orphaned"
+        ? <OrphanedRow key={review.worktreeName} review={review} onClean={() => onReject(review.worktreeName)} />
+        : <ReviewRow key={review.worktreeName} review={review} onApprove={() => onApprove(review.worktreeName)} onReject={() => onReject(review.worktreeName)} onViewDiff={() => setDiffWorktree(review.worktreeName)} />)}
       {diffWorktree && <DiffModal worktreeName={diffWorktree} onClose={() => setDiffWorktree(null)} />}
     </>
   );

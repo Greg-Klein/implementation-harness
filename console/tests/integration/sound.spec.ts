@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun } from "./helpers";
+import { expectDemoCompleted, resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -43,7 +43,7 @@ test("should make no sound while the setting is off, and sound once it is on", a
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
   expect(await page.evaluate(() => (window as unknown as { oscillators: number }).oscillators)).toBe(0);
 
   // Turning it on plays the cue immediately, which is the confirmation the

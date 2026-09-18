@@ -15,25 +15,28 @@ test("should return 404 for a valid but nonexistent worktree", async ({ request 
   expect(response.status()).toBe(404);
 });
 
-test("should surface an error when approving without a pending review, without failing the run", async ({ page }) => {
+/**
+ * A panel action belongs to no run, so its failure is answered to the page that
+ * asked rather than written into a run's state: it must never rewrite the
+ * status of a run that already ended cleanly, nor be archived as its verdict.
+ */
+test("should answer a groundless approval to the page, without touching any run", async ({ page }) => {
   await page.goto("/");
-  const result = await page.evaluate(() =>
-    new Promise<{ status: string; error?: string }>((resolve, reject) => {
+  const error = await page.evaluate(() =>
+    new Promise<string>((resolve, reject) => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
       const timeout = window.setTimeout(() => { socket.close(); reject(new Error("timeout")); }, 4_000);
       socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "selfImprovement.approve", worktreeName: "self-improvement-fake" })));
       socket.addEventListener("message", (event) => {
-        const msg = JSON.parse(event.data) as { type: string; state?: { status: string; error?: string } };
-        if (msg.type === "state" && msg.state?.error) {
+        const message = JSON.parse(event.data) as { type: string; message?: string };
+        if (message.type === "error" && message.message) {
           window.clearTimeout(timeout);
           socket.close();
-          resolve({ status: msg.state.status, error: msg.state.error });
+          resolve(message.message);
         }
       });
     }),
   );
-  expect(result.error).toContain("auto-amélioration");
-  // A panel action that fails is not the run's own failure.
-  expect(result.status).toBe("idle");
+  expect(error).toContain("auto-amélioration");
 });

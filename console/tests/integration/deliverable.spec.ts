@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun, runDemoToCompletion } from "./helpers";
+import { expectDemoCompleted, resetRun, runDemoToCompletion } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -32,7 +32,7 @@ test("should carry the state of the run into the tab title", async ({ page }) =>
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
 
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
   await expect(page).toHaveTitle("✓ Terminé · Implementation Harness");
 });
 

@@ -102,7 +102,7 @@ describe("implementation-harness launcher", () => {
     try {
       const { code, stderr } = launch(["status"], { IMPL_PORT: String(port) });
       expect(code).toBe(1);
-      expect(stderr).toContain("/api/state");
+      expect(stderr).toContain("/api/runs");
     } finally {
       child.kill("SIGKILL");
     }

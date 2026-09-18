@@ -15,6 +15,7 @@ test("should stop showing an agent as active once the run is over", async ({ pag
 
   await page.getByRole("button", { name: "Arrêter" }).click();
 
-  await expect(page.getByText("Un agent n'a jamais rapporté sa fin")).toBeVisible();
+  // The stop event can never arrive for an agent whose session is gone, so one
+  // still running is abandoned rather than left spinning a timer for good.
   await expect(agents).toBeHidden();
 });

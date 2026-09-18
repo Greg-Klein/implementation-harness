@@ -1,14 +1,25 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ctx, activity, now, publishState } from "./context.js";
+import { broadcast, now } from "./context.js";
 import { feedbackRoot, consoleRoot, pluginRoot } from "./config.js";
 import { demoState } from "./demo.js";
 import { commitlessImprovementStatus, hasAuditableEvidence, improvementWorktreeInFlight, improvementWorktreeName, isImprovementWorktree, normalizeText } from "./domain.js";
 import { engine } from "./engine/index.js";
 import { branchIsMerged, branchIsRebasedOn, branchMergesCleanly, headCommit, listWorktrees, rebaseWorktree, worktreeCommitCount, worktreeIsClean } from "./worktree.js";
+import type { RunSession } from "./run-session.js";
 import type { PendingSelfImprovementReview, RunState } from "./types.js";
 
 const auditedRuns = new Set<string>();
+
+/**
+ * The improvement loop belongs to the harness, not to any one run: it is read
+ * from the worktrees on disk and it keeps going after the run that triggered it
+ * is closed. What it has to say therefore goes to every open page instead of
+ * into the activity feed of a run that may no longer exist.
+ */
+export function notice(level: "info" | "attention", title: string, detail?: string) {
+  broadcast({ type: "notice", level, title, detail, at: now() });
+}
 
 /**
  * Every self-improvement worktree, whichever run spawned it and however long ago,
@@ -55,8 +66,7 @@ function startConflictResolution(worktreeName: string, onto: string) {
   const child = engine.startConflictResolution({ worktreeName, onto });
   if (!child) return false;
   child.on("close", (code) => {
-    activity(code === 0 ? "system" : "attention", code === 0 ? "Rebase assisté terminé" : "Rebase assisté en échec", worktreeName);
-    publishState();
+    notice(code === 0 ? "info" : "attention", code === 0 ? "Rebase assisté terminé" : "Rebase assisté en échec", worktreeName);
   });
   return true;
 }
@@ -87,40 +97,36 @@ export async function realignPendingImprovements() {
     if (!(await worktreeIsClean(worktree).catch(() => false))) continue;
     const name = path.basename(worktree.path);
     if (await rebaseWorktree(worktree, onto).catch(() => false)) {
-      activity("system", "Amélioration rebasée sur le harnais", name);
+      notice("info", "Amélioration rebasée sur le harnais", name);
       continue;
     }
-    // git stopped on a conflict and the branch is back where it was. An agent is the
-    // only thing that settles it, and until one does the card must keep saying so.
     const delegated = startConflictResolution(name, onto);
-    activity("attention", delegated ? "Rebase assisté lancé" : "Rebase impossible",
+    notice("attention", delegated ? "Rebase assisté lancé" : "Rebase impossible",
       delegated ? `${name} est en conflit avec le harnais, un agent le reprend dans son worktree.`
         : `${name} est en conflit avec le harnais. La branche est intacte, à reprendre à la main.`);
   }
-  publishState();
 }
 
-export async function saveFeedback(body: string) {
+export async function saveFeedback(session: RunSession, body: string) {
   const feedback = body.trim();
-  if (!ctx.state.id) throw new Error("Aucune exécution à laquelle rattacher ce retour.");
-  if (ctx.state.id.startsWith("demo-")) throw new Error("La démonstration n'enregistre pas de retour d’auto-amélioration.");
+  if (session.demo) throw new Error("La démonstration n'enregistre pas de retour d’auto-amélioration.");
   if (!feedback) throw new Error("Le retour est vide.");
   if (feedback.length > 5_000) throw new Error("Le retour dépasse 5 000 caractères.");
   const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
-    id, runId: ctx.state.id, createdAt: now(), status: "pending", feedback,
-    issueUrl: ctx.state.issueUrl, projectDirectory: ctx.state.cwd,
+    id, runId: session.id, createdAt: now(), status: "pending", feedback,
+    issueUrl: session.state.issueUrl, projectDirectory: session.state.cwd,
   }, null, 2));
-  activity("artifact", "Retour ajouté à la boucle d’auto-amélioration", `${id}.json`);
-  publishState();
+  session.activity("artifact", "Retour ajouté à la boucle d’auto-amélioration", `${id}.json`);
+  session.publish();
 }
 
-async function queueAutonomousReview(runId: string, snapshot: RunState) {
-  const id = `self-audit-${runId}`;
+async function queueAutonomousReview(session: RunSession, snapshot: RunState) {
+  const id = `self-audit-${session.id}`;
   await mkdir(feedbackRoot, { recursive: true });
   await writeFile(path.join(feedbackRoot, `${id}.json`), JSON.stringify({
-    id, runId, createdAt: now(), status: "pending", source: "autonomous",
+    id, runId: session.id, createdAt: now(), status: "pending", source: "autonomous",
     objective: "Find durable improvements from observable friction, failures, repeated review findings and missing verification in this run.",
     signals: {
       finalStatus: snapshot.status,
@@ -132,48 +138,60 @@ async function queueAutonomousReview(runId: string, snapshot: RunState) {
       error: snapshot.error,
     },
   }, null, 2));
-  if (ctx.state.id === runId) {
-    activity("artifact", "Auto-audit mis en file", `${id}.json`);
-    publishState();
-  }
+  session.activity("artifact", "Auto-audit mis en file", `${id}.json`);
+  session.publish();
 }
 
-async function startAutonomousImprovement(runId: string) {
-  if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return;
-  const worktrees = await listWorktrees().catch(() => []);
-  const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
-  if (inFlight) {
-    // The audit stays in pending/, where the next iteration reads it: nothing is
-    // lost by waiting, and evidence gathered over two runs is worth more than one
-    // branch per run.
-    activity("system", "Auto-amélioration en attente", `${path.basename(inFlight)} n'est pas encore tranché. Fusionne-le ou ignore-le pour libérer la boucle.`);
-    publishState();
-    return;
+/** Resolves once the launch itself has returned, which is what lets the next audit take its turn. */
+function startAutonomousImprovement(session: RunSession) {
+  return new Promise<void>((resolve) => {
+    if (process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "true") return resolve();
+    void listWorktrees().catch(() => []).then((worktrees) => {
+      const inFlight = improvementWorktreeInFlight(worktrees.map((worktree) => worktree.path));
+      if (inFlight) {
+        notice("info", "Auto-amélioration en attente", `${path.basename(inFlight)} n'est pas encore tranché. Fusionne-le ou ignore-le pour libérer la boucle.`);
+        return resolve();
+      }
+      const worktreeName = improvementWorktreeName(session.id);
+      const child = engine.startSelfImprovement({
+        worktreeName,
+        feedbackDirectory: path.join(consoleRoot, "data", "feedback"),
+        runId: session.id,
+      });
+      if (!child) return resolve();
+      let output = "";
+      let launchError: Error | undefined;
+      child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
+      child.stderr.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
+      child.on("error", (error) => { launchError = error; });
+      child.on("close", (code) => {
+        if (code === 0 && !launchError) notice("info", "Auto-amélioration lancée en tâche de fond", worktreeName);
+        else notice("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));
+        resolve();
+      });
+    });
+  });
+}
+
+/**
+ * One improvement agent at a time, whatever the console is running. Several runs
+ * finishing together used to each check for a worktree in flight before any of
+ * them had created one, and all of them passed: the loop opened concurrent
+ * branches on the same checkout, which is the state it was written to avoid.
+ * The check and the launch are sequential here, so the second audit sees the
+ * worktree the first one opened.
+ */
+const auditQueue: (() => Promise<void>)[] = [];
+let auditing = false;
+
+async function drainAudits() {
+  if (auditing) return;
+  auditing = true;
+  try {
+    while (auditQueue.length > 0) await auditQueue.shift()?.().catch(() => undefined);
+  } finally {
+    auditing = false;
   }
-  const worktreeName = improvementWorktreeName(runId);
-  const child = engine.startSelfImprovement({
-    worktreeName,
-    feedbackDirectory: path.join(consoleRoot, "data", "feedback"),
-    runId,
-  });
-  if (!child) return;
-  let output = "";
-  let launchError: Error | undefined;
-  child.stdout.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
-  child.stderr.on("data", (chunk) => { output = (output + chunk.toString()).slice(-4_000); });
-  child.on("error", (error) => { launchError = error; });
-  child.on("close", (code) => {
-    if (ctx.state.id !== runId) return;
-    if (code === 0 && !launchError) {
-      // The launcher only confirms the background session exists, not that it has
-      // written anything yet: listPendingImprovements() shows the worktree as
-      // "analyzing" from here, then flips it to a reviewable card once a commit lands.
-      activity("agent", "Auto-amélioration lancée en tâche de fond", worktreeName);
-    } else {
-      activity("attention", "Auto-amélioration non démarrée", normalizeText(launchError?.message ?? output));
-    }
-    publishState();
-  });
 }
 
 /**
@@ -182,24 +200,21 @@ async function startAutonomousImprovement(runId: string) {
  * once per run and kept: a second launch races the first one over the same
  * worktree, and one of them destroys the other's work.
  */
-export function scheduleAutonomousReview(runId: string) {
-  // A demonstration run has nothing to teach the loop, like its feedback field.
-  if (runId.startsWith("demo-")) return;
-  if (auditedRuns.has(runId)) return;
-  auditedRuns.add(runId);
-  const snapshot = structuredClone(ctx.state);
+export function scheduleAutonomousReview(session: RunSession) {
+  if (session.demo) return;
+  if (auditedRuns.has(session.id)) return;
+  auditedRuns.add(session.id);
+  const snapshot = structuredClone(session.archivedState());
   if (!hasAuditableEvidence(snapshot)) {
-    if (ctx.state.id === runId) {
-      activity("system", "Auto-audit sans objet", "Cette exécution n'a produit ni agent, ni document, ni échec à analyser.");
-      publishState();
-    }
+    session.activity("system", "Auto-audit sans objet", "Cette exécution n'a produit ni agent, ni document, ni échec à analyser.");
+    session.publish();
     return;
   }
-  void queueAutonomousReview(runId, snapshot)
-    .then(() => startAutonomousImprovement(runId))
+  auditQueue.push(() => queueAutonomousReview(session, snapshot)
+    .then(() => startAutonomousImprovement(session))
     .catch((error) => {
-      if (ctx.state.id !== runId) return;
-      activity("attention", "Auto-audit impossible", normalizeText(error instanceof Error ? error.message : error));
-      publishState();
-    });
+      session.activity("attention", "Auto-audit impossible", normalizeText(error instanceof Error ? error.message : error));
+      session.publish();
+    }));
+  void drainAudits();
 }

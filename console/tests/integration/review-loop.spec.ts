@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun } from "./helpers";
+import { currentRunState, expectDemoCompleted, resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -10,12 +10,12 @@ test("should loop through requested changes before completing the review", async
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
 
-  await expect(page.getByText("Review : corrections demandées", { exact: true })).toBeVisible();
-  await expect(page.getByText("developer reprend l’implémentation", { exact: true })).toBeVisible();
-  await expect(page.getByText("Review 2/2 approuvée", { exact: true })).toBeVisible();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Review 1/2 : changements demandés sur le fallback et sa couverture de test.")).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Boucle vers l’implémentation : correction du fallback et ajout du test manquant…")).toBeVisible();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Review 2/2 : approuvée. Les retours ont bien été pris en compte.")).toBeVisible();
+  await expectDemoCompleted(page);
 
-  await expect.poll(async () => (await (await request.get("/api/state")).json()).state).toMatchObject({
+  await expect.poll(() => currentRunState(request)).toMatchObject({
     status: "completed",
     phase: 10,
     artifacts: expect.arrayContaining(["senior-review-round-1.md", "senior-review-round-2.md", "mr-description.md"]),

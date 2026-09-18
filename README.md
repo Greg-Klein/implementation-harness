@@ -47,13 +47,14 @@ impl
 
 Une commande inconnue est refusée avec l’aide et un code de sortie non nul, plutôt que de démarrer le serveur en silence.
 
-`impl status` ne se contente pas de chercher un processus. Il interroge `/api/state`, puis demande au serveur chaque ressource `/_next/static/` que la page référence. Un serveur qui tourne encore sur un build précédent répond avec un manifeste dont les fichiers ont été effacés par la recompilation, et c’est ce qui produit une page sans style. Ses codes de sortie : `0` en écoute et cohérent, `1` en écoute mais incohérent, `3` arrêté.
+`impl status` ne se contente pas de chercher un processus. Il interroge `/api/runs`, puis demande au serveur chaque ressource `/_next/static/` que la page référence. Un serveur qui tourne encore sur un build précédent répond avec un manifeste dont les fichiers ont été effacés par la recompilation, et c’est ce qui produit une page sans style. Ses codes de sortie : `0` en écoute et cohérent, `1` en écoute mais incohérent, `3` arrêté.
 
 ```console
 $ impl status
 Serveur   : en écoute sur http://127.0.0.1:3210 (PID 76579)
 Build     : caiz9bak8t_BsOXSZHCmN sur disque
 API       : répond
+Runs      : 2/3 places occupées, 3 affiché(s), 1 en file
 Ressources: 11 servies, build à jour
 ```
 
@@ -80,13 +81,28 @@ Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
 3. ajouter si nécessaire une instruction propre à cette exécution;
 4. lancer le workflow et répondre aux décisions dans le panneau dédié ou échanger librement dans le terminal.
 
+### Plusieurs runs en parallèle
+
+Le harnais tient plusieurs runs à la fois. La colonne de gauche les liste, du plus récent au plus ancien, et le run sélectionné s’affiche à droite. Chaque ligne donne le dépôt et le ticket, l’étape atteinte, ce que fait l’agent à cet instant, et une pastille orange quand une décision attend une réponse. Le bouton **+** en haut de la liste ramène au formulaire de lancement sans interrompre les runs en cours.
+
+Deux limites encadrent le parallélisme :
+
+- **un run par dépôt**. Deux sessions Claude Code dans le même checkout se disputeraient la branche, le dossier `.claude/tasks` et leurs propres modifications. Un dépôt reste tenu tant que sa session est ouverte, y compris après la fin du workflow : la session attend encore à son prompt et peut toujours écrire;
+- **`IMPL_MAX_CONCURRENT_RUNS` sessions au total** (3 par défaut). Chacune est une vraie session Claude Code, avec son quota et son CPU.
+
+Un lancement qui bute sur l’une des deux n’est pas refusé : il part en file d’attente, visible sous la liste avec la raison de l’attente, et démarre tout seul dès qu’une place et son dépôt se libèrent. Une demande dont le dépôt est encore occupé ne bloque pas celles qui la suivent. La file est enregistrée dans `console/data/queue.json` et survit à un redémarrage : les demandes en attente démarrent dès que le serveur écoute à nouveau, sans que personne ne les relance. Une croix retire une demande de la file.
+
+Un run terminé dont la session est encore ouverte garde sa place. Le bouton **Libérer la place** ferme cette session et laisse la file avancer. Une fois la session fermée, l’icône corbeille de sa ligne, ou le bouton **Fermer** de la vue, retire le run de la liste. Ses documents, sa conversation et son journal restent archivés dans `console/data/runs/<id>/`.
+
+Les notifications, le titre de l’onglet et son icône parlent pour tous les runs à la fois, pas seulement pour celui qui est ouvert : le run qui réclame une réponse est rarement celui qu’on regarde. Les messages qui ne concernent aucun run en particulier (une demande mise en file, une amélioration rebasée) s’affichent dans un bandeau sous l’en-tête.
+
 Le bouton **Documents générés** ouvre un lecteur intégré pour consulter le contexte du ticket, les plans, rapports de tests, reviews et descriptions de MR conservés pendant le run.
 
 Le lecteur n’interrompt pas l’exécution. Si Claude Code pose une question pendant sa consultation, un bandeau signale la décision attendue et le bouton **Répondre** referme le lecteur pour afficher la carte de clarification.
 
 Le panneau de progression récapitule le livrable du run : le ticket, la branche de travail dès que le workflow la crée, et la merge request dès qu’elle est ouverte. Le ticket et la merge request sont cliquables, la branche est là pour être relue. La merge request est lue dans la sortie de la commande qui l’ouvre, donc elle apparaît sans que le workflow ait à la déclarer.
 
-Un run dure longtemps et n’a pas à être surveillé. Le titre de l’onglet et son icône suivent l’état du run, et le navigateur envoie une notification système quand une décision attend une réponse, quand la session réclame de l’attention et quand le run se termine. La permission est demandée au premier lancement, et une notification ne part que si la page n’est pas au premier plan : tant qu’elle est visible, l’interface suffit.
+Un run dure longtemps et n’a pas à être surveillé. Le titre de l’onglet et son icône suivent l’état des runs, et le navigateur envoie une notification système quand une décision attend une réponse, quand la session réclame de l’attention et quand le run se termine. La permission est demandée au premier lancement, et une notification ne part que si la page n’est pas au premier plan : tant qu’elle est visible, l’interface suffit.
 
 Le bouton haut-parleur de l’en-tête ajoute un signal sonore aux mêmes trois moments : une montée à deux notes quand quelque chose est attendu de toi, une résolution à trois notes quand le run est fini. Il est **coupé par défaut** et le réglage est mémorisé dans le navigateur. L’activer joue le signal tout de suite, pour que le réglage se prouve sans attendre un run.
 
@@ -127,6 +143,7 @@ Les réglages disponibles :
 | `IMPL_PORT` | port d’écoute | `3210` |
 | `IMPL_HOST` | interface d’écoute | `127.0.0.1` |
 | `IMPL_NO_OPEN` | `1` pour démarrer sans ouvrir le navigateur | `0` |
+| `IMPL_MAX_CONCURRENT_RUNS` | nombre de runs tenus en parallèle, de 1 à 10 ; au-delà, les lancements attendent en file | `3` |
 | `IMPL_DEMO_STEP_MS` | durée d’une étape du mode démo | `5000` |
 
 Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur le défaut. Un réglage ponctuel ne demande donc aucune écriture :
@@ -195,7 +212,8 @@ La fusion ne s’annonce que si elle a réellement déplacé la branche du harna
 
 Claude Code reste le moteur du workflow. Le harnais ajoute :
 
-- un pseudo-terminal interactif relié à l’interface avec WebSocket;
+- un registre de runs (`console/server/registry.ts`) qui démarre, met en file et libère les sessions, chacune isolée dans sa `RunSession` avec son état, son terminal, ses surveillances de fichiers et sa question en attente;
+- un pseudo-terminal interactif par run, relié à l’interface avec WebSocket. Chaque page s’abonne au run qu’elle affiche et ne reçoit que son terminal et son état, la liste des runs étant diffusée à toutes;
 - des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
 - une surveillance de `.claude/tasks/` pour suivre les étapes et conserver les rapports avant leur nettoyage. Ce dossier appartient au dépôt cible et un run interrompu n’a pas eu le temps de le nettoyer : seuls les fichiers écrits depuis le début du run lui sont rattachés, ceux laissés par un run précédent sont ignorés et ne font pas avancer le rail d’étapes. La surveillance est posée sur `.claude/` et restreinte à `tasks/`, parce que le workflow supprime et recrée ce dossier en cours de run et qu’une surveillance posée dessus ne se réveillerait plus ensuite.
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetRun } from "./helpers";
+import { expectDemoCompleted, resetRun } from "./helpers";
 
 test.beforeEach(async ({ page }) => resetRun(page));
 
@@ -44,7 +44,7 @@ test("should flag again when a later round rewrites the same file", async ({ pag
   await page.getByRole("tab", { name: "Conversation" }).click();
 
   // The demo writes evidence a second time, as a review round would.
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
   await expect(badge).toBeVisible();
 });
 
@@ -55,7 +55,7 @@ test("should flag again when a later round rewrites the same file", async ({ pag
  */
 test("should read the evidence file again when it is written a second time", async ({ page }) => {
   const reads: string[] = [];
-  await page.route("**/api/artifacts?path=*", async (route) => {
+  await page.route("**/api/artifacts?*", async (route) => {
     reads.push(new URL(route.request().url()).searchParams.get("path") ?? "");
     await route.continue();
   });
@@ -64,7 +64,7 @@ test("should read the evidence file again when it is written a second time", asy
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
 
   // dev-evidence.json is written at one step and the stamp moves again at a
   // later one, exactly the shape of a review round overwriting its own file.
@@ -137,7 +137,7 @@ test("should never flag the tab the user is already reading", async ({ page }) =
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
-  await expect(page.getByText("Démonstration terminée", { exact: true })).toBeVisible();
+  await expectDemoCompleted(page);
 
   await expect(page.getByRole("img", { name: "nouvelles preuves" })).toBeHidden();
 });

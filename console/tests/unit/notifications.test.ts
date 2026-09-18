@@ -1,70 +1,90 @@
 import { describe, expect, it } from "@jest/globals";
-import { documentTitle, faviconColor, runAlert } from "../../lib/notifications";
-import type { RunState } from "../../lib/types";
+import { documentTitle, faviconColor, runAlert, runAlerts } from "../../lib/notifications";
+import type { RunSummary } from "../../lib/types";
 
-function state(overrides: Partial<RunState> = {}): RunState {
+function run(overrides: Partial<RunSummary> = {}): RunSummary {
   return {
-    id: "run-1", status: "running", phase: 5, cwd: "/tmp/repo", issueUrl: "", instruction: "",
-    startedAt: "2026-09-07T10:00:00.000Z", endedAt: null, agents: [], activities: [], messages: [], artifacts: [],
+    id: "run-1", status: "running", phase: 5, cwd: "/tmp/repo", issueUrl: "",
+    startedAt: "2026-09-07T10:00:00.000Z", endedAt: null,
+    sessionActive: true, pendingQuestionCount: 0, runningAgents: 0, holdsRepository: true,
     ...overrides,
   };
 }
 
-const question = { id: "q1", questions: [{ question: "Quelle base ?", header: "Branche", options: [], multiSelect: false }] };
+const waiting = { status: "attention" as const, pendingQuestionCount: 1, pendingQuestionId: "q1" };
 
 describe("run notifications", () => {
-  it("should call back when a decision starts waiting", () => {
-    expect(runAlert(state(), state({ status: "attention", pendingQuestion: question }))).toEqual({
+  it("should call back when a decision starts waiting, and name the run", () => {
+    expect(runAlert(run(), run(waiting))).toEqual({
+      runId: "run-1",
       tag: "question-q1",
       title: "Claude attend une réponse",
-      body: "Le workflow attend ta décision pour continuer.",
+      body: "repo · le workflow attend ta décision pour continuer.",
       cue: "attention",
     });
   });
 
   it("should distinguish being needed from the run being over", () => {
-    expect(runAlert(state(), state({ status: "attention", pendingQuestion: question }))?.cue).toBe("attention");
-    expect(runAlert(state(), state({ status: "attention" }))?.cue).toBe("attention");
-    expect(runAlert(state(), state({ status: "completed" }))?.cue).toBe("done");
-    // A blocked run is over too, and what happens next is the user's call.
-    expect(runAlert(state(), state({ status: "failed" }))?.cue).toBe("done");
+    expect(runAlert(run(), run(waiting))?.cue).toBe("attention");
+    expect(runAlert(run(), run({ status: "attention" }))?.cue).toBe("attention");
+    expect(runAlert(run(), run({ status: "completed" }))?.cue).toBe("done");
+    expect(runAlert(run(), run({ status: "failed" }))?.cue).toBe("done");
   });
 
   it("should call back when the session waits without a structured question", () => {
-    expect(runAlert(state(), state({ status: "attention" }))?.title).toBe("Claude Code attend ton attention");
+    expect(runAlert(run(), run({ status: "attention" }))?.title).toBe("Claude Code attend ton attention");
   });
 
   it("should call back when the run ends, and name the merge request when there is one", () => {
-    expect(runAlert(state(), state({ status: "completed" }))?.body).toBe("Le run est allé au bout.");
-    expect(runAlert(state(), state({ status: "completed", mergeRequestUrl: "https://gitlab.com/acme/-/merge_requests/1" }))?.body)
+    expect(runAlert(run(), run({ status: "completed" }))?.body).toBe("Le run est allé au bout.");
+    expect(runAlert(run(), run({ status: "completed", mergeRequestUrl: "https://gitlab.com/acme/-/merge_requests/1" }))?.body)
       .toBe("https://gitlab.com/acme/-/merge_requests/1");
-    expect(runAlert(state(), state({ status: "failed", error: "Code 2" }))?.title).toBe("Le run a échoué");
+    expect(runAlert(run(), run({ status: "failed", error: "Code 2" }))?.title).toBe("Le run a échoué · repo");
   });
 
   it("should stay silent on anything that is not a transition", () => {
-    expect(runAlert(null, state({ status: "attention", pendingQuestion: question }))).toBeUndefined();
-    expect(runAlert(state({ status: "attention", pendingQuestion: question }), state({ status: "attention", pendingQuestion: question }))).toBeUndefined();
-    expect(runAlert(state({ status: "attention" }), state({ status: "attention" }))).toBeUndefined();
-    expect(runAlert(state(), state())).toBeUndefined();
+    expect(runAlert(undefined, run(waiting))).toBeUndefined();
+    expect(runAlert(run(waiting), run(waiting))).toBeUndefined();
+    expect(runAlert(run({ status: "attention" }), run({ status: "attention" }))).toBeUndefined();
+    expect(runAlert(run(), run())).toBeUndefined();
   });
 
   it("should stay silent when the state belongs to another run", () => {
-    expect(runAlert(state({ id: "run-0" }), state({ id: "run-1", status: "completed" }))).toBeUndefined();
-    expect(runAlert(state(), state({ id: null, status: "completed" }))).toBeUndefined();
+    expect(runAlert(run({ id: "run-0" }), run({ id: "run-1", status: "completed" }))).toBeUndefined();
   });
 
-  it("should say in the tab what the window would show", () => {
-    expect(documentTitle(state({ status: "attention", pendingQuestion: question }))).toBe("● Claude attend une réponse · Implementation Harness");
-    expect(documentTitle(state({ status: "attention" }))).toBe("● Attention requise · Implementation Harness");
-    expect(documentTitle(state({ status: "completed" }))).toBe("✓ Terminé · Implementation Harness");
-    expect(documentTitle(state({ status: "failed" }))).toBe("✗ Échec · Implementation Harness");
-    expect(documentTitle(state())).toBe("Run en cours · Implementation Harness");
-    expect(documentTitle(state({ status: "idle" }))).toBe("Implementation Harness");
+  /**
+   * The run that needs the user is rarely the one they have open, so an alert
+   * raised only for the visible run left the other two silent.
+   */
+  it("should raise an alert for every run that changed, not only the open one", () => {
+    const before = [run({ id: "a" }), run({ id: "b" }), run({ id: "c" })];
+    const after = [run({ id: "a" }), run({ id: "b", ...waiting }), run({ id: "c", status: "completed" })];
+    expect(runAlerts(before, after).map((alert) => alert.runId)).toEqual(["b", "c"]);
   });
 
+  it("should stay silent for a run that appeared between the two lists", () => {
+    expect(runAlerts([run({ id: "a" })], [run({ id: "a" }), run({ id: "b", ...waiting })])).toEqual([]);
+  });
+
+  it("should say in the tab what the whole console would show", () => {
+    expect(documentTitle([run(waiting)])).toBe("● Claude attend une réponse · Implementation Harness");
+    expect(documentTitle([run({ id: "a", ...waiting }), run({ id: "b", ...waiting })])).toBe("● 2 runs attendent une réponse · Implementation Harness");
+    expect(documentTitle([run({ status: "attention" })])).toBe("● Attention requise · Implementation Harness");
+    expect(documentTitle([run({ id: "a", status: "attention" }), run({ id: "b", status: "attention" })])).toBe("● Attention requise (2) · Implementation Harness");
+    expect(documentTitle([run({ status: "completed" })])).toBe("✓ Terminé · Implementation Harness");
+    expect(documentTitle([run({ status: "failed" })])).toBe("✗ Échec · Implementation Harness");
+    expect(documentTitle([run()])).toBe("1 run en cours · Implementation Harness");
+    expect(documentTitle([run({ id: "a" }), run({ id: "b" })])).toBe("2 runs en cours · Implementation Harness");
+    expect(documentTitle([])).toBe("Implementation Harness");
+  });
+
+  /** The favicon speaks for the console, so the most demanding run wins. */
   it("should mark a waiting run apart from a healthy one", () => {
-    expect(faviconColor(state({ status: "attention" }))).toBe("#d97706");
-    expect(faviconColor(state({ status: "failed" }))).toBe("#b91c1c");
-    expect(faviconColor(state({ status: "idle" }))).toBe("#1c211f");
+    expect(faviconColor([run({ status: "attention" })])).toBe("#d97706");
+    expect(faviconColor([run({ id: "a" }), run({ id: "b", status: "attention" })])).toBe("#d97706");
+    expect(faviconColor([run({ status: "failed" })])).toBe("#b91c1c");
+    expect(faviconColor([run({ id: "a" }), run({ id: "b", status: "failed" })])).toBe("#477a62");
+    expect(faviconColor([])).toBe("#1c211f");
   });
 });
