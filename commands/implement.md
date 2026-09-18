@@ -203,6 +203,16 @@ Each agent wrote under its own suffix. Two files carry the run, and both are you
 
 **Merge, never replace.** A later batch, and a rework round in step 7, add their rows to what is already there. Keep the per-task files, they are the archive; the merged pair is the view. An archived run that shows seven measurements while its suffixed files hold fifty-two is the failure this contract exists to prevent, and it happened.
 
+### Close step 5 with a roll call against the plan
+
+The implementation phase is not over because the last agent you launched came back. It is over when every task in `planner-output.json` is accounted for. Before you open step 6, put the plan's task ids next to the `developer-report-<id>.md` files that exist and read the two lists against each other, in both directions:
+
+- **A plan id with no report is a task that never ran.** Launch it now, as step 5 describes, and commit it like any other. Do not push it into the review phase, do not demote it to a follow-up ticket, and do not conclude from the diff that it looks done anyway: the per-task report is what feeds the merged one the reviewers read, so a task without one is a task nobody checks.
+- **A report under an id the plan does not carry means the ids drifted.** Say which plan task it actually implemented, or relaunch it under the right id. That suffix is the only mapping between the plan and what was built, and a renumbered one breaks it without a trace.
+- **A task you decided not to run is written down, not left silent.** Name it in the merged `developer-report.md`, with what covers it instead and why. A stated decision is something a reviewer can challenge; an absence is not.
+
+Three archived runs opened their review with a hole here: nine planned tasks and eight reports, seven planned tasks with a report numbered past the end of the plan, and ten planned tasks with the first and the last missing. The first cost the most: the task that never ran was the documentation update, QA raised it as a `P1` in its second pass, and the run paid an extra rework round and about seventeen minutes over its review budget for something a file listing showed at a glance.
+
 ---
 
 ## Step 6 - Make the app reachable and measure the change in it
