@@ -5,7 +5,7 @@ import process from "node:process";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { broadcast, clients, now, reconcileInterruptedRuns, send } from "./context.js";
-import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot } from "./config.js";
+import { hostname, port, dev, pluginRoot, dataRoot, consoleRoot, setListeningPort } from "./config.js";
 import { readArtifact } from "./artifacts.js";
 import { followTranscript } from "./transcript.js";
 import { answerQuestion, processHook } from "./hooks.js";
@@ -241,10 +241,34 @@ wss.on("connection", (socket) => {
   socket.on("close", () => clients.delete(socket));
 });
 
-server.listen(port, hostname, () => console.log(`Implementation Harness: http://${hostname}:${port}`));
+await new Promise<void>((resolve, reject) => {
+  server.once("error", reject);
+  server.listen(port, hostname, () => { server.off("error", reject); resolve(); });
+});
+const address = server.address();
+if (!address || typeof address === "string") throw new Error("Le serveur n'a pas de port TCP.");
+setListeningPort(address.port);
+const url = `http://${hostname}:${port}`;
+console.log(`Implementation Harness: ${url}`);
+// Electron's utility process owns this port. Ordinary Node keeps using signals.
+const desktopParent = (process as typeof process & {
+  parentPort?: { postMessage: (message: unknown) => void; on: (event: "message", listener: (event: { data: unknown }) => void) => void };
+}).parentPort;
+desktopParent?.postMessage({ type: "ready", url });
 // Launches accepted before the last shutdown start now that the server is up.
 void registry.drain();
 
-async function shutdown() { await registry.shutdown(); server.close(); }
-process.on("SIGINT", () => void shutdown().finally(() => process.exit(0)));
-process.on("SIGTERM", () => void shutdown().finally(() => process.exit(0)));
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const timeout = setTimeout(() => process.exit(1), 8_000).unref();
+  for (const socket of wss.clients) socket.terminate();
+  wss.close();
+  server.close();
+  try { await registry.shutdown(); await app.close(); }
+  finally { clearTimeout(timeout); process.exit(0); }
+}
+desktopParent?.on("message", ({ data }) => { if (data === "shutdown") void shutdown(); });
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());

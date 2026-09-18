@@ -35,6 +35,7 @@ function runIdentifier() {
 export class RunRegistry {
   private readonly sessions = new Map<string, RunSession>();
   private queue: QueuedRun[] = [];
+  private shuttingDown = false;
 
   get(runId: string | undefined) {
     return runId ? this.sessions.get(runId) : undefined;
@@ -70,8 +71,10 @@ export class RunRegistry {
    * while the user is still looking at the form rather than an hour later.
    */
   async launch(request: LaunchRequest): Promise<LaunchOutcome> {
+    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
     if (!engine.locate()) throw new Error(`${engine.label} est introuvable dans PATH.`);
     const cwd = await resolveProjectDirectory(request.cwd, request.issueUrl);
+    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
     const entry: QueuedRun = {
       id: `queued-${crypto.randomUUID().slice(0, 8)}`,
       cwd,
@@ -92,6 +95,7 @@ export class RunRegistry {
 
   /** The simulated run, subject to the same ceilings: it takes a slot and it holds its own address. */
   startDemo() {
+    if (this.shuttingDown) throw new Error("L'application est en cours de fermeture.");
     const launch = demoLaunchState();
     if (this.holders().has(launch.cwd)) throw new Error("Une démonstration est déjà en cours.");
     if (this.occupiedSlots() >= maxConcurrentRuns) throw new Error(`Le harnais tient déjà ${maxConcurrentRuns} runs. Libère une place avant de lancer la démonstration.`);
@@ -116,6 +120,7 @@ export class RunRegistry {
     session.publish();
     await clearTaskDirectory(entry.cwd);
     await startArtifactWatcher(session);
+    if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
     session.engine = engine.start({
       cwd: entry.cwd, runId: id, command,
@@ -149,7 +154,7 @@ export class RunRegistry {
     session.activity("system", session.intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
     closeAgentsLeftBehind(session);
     session.publish();
-    scheduleAutonomousReview(session);
+    if (!this.shuttingDown) scheduleAutonomousReview(session);
     // The checkout and the slot are free now, which is what the queue waits on.
     void this.drain();
   }
@@ -218,7 +223,10 @@ export class RunRegistry {
    * the whole queue for it would leave free slots idle.
    */
   async drain() {
+    // PTY exit callbacks may arrive while shutdown is persisting the final state.
+    if (this.shuttingDown) return;
     for (;;) {
+      if (this.shuttingDown) break;
       if (this.occupiedSlots() >= maxConcurrentRuns) break;
       const holders = this.holders();
       const index = this.queue.findIndex((entry) => !holders.has(entry.cwd));
@@ -264,8 +272,23 @@ export class RunRegistry {
   }
 
   async shutdown() {
-    for (const session of this.sessions.values()) await session.dispose().catch(() => undefined);
+    this.shuttingDown = true;
+    for (const session of this.sessions.values()) {
+      session.intentionallyStopped = true;
+      if (runInProgress(session.state.status)) {
+        session.state.status = "stopped";
+        session.state.endedAt = now();
+        session.activity("system", "Session arrêtée à la fermeture de l’application");
+      }
+      session.state.sessionActive = false;
+      session.state.action = undefined;
+      clearPendingQuestion(session);
+      closeAgentsLeftBehind(session);
+      await session.dispose().catch(() => undefined);
+      await session.persist();
+    }
     this.sessions.clear();
+    await this.persistQueue();
   }
 }
 

@@ -89,7 +89,7 @@ export class RunSession {
     void this.persist();
   }
 
-  private async persist() {
+  async persist() {
     if (this.demo) return;
     const runDirectory = path.join(dataRoot, this.id);
     await mkdir(runDirectory, { recursive: true }).catch(() => undefined);

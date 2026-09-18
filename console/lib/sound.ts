@@ -1,4 +1,5 @@
 import type { AlertCue } from "./notifications";
+import type {} from "./desktop";
 
 /**
  * The workflow used to ask the model to play a system sound. That is wrong on
@@ -39,7 +40,8 @@ export function isSoundEnabled() {
   }
 }
 
-export function setSoundEnabled(enabled: boolean) {
+export function setSoundEnabled(enabled: boolean, persist = true) {
+  if (persist) window.desktop?.setSoundEnabled(enabled);
   try {
     window.localStorage.setItem(STORAGE_KEY, enabled ? "on" : "off");
   } catch {

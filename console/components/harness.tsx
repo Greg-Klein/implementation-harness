@@ -12,6 +12,7 @@ import { RunRail } from "./run-rail";
 import { RunView } from "./run-view";
 import { SelfImprovementReviewPanel } from "./self-improvement-review-panel";
 import type { TerminalHandle } from "./terminal-panel";
+import type {} from "@/lib/desktop";
 
 const TICKET_URL = /\/-\/(?:issues|work_items)\/\d+/;
 // Independent of any run, so a slow improvement agent is caught however long it takes.
@@ -182,8 +183,13 @@ export function Harness() {
     document.title = documentTitle(snapshot.runs);
     const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']") ?? document.head.appendChild(Object.assign(document.createElement("link"), { rel: "icon" }));
     icon.href = faviconDataUri(faviconColor(snapshot.runs));
+    window.desktop?.updateStatus({
+      active: snapshot.runs.filter((summary) => summary.holdsRepository).length,
+      attention: snapshot.runs.filter((summary) => summary.status === "attention" || summary.pendingQuestionCount > 0).length,
+    });
     for (const alert of runAlerts(previous, snapshot.runs)) {
       playCue(alert.cue);
+      if (window.desktop) { window.desktop.notify(alert); continue; }
       if (!document.hidden || typeof Notification === "undefined" || Notification.permission !== "granted") continue;
       new Notification(alert.title, { body: alert.body, tag: alert.tag });
     }
@@ -198,6 +204,10 @@ export function Harness() {
 
   useEffect(() => {
     setSound(isSoundEnabled());
+    void window.desktop?.getPreferences().then((preferences) => {
+      setSoundEnabled(preferences.sound, false);
+      setSound(preferences.sound);
+    }).catch(() => undefined);
     const unlock = () => unlockSound();
     window.addEventListener("pointerdown", unlock, { once: true });
     window.addEventListener("keydown", unlock, { once: true });
@@ -206,6 +216,11 @@ export function Harness() {
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+
+  useEffect(() => window.desktop?.onPreferencesChanged((preferences) => {
+    setSoundEnabled(preferences.sound, false);
+    setSound(preferences.sound);
+  }), []);
 
   /** Turning it on plays the cue straight away, so the setting proves itself. */
   const toggleSound = () => {
@@ -252,13 +267,16 @@ export function Harness() {
     changeCwd("");
   }, [openRun, changeCwd]);
 
+  useEffect(() => window.desktop?.onOpenRun(openRun), [openRun]);
+  useEffect(() => window.desktop?.onNewRun(newRun), [newRun]);
+
   const start = () => {
     setError(undefined);
     setComposingRun(false);
     adoptNextRunRef.current = true;
     terminalRef.current?.clear();
     unlockSound();
-    if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
+    if (!window.desktop && typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
     send({ type: "run.start", cwd, issueUrl, instruction });
   };
 

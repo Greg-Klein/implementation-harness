@@ -5,8 +5,7 @@ import { fileURLToPath } from "node:url";
 import { concurrencyLimit, positiveDuration } from "./domain.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const pluginRoot = path.resolve(consoleRoot, "..");
-const envFile = process.env.IMPL_ENV_FILE ?? path.join(pluginRoot, ".env");
+const envFile = process.env.IMPL_ENV_FILE ?? path.resolve(consoleRoot, "..", ".env");
 try {
   process.loadEnvFile(envFile);
 } catch (error) {
@@ -14,11 +13,16 @@ try {
   // but unusable, and staying silent would hide a broken configuration.
   if (existsSync(envFile)) console.warn(`Configuration ignorée, ${envFile} est illisible : ${error instanceof Error ? error.message : error}`);
 }
-export const dataRoot = path.join(consoleRoot, "data", "runs");
-export const feedbackRoot = path.join(consoleRoot, "data", "feedback", "pending");
+export const pluginRoot = path.resolve(process.env.IMPL_PLUGIN_ROOT?.trim() || process.env.IMPL_BUNDLED_PLUGIN_ROOT || path.join(consoleRoot, ".."));
+export const storageRoot = path.resolve(process.env.IMPL_DATA_DIR ?? path.join(consoleRoot, "data"));
+export const dataRoot = path.join(storageRoot, "runs");
+export const feedbackRoot = path.join(storageRoot, "feedback", "pending");
 /** The launches accepted but not started, kept across a restart of the console. */
-export const queueFile = path.join(consoleRoot, "data", "queue.json");
-export const port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
+export const queueFile = path.join(storageRoot, "queue.json");
+export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
+/** Port zero lets the OS bind a free port; agent hooks need the actual one. */
+export function setListeningPort(value: number) { port = value; }
+export const bundledPlugin = process.env.IMPL_BUNDLED_PLUGIN === "true" && !process.env.IMPL_PLUGIN_ROOT?.trim();
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";

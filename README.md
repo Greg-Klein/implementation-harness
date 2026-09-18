@@ -4,13 +4,92 @@ Implementation Harness est une interface locale pour piloter Claude Code pendant
 
 Le dépôt contient un plugin Claude Code dont la commande `/implementation-harness:implement` orchestre le travail : lecture du ticket, questions de clarification, planification, implémentation, tests, revues spécialisées et préparation de la merge request. Le harnais constitue la couche visuelle de cette commande. Il utilise la connexion Claude Code déjà présente sur la machine et ne fait aucun appel direct à l’API Anthropic.
 
-## Installation en une commande
+L’interface s’utilise dans une **application de bureau Electron** ou dans le navigateur via la commande `impl`. Les deux modes partagent le même workflow, les terminaux interactifs et la gestion des runs en parallèle.
+
+## Application de bureau Electron
+
+### Démarrer depuis le dépôt
+
+Installer Node.js 22.12 ou plus récent, puis, depuis la racine du dépôt :
+
+```bash
+cd console
+npm install
+npm run desktop:dev
+```
+
+La fenêtre s’ouvre avec son serveur local embarqué. Electron choisit un port libre sur `127.0.0.1` et gère le démarrage ainsi que l’arrêt du serveur. Il peut fonctionner à côté de la console web lancée avec `impl`.
+
+Pour traiter un ticket, la machine doit disposer de Claude Code connecté, de Git et de `glab` authentifié. Node reste nécessaire aux hooks du plugin et les MCP du workflow doivent être configurés dans Claude Code. Le PATH du shell de connexion est récupéré au lancement depuis le Finder pour retrouver ces outils.
+
+### Installer une version macOS
+
+Une fois le DMG construit, l’ouvrir, copier **Implementation Harness.app** dans **Applications**, puis lancer l’application depuis le Finder ou le Dock. Le ZIP contient la même application. Le serveur et le plugin sont inclus ; aucune commande `impl` n’est nécessaire pour ouvrir la fenêtre.
+
+L’application est testée sur **macOS Apple Silicon**. La configuration d’empaquetage prévoit aussi Linux et Windows, mais ces plateformes nécessitent encore une validation complète.
+
+### Fonctions natives
+
+| Fonction | Comportement |
+|---|---|
+| Sélection du projet | **Parcourir les dossiers…** ouvre le sélecteur natif ; la détection depuis l’URL GitLab reste disponible |
+| Notifications système | une décision, une demande d’attention ou la fin d’un run déclenche une notification lorsque la fenêtre n’a pas le focus ; cliquer affiche le run concerné |
+| Badge du Dock | indique le nombre de runs qui attendent une réponse ou une intervention |
+| Indicateur d’activité | signale les sessions ouvertes sur le Dock ou la barre des tâches, selon le système |
+| Menus et raccourcis | `⌘N` / `Ctrl+N` ouvre un nouveau run ; les menus donnent accès au zoom, aux données locales, à la configuration et aux outils de développement |
+| Préférences | la taille et la position de la fenêtre ainsi que le réglage sonore sont conservés entre les lancements |
+| Instance unique | ouvrir une seconde fois l’application ramène à la fenêtre existante |
+
+Le bouton haut-parleur active les signaux sonores de l’interface, coupés par défaut. L’affichage des notifications dépend aussi des réglages de notifications du système.
+
+Sur macOS, **fermer la fenêtre la masque et laisse les runs continuer**. Le Dock ou le menu **Afficher l’application** la ramène. **Quitter** demande confirmation si des sessions sont encore ouvertes, arrête leurs terminaux et conserve les demandes en file pour le prochain lancement.
+
+Les liens vers les tickets et merge requests s’ouvrent dans le navigateur par défaut. La fenêtre Electron est isolée du système : le preload expose seulement les fonctions natives nécessaires, sans donner accès à Node à l’interface.
+
+### Compiler et empaqueter
+
+Depuis `console/` :
+
+| Commande | Résultat |
+|---|---|
+| `npm run desktop:dev` | compile le serveur Electron et lance l’interface avec rechargement des changements frontend |
+| `npm run desktop:build` | compile l’interface de production, le serveur et l’icône |
+| `npm run desktop:start` | ouvre la dernière compilation de production ; nécessite `desktop:build` au préalable |
+| `npm run desktop:pack` | compile puis produit une application dans `console/release/`, sans installateur |
+| `npm run desktop:dist` | compile et produit les installateurs de la plateforme courante |
+| `npm run desktop:dist:signed` | produit le DMG et le ZIP macOS en exigeant une signature Developer ID valide |
+
+Construire sur la plateforme et l’architecture cibles. Sur un Mac Apple Silicon, le `.app` est créé dans `console/release/mac-arm64/` et les fichiers `.dmg` et `.zip` dans `console/release/`. Les données des runs, la configuration `.env` et les caches de développement sont exclus du paquet.
+
+### Signature macOS et notarisation
+
+La signature utilise un certificat **Developer ID Application** et sa clé privée présents dans le trousseau. Depuis `console/` :
+
+```bash
+security find-identity -v -p codesigning
+npm run desktop:dist:signed
+```
+
+`CSC_NAME` permet de sélectionner le certificat si plusieurs sont disponibles. La construction active Hardened Runtime. Sans profil de notarisation, elle produit une application signée mais non notarisée.
+
+Pour ajouter la notarisation, enregistrer les identifiants dans le trousseau avec l’invite interactive de `notarytool`, puis fournir uniquement le nom du profil à la construction :
+
+```bash
+xcrun notarytool store-credentials "implementation-harness"
+IMPL_NOTARY_PROFILE="implementation-harness" npm run desktop:dist:signed
+```
+
+Le hook soumet l’application signée à Apple, attend son acceptation, puis agrafe et vérifie le ticket avant de créer les installateurs. Un rejet fait échouer la construction. Les identifiants restent dans le trousseau.
+
+Les chemins de données, les tests et les détails techniques sont aussi décrits dans le [guide de la console et de l’application Electron](console/README.md).
+
+## Console web : installation en une commande
 
 Prérequis :
 
 - macOS ou Linux;
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installé et connecté;
-- Node.js 22 ou plus récent;
+- Node.js 22.12 ou plus récent;
 - `git` et [`glab`](https://gitlab.com/gitlab-org/cli) installé et authentifié.
 
 Exécuter :
@@ -28,7 +107,7 @@ L’installateur télécharge les dépendances et crée deux commandes dans `~/.
 
 Si `~/.local/bin` n’est pas encore dans `PATH`, l’installateur affiche la ligne à ajouter à la configuration du shell.
 
-## Utilisation
+## Console web : utilisation
 
 ```bash
 impl
@@ -74,7 +153,11 @@ impl restart
 
 `impl` détecte un harnais déjà en écoute et se contente d’ouvrir le navigateur. Après une recompilation de l’interface, le serveur en cours sert encore l’ancien manifeste Next.js et les feuilles de style renvoient une erreur : la page s’affiche alors sans aucun style. `impl restart` arrête le serveur du port courant, attend la libération du port et relance la version compilée. Il se combine avec le mode démo (`impl restart demo`) et n’arrête rien si son argument est invalide.
 
-Le navigateur s’ouvre sur <http://127.0.0.1:3210>. Dans l’interface :
+Le navigateur s’ouvre sur <http://127.0.0.1:3210>.
+
+## Piloter les runs
+
+Dans la fenêtre Electron comme dans la console web :
 
 1. coller l’URL du ticket GitLab;
 2. vérifier le projet détecté ou renseigner son chemin;
@@ -90,9 +173,9 @@ Deux limites encadrent le parallélisme :
 - **un run par dépôt**. Deux sessions Claude Code dans le même checkout se disputeraient la branche, le dossier `.claude/tasks` et leurs propres modifications. Un dépôt reste tenu tant que sa session est ouverte, y compris après la fin du workflow : la session attend encore à son prompt et peut toujours écrire;
 - **`IMPL_MAX_CONCURRENT_RUNS` sessions au total** (3 par défaut). Chacune est une vraie session Claude Code, avec son quota et son CPU.
 
-Un lancement qui bute sur l’une des deux n’est pas refusé : il part en file d’attente, visible sous la liste avec la raison de l’attente, et démarre tout seul dès qu’une place et son dépôt se libèrent. Une demande dont le dépôt est encore occupé ne bloque pas celles qui la suivent. La file est enregistrée dans `console/data/queue.json` et survit à un redémarrage : les demandes en attente démarrent dès que le serveur écoute à nouveau, sans que personne ne les relance. Une croix retire une demande de la file.
+Un lancement qui bute sur l’une des deux n’est pas refusé : il part en file d’attente, visible sous la liste avec la raison de l’attente, et démarre tout seul dès qu’une place et son dépôt se libèrent. Une demande dont le dépôt est encore occupé ne bloque pas celles qui la suivent. La file est enregistrée dans `queue.json`, sous le [dossier de données du mode utilisé](#configuration), et survit à un redémarrage : les demandes en attente démarrent dès que le serveur écoute à nouveau, sans que personne ne les relance. Une croix retire une demande de la file.
 
-Un run terminé dont la session est encore ouverte garde sa place. Le bouton **Libérer la place** ferme cette session et laisse la file avancer. Une fois la session fermée, l’icône corbeille de sa ligne, ou le bouton **Fermer** de la vue, retire le run de la liste. Ses documents, sa conversation et son journal restent archivés dans `console/data/runs/<id>/`.
+Un run terminé dont la session est encore ouverte garde sa place. Le bouton **Libérer la place** ferme cette session et laisse la file avancer. Une fois la session fermée, l’icône corbeille de sa ligne, ou le bouton **Fermer** de la vue, retire le run de la liste. Ses documents, sa conversation et son journal restent archivés dans `runs/<id>/`, sous le dossier de données.
 
 Les notifications, le titre de l’onglet et son icône parlent pour tous les runs à la fois, pas seulement pour celui qui est ouvert : le run qui réclame une réponse est rarement celui qu’on regarde. Les messages qui ne concernent aucun run en particulier (une demande mise en file, une amélioration rebasée) s’affichent dans un bandeau sous l’en-tête.
 
@@ -102,19 +185,48 @@ Le lecteur n’interrompt pas l’exécution. Si Claude Code pose une question p
 
 Le panneau de progression récapitule le livrable du run : le ticket, la branche de travail dès que le workflow la crée, et la merge request dès qu’elle est ouverte. Le ticket et la merge request sont cliquables, la branche est là pour être relue. La merge request est lue dans la sortie de la commande qui l’ouvre, donc elle apparaît sans que le workflow ait à la déclarer.
 
-Un run dure longtemps et n’a pas à être surveillé. Le titre de l’onglet et son icône suivent l’état des runs, et le navigateur envoie une notification système quand une décision attend une réponse, quand la session réclame de l’attention et quand le run se termine. La permission est demandée au premier lancement, et une notification ne part que si la page n’est pas au premier plan : tant qu’elle est visible, l’interface suffit.
+Un run dure longtemps et n’a pas à être surveillé. Dans la console web, le titre de l’onglet et son icône suivent l’état des runs, et le navigateur envoie une notification système quand une décision attend une réponse, quand la session réclame de l’attention et quand le run se termine. La permission du navigateur est demandée au premier lancement, et une notification ne part que si la page n’est pas au premier plan. L’application Electron utilise les notifications natives décrites plus haut.
 
-Le bouton haut-parleur de l’en-tête ajoute un signal sonore aux mêmes trois moments : une montée à deux notes quand quelque chose est attendu de toi, une résolution à trois notes quand le run est fini. Il est **coupé par défaut** et le réglage est mémorisé dans le navigateur. L’activer joue le signal tout de suite, pour que le réglage se prouve sans attendre un run.
+Le bouton haut-parleur de l’en-tête ajoute un signal sonore aux mêmes trois moments : une montée à deux notes quand quelque chose est attendu de toi, une résolution à trois notes quand le run est fini. Il est **coupé par défaut** et le réglage est mémorisé dans le navigateur ou dans les préférences de l’application Electron. L’activer joue le signal tout de suite, pour que le réglage se prouve sans attendre un run.
 
 Le son vient de l’interface, pas du modèle, et c’est ce qui le rend juste : il part à l’instant exact où la question devient bloquante, alors qu’un son demandé au modèle arrivait en avance et pouvait être oublié. Deux réserves à connaître : un navigateur interdit à une page d’émettre du son avant une interaction, donc le tout premier signal d’une session ouverte sans un clic reste muet, et deux onglets ouverts sur le harnais sonnent deux fois.
 
-Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt. Les commandes et les agents restent dans le dépôt; aucun fichier n’est copié dans `~/.claude`.
+Le harnais exécute Claude Code dans le projet sélectionné avec le plugin de ce dépôt, ou sa copie embarquée dans l’application installée. Aucun fichier du plugin n’est copié dans `~/.claude`.
 
 Quand Claude Code utilise `AskUserQuestion`, le harnais présente les décisions dans un panneau dédié : les choix suggérés peuvent remplir la réponse, qui reste éditable dans un champ de texte avant son envoi. La réponse est transmise à Claude Code par le hook en attente. Le terminal intégré reste visible et interactif pendant toute l’exécution pour les échanges libres et les commandes qui ne passent pas par ce panneau.
 
 ## Configuration
 
-Tout se règle avec une seule commande, sans savoir où vit le fichier :
+### Application Electron
+
+Le menu **Implementation Harness → Réglages…** (`⌘,` sur macOS, `Ctrl+,` ailleurs) ouvre une fenêtre dédiée :
+
+| Rubrique | Réglages |
+|---|---|
+| Général | Dossiers de recherche, avec sélection native et un dossier par ligne ; son des alertes |
+| Exécutions | Nombre de runs en parallèle (1 à 10), accès à distance, auto-audit |
+| Avancé | Dépôt Git du harnais utilisé pour l’auto-amélioration ; durée des étapes de démo en secondes |
+
+**Enregistrer** valide les champs et conserve les autres valeurs du fichier de configuration. Les changements prennent effet avec **Redémarrer l’application** ; si des sessions sont ouvertes, une confirmation prévient de leur arrêt. La file d’attente est conservée. Le son s’applique immédiatement et reste synchronisé avec le bouton de l’en-tête.
+
+Les réglages imposés par l’environnement de lancement sont affichés mais non modifiables. Une modification externe du fichier demande de recharger les valeurs avant d’enregistrer, et fermer une fenêtre contenant des modifications non enregistrées demande confirmation. Aucun éditeur de fichier n’est nécessaire.
+
+| Élément | Application macOS installée | Console web et Electron depuis les sources |
+|---|---|---|
+| Configuration | `~/Library/Application Support/Implementation Harness/.env` | `.env` à la racine du dépôt |
+| Runs, file et retours | `~/Library/Application Support/Implementation Harness/data/` | `console/data/` |
+| Préférences Electron | `~/Library/Application Support/Implementation Harness/preferences.json` | `~/Library/Application Support/Implementation Harness Development/preferences.json` |
+| Journal du serveur Electron | `~/Library/Application Support/Implementation Harness/logs/server.log` | `~/Library/Application Support/Implementation Harness Development/logs/server.log` |
+
+Le menu **Ouvrir les données locales** donne accès aux archives. L’application installée conserve ses données séparément de celles du dépôt ; ses mises à jour ne remplacent pas ce dossier utilisateur.
+
+`IMPL_ENV_FILE` et `IMPL_DATA_DIR`, définis dans l’environnement de lancement, permettent de choisir d’autres chemins absolus. `IMPL_PLUGIN_ROOT` désigne un checkout du harnais à utiliser à la place du plugin embarqué, notamment pour l’auto-amélioration. `IMPL_DESKTOP_USER_DATA` permet d’isoler les préférences et les journaux dans un autre profil Electron.
+
+Electron impose l’écoute sur `127.0.0.1` avec un port libre : `IMPL_PORT`, `IMPL_HOST` et `IMPL_NO_OPEN` concernent la console web. Les réglages de recherche de dépôts, parallélisme et Remote Control s’appliquent aux deux modes.
+
+### Console web avec `impl`
+
+La configuration du dépôt se règle avec :
 
 ```bash
 impl config
@@ -162,6 +274,8 @@ Un run démarre avec Remote Control activé. La session affiche son lien `claude
 Le harnais parcourt les racines de recherche jusqu’à deux niveaux de profondeur, lit le `.git/config` de chaque dossier et en déduit le projet GitLab. Après collage d’un ticket, le chemin détecté remplit le champ projet s’il est vide. Ce champ reste éditable et propose les checkouts découverts pendant la saisie. Un dépôt qui vit ailleurs se rend visible en ajoutant son dossier parent à `IMPL_SEARCH_ROOTS`.
 
 ## Boucle d’auto-amélioration
+
+Dans l’application empaquetée, la boucle nécessite un checkout Git modifiable du harnais, désigné par `IMPL_PLUGIN_ROOT`. Avec le seul plugin embarqué, les retours sont enregistrés mais aucun auto-audit ne modifie le paquet installé. La procédure ci-dessous décrit l’usage depuis un checkout du dépôt.
 
 À la fin d’un run, le panneau de droite permet d’enregistrer un retour concret. Il est conservé localement avec l’identifiant du run et ses documents générés, puis traité avec :
 
@@ -212,6 +326,7 @@ La fusion ne s’annonce que si elle a réellement déplacé la branche du harna
 
 Claude Code reste le moteur du workflow. Le harnais ajoute :
 
+- une application Electron (`console/electron/`) qui gère la fenêtre, les menus, notifications et préférences, et démarre le serveur dans un processus séparé;
 - un registre de runs (`console/server/registry.ts`) qui démarre, met en file et libère les sessions, chacune isolée dans sa `RunSession` avec son état, son terminal, ses surveillances de fichiers et sa question en attente;
 - un pseudo-terminal interactif par run, relié à l’interface avec WebSocket. Chaque page s’abonne au run qu’elle affiche et ne reçoit que son terminal et son état, la liste des runs étant diffusée à toutes;
 - des hooks Claude Code pour suivre les agents et les outils, puis présenter et résoudre les questions structurées dans l’interface;
@@ -225,7 +340,7 @@ Il y a une implémentation aujourd’hui, `claude-code`, et c’est délibéré 
 
 `console/server/engine/README.md` documente le contrat membre par membre, le chemin complet d’une question bloquante, et ce qui reste couplé en dehors du serveur.
 
-Les données sont archivées dans `console/data/runs/<run-id>/` :
+Les données sont archivées dans `runs/<run-id>/`, sous le [dossier de données](#configuration) (`console/data/` depuis le dépôt) :
 
 - `run.json` contient l’état, les agents et l’activité;
 - `terminal.log` contient la sortie brute du terminal;
@@ -254,13 +369,33 @@ npm run test:integration:headed
 
 GitHub Actions exécute le contrôle TypeScript, les tests unitaires, le build de production et les tests d’intégration à chaque pull request et à chaque push sur `main`.
 
+Pour Electron, depuis `console/` :
+
+```bash
+npm run test:desktop:policy
+npm run desktop:build
+npm run test:desktop
+```
+
+Les tests natifs ouvrent une vraie fenêtre Electron et utilisent un faux exécutable Claude ainsi que des données temporaires. Ils vérifient le sélecteur de dossier, les préférences, la validation et la sauvegarde des réglages, les conflits de modification, le redémarrage, le parcours de démonstration, le clic sur une notification, le terminal natif, les hooks sur le port attribué et l’arrêt du serveur avec conservation de la file. Ils ne traitent aucun vrai ticket. Les notifications sont interceptées pendant le test.
+
+Pour viser le paquet macOS Apple Silicon déjà construit :
+
+```bash
+IMPL_DESKTOP_EXECUTABLE="$PWD/release/mac-arm64/Implementation Harness.app/Contents/MacOS/Implementation Harness" npm run test:desktop
+```
+
+Un job macOS de GitHub Actions construit et teste également l’application Electron, puis teste son paquet `.app`. Les rapports Electron sont séparés dans `console/desktop-test-results/`.
+
 ## Développement
 
 ```bash
 cd console
 npm install
-npm run dev
+npm run desktop:dev
 ```
+
+Pour développer dans le navigateur, utiliser `npm run dev`. En mode Electron, les changements frontend sont rechargés ; une modification du serveur, du preload ou du processus principal demande de relancer `desktop:dev`. Pour vérifier la version de production, exécuter `npm run desktop:build` puis `npm run desktop:start`.
 
 Vérifications :
 
@@ -279,6 +414,9 @@ commands/     commandes /implementation-harness:implement, /implementation-harne
 hooks/        événements envoyés au harnais local
 bin/          lanceur impl et commande impl config
 console/      interface Next.js et serveur PTY
+console/electron/  fenêtre native, preload, menus, notifications et icône
+console/electron-builder.cjs  empaquetage des applications de bureau
+console/scripts/notarize.cjs  notarisation Apple depuis un profil du trousseau
 console/server/engine/  la couche qui isole l'agent piloté, une implémentation : claude-code
 install.sh    installation et création des commandes globales
 install-remote.sh  clone ou mise à jour depuis la commande curl
