@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
+import { claudeCode } from "../../server/engine/claude-code";
 import { RunSession } from "../../server/run-session";
 
 let session: RunSession;
@@ -13,6 +14,16 @@ describe("instructions sent from the conversation", () => {
     expect(session.state.messages).toEqual([{ id: "local-1", at: "2026-09-07T11:54:08.000Z", author: "user", text: "reste sur desktop", pending: true }]);
 
     session.conversationMessage({ id: "uuid-1", at: "2026-09-07T11:55:27.000Z", author: "user", text: "reste sur desktop" });
+    expect(session.state.messages).toEqual([{ id: "uuid-1", at: "2026-09-07T11:55:27.000Z", author: "user", text: "reste sur desktop" }]);
+  });
+
+  it("should confirm the local echo of an instruction the console pasted", () => {
+    session.conversationMessage({ id: "local-1", at: "2026-09-07T11:54:08.000Z", author: "user", text: "reste sur desktop", pending: true });
+    const recorded = claudeCode.conversationLine(JSON.stringify({
+      type: "user", uuid: "uuid-1", timestamp: "2026-09-07T11:55:27.000Z",
+      message: { role: "user", content: "<pasted_content id=\"06f1\">\nreste sur desktop\n</pasted_content id=\"06f1\">" },
+    }));
+    session.conversationMessage(recorded!);
     expect(session.state.messages).toEqual([{ id: "uuid-1", at: "2026-09-07T11:55:27.000Z", author: "user", text: "reste sur desktop" }]);
   });
 
