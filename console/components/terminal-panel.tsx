@@ -12,6 +12,14 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
 }>(function TerminalPanel({ onInput, onResize }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
+  /**
+   * Read through a ref rather than closed over: the terminal holds everything
+   * the run has printed and nothing replays it, so rebuilding it because the
+   * parent passed a new callback identity would leave an empty screen fed only
+   * with the redraws of a full-screen UI, which land as scattered fragments.
+   */
+  const callbacks = useRef({ onInput, onResize });
+  useEffect(() => { callbacks.current = { onInput, onResize }; });
 
   useImperativeHandle(ref, () => ({
     write: (data) => terminalRef.current?.write(data),
@@ -40,14 +48,21 @@ export const TerminalPanel = forwardRef<TerminalHandle, {
     terminal.loadAddon(fit);
     terminal.open(containerRef.current);
     terminalRef.current = terminal;
-    const inputDisposable = terminal.onData(onInput);
-    const resize = () => { fit.fit(); onResize(terminal.cols, terminal.rows); };
+    const inputDisposable = terminal.onData((data) => callbacks.current.onInput(data));
+    // A hidden tab has no box to measure: fitting there keeps the default 80x24
+    // and would shrink the agent's pseudo-terminal away from the size it runs at.
+    let laidOut = false;
+    const resize = () => {
+      if (!containerRef.current?.clientWidth) { laidOut = false; return; }
+      fit.fit();
+      callbacks.current.onResize(terminal.cols, terminal.rows);
+      if (!laidOut) { laidOut = true; terminal.focus(); }
+    };
     const observer = new ResizeObserver(resize);
     observer.observe(containerRef.current);
     requestAnimationFrame(resize);
-    terminal.focus();
     return () => { observer.disconnect(); inputDisposable.dispose(); terminal.dispose(); terminalRef.current = null; };
-  }, [onInput, onResize]);
+  }, []);
 
   return <div ref={containerRef} className="h-[calc(100%-48px)] min-h-[492px] w-full" aria-label="Terminal Claude Code" />;
 });
