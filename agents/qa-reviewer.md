@@ -22,6 +22,7 @@ You have access to a browser via **Playwright MCP** to visually inspect and func
 - `.claude/tasks/planner-output.json` (MANDATORY)
 - `.claude/tasks/developer-report.md` (MANDATORY)
 - `.claude/tasks/senior-review.md` (MANDATORY)
+- `.claude/tasks/browser-recipe.md` (MANDATORY when it exists): how the developer put the app into the state its measurements were taken in
 - The full codebase
 - Existing tests
 
@@ -119,12 +120,13 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 
 #### How to use Playwright
 
-1. **Navigate** to the application URL using `browser_navigate`
-2. **Take screenshots** to document current state using `browser_take_screenshot`
-3. **Interact** with the UI: click buttons, fill forms, trigger actions using `browser_click`, `browser_hover`, `browser_fill_form`
-4. **Validate outcomes**: check that expected elements appear, data is displayed correctly, error states work
-5. **Test edge cases**: invalid inputs, empty states, boundary conditions via the browser
-6. **Test responsive** behavior at different viewports using `browser_resize`
+1. **Read `.claude/tasks/browser-recipe.md` when it exists, and put the app into its state with that recipe**, not with a setup of your own. The developer wrote it after reaching the feature, and it carries the stubbed responses verbatim. A stub each agent reconstitutes from prose comes back subtly different, and the difference then reads as a defect: a design review once reported a crash that only its own malformed payload produced, and disproving it cost a round. If you must depart from the recipe, say where and why in your report.
+2. **Navigate** to the application URL using `browser_navigate`
+3. **Take screenshots** to document current state using `browser_take_screenshot`
+4. **Interact** with the UI: click buttons, fill forms, trigger actions using `browser_click`, `browser_hover`, `browser_fill_form`
+5. **Validate outcomes**: check that expected elements appear, data is displayed correctly, error states work
+6. **Test edge cases**: invalid inputs, empty states, boundary conditions via the browser
+7. **Test responsive** behavior at different viewports using `browser_resize`
 
 #### What to validate via Playwright
 
@@ -138,7 +140,7 @@ You MUST use Playwright MCP to test the running application when a URL is availa
 #### If no URL is available
 
 - Check if a dev server can be started (look for `package.json` scripts)
-- Read the developer's `## Preuves navigateur` table and open every screenshot it names under `.claude/tasks/assets/`. The developer reached the feature before you and left measured values behind, sometimes through a temporary harness whose rebuild recipe is in the same table. Confirming a criterion from that evidence is a real verification; ignoring it and calling the criterion unverified is not
+- Read the developer's `## Preuves navigateur` table and open every screenshot it names under `.claude/tasks/assets/`. The developer reached the feature before you and left measured values behind, sometimes through a temporary harness whose rebuild recipe is in `.claude/tasks/browser-recipe.md`. Confirming a criterion from that evidence is a real verification; ignoring it and calling the criterion unverified is not
 - If the evidence is missing or does not cover a criterion, say which one and why, and rely on automated tests for the rest
 - This reduces confidence — flag it clearly
 

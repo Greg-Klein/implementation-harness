@@ -334,7 +334,7 @@ export function phaseForArtifact(relativePath: string) {
   if (name === "ticket-context.md") return 1;
   if (name === "open-questions.md") return 2;
   if (name === "planner-output.json") return 4;
-  if (name.startsWith("developer-report") || name.startsWith("dev-evidence")) return 5;
+  if (name.startsWith("developer-report") || name.startsWith("dev-evidence") || name === "browser-recipe.md") return 5;
   if (name.startsWith("senior-review") || name.startsWith("designer-review") || name.startsWith("qa-report") || name.startsWith("qa-evidence") || name.startsWith("design-evidence")) return 6;
   if (name === "review-summary.md") return 7;
   if (name === "mr-description.md") return 8;

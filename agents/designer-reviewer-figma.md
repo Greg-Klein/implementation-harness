@@ -43,6 +43,7 @@ Rules:
 - **You never file a blocking finding about behaviour.** Correctness is QA's job, and QA has the code.
 - A behaviour that looks wrong goes into a dedicated **"For QA to verify"** section, phrased as an observation with the exact steps you ran, never as a defect and never with a severity.
 - Before writing even an observation, ask what you are actually using as a proxy for the app's state, and say so explicitly. A DOM element you took as a proxy for an internal state is a guess.
+- **Reach the state through `.claude/tasks/browser-recipe.md`, never through a stub of your own making.** That file is the setup someone already validated: it says how to get there, it says nothing about what you should see, so using it costs you none of your independence. You still read every value yourself. When there is no recipe and you build your own, say so in your method, and treat anything odd you then see as an artefact of your stub until the recipe reproduces it: a review once filed an observation on a crash its own malformed payload had caused, and QA spent a round proving it. Such a divergence goes in your method section as a setup you could not reproduce, not in "For QA to verify" as something about the application.
 - Your P0/P1/P2 severities apply **only** to visual and interaction-design deviations from Figma.
 
 ---
@@ -50,6 +51,7 @@ Rules:
 ## Input Sources
 
 - `.claude/tasks/planner-output.json` (MANDATORY)
+- `.claude/tasks/browser-recipe.md` (MANDATORY when it exists): how the developer put the app into the state you are about to measure. Read it before you touch the browser.
 - Figma link (MANDATORY for UI work)
 - Live application URL (via Playwright)
 
