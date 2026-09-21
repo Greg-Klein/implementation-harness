@@ -22,6 +22,13 @@ describe("conversation extraction", () => {
     }))?.author).toBe("user");
   });
 
+  it("should keep only what was typed when the console pasted the instruction", () => {
+    expect(parseConversationLine(line({
+      type: "user", uuid: "u6", timestamp: "2026-09-07T09:05:00.000Z",
+      message: { role: "user", content: "<pasted_content id=\"06f1\">\nles preuves vont dans la description\n</pasted_content id=\"06f1\">" },
+    }))).toEqual({ id: "u6", at: "2026-09-07T09:05:00.000Z", author: "user", text: "les preuves vont dans la description" });
+  });
+
   it("should keep an instruction queued while Claude Code was mid-turn", () => {
     expect(parseConversationLine(line({
       type: "attachment", uuid: "u5", timestamp: "2026-09-07T12:16:55.223Z", isSidechain: false,

@@ -38,6 +38,15 @@ const TAGGED_INPUT = /^<[a-z][a-z-]*(?:\s[^>]*)?>/;
  */
 const IDLE_NOTIFICATION = /waiting for your input/i;
 
+/**
+ * The console submits an instruction as a bracketed paste, so Claude Code
+ * records it wrapped in a paste marker. The dialogue shows what the user wrote,
+ * not how it reached the session.
+ */
+const PASTE_MARKER = /<\/?pasted_content(?:\s[^>]*)?>/g;
+
+const unwrapPaste = (text: string) => text.replace(PASTE_MARKER, "").trim();
+
 function textOf(content: unknown) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -66,13 +75,14 @@ function conversationLine(line: string): ConversationMessage | undefined {
   if (entry.type === "attachment") {
     const attachment = entry.attachment as { type?: unknown; prompt?: unknown } | undefined;
     if (attachment?.type !== "queued_command" || typeof attachment.prompt !== "string") return undefined;
-    const queued = attachment.prompt.trim();
+    const queued = unwrapPaste(attachment.prompt);
     return queued && !TAGGED_INPUT.test(queued) ? { id, at, author: "user", text: queued } : undefined;
   }
   const author = entry.type === "assistant" ? "claude" as const : entry.type === "user" ? "user" as const : undefined;
   if (!author) return undefined;
   const message = entry.message as { content?: unknown } | undefined;
-  const text = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+  const body = textOf(message?.content).replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+  const text = author === "user" ? unwrapPaste(body) : body;
   if (!text || (author === "user" && TAGGED_INPUT.test(text))) return undefined;
   return { id, at, author, text };
 }
