@@ -195,6 +195,7 @@ function normalize(descriptor, answer) {
 
 function hint(descriptor) {
   if (descriptor.kind === "boolean" || descriptor.kind === "flag") return " (oui/non)";
+  if (descriptor.kind === "choice") return ` (${descriptor.options.join(", ")})`;
   return "";
 }
 

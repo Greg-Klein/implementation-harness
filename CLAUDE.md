@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Two things in one repo:
 
-1. **A Claude Code plugin** (`.claude-plugin/`, `commands/`, `agents/`, `hooks/`). `/implementation-harness:implement` drives a GitLab ticket end to end (clarify, plan, implement, test, specialized reviews, MR). `improve` and `rebase` run the self-improvement loop on this repo itself; `review` is the review step.
+1. **A Claude Code plugin** (`.claude-plugin/`, `commands/`, `agents/`, `hooks/`, `skills/`). `/implementation-harness:implement` drives a GitLab ticket end to end (clarify, plan, implement, test, specialized reviews, MR). `improve` and `rebase` run the self-improvement loop on this repo itself; `review` is the review step.
 2. **A local console** (`console/`): a Next.js UI plus a Node server that spawns the real `claude` binary in a PTY (`claude --plugin-dir <this repo> "/implementation-harness:implement <ticket>"`), and makes its progress, agents, questions and documents visible. No direct Anthropic API calls, no API key.
 
 `bin/implementation-harness` is the `impl` launcher (start/demo/restart/stop/status/config/improve). `bin/config.mjs` + `env-schema.mjs` + `env-file.mjs` implement `impl config` over a local `.env` (shell env > `.env` > defaults, see `.env.example`).
@@ -57,6 +57,6 @@ Runtime data lives in `console/data/runs/<run-id>/` (`run.json`, `terminal.log`,
 - Commits: conventional prefixes (`fix:`, `feat:`, `chore:`), subject describes the behavior change in plain words. `self-improvement: apply improvements from self-improvement-<id>` is reserved for the improvement loop.
 - Server modules are ESM and import siblings with the `.js` suffix (Jest maps it back).
 - Unit tests: `describe(...)` + `it("should ...")`, one file per responsibility.
-- Every `agents/*.md` and `commands/*.md` needs YAML frontmatter with `name` and `description` (enforced by `tests/unit/plugin-metadata.test.ts`).
+- Every `agents/*.md`, `commands/*.md` and `skills/*/SKILL.md` needs YAML frontmatter with `name` and `description`, and a skill's `name` is its directory (enforced by `tests/unit/plugin-metadata.test.ts`, which also holds the desktop package to every plugin directory).
 - Editing `commands/` or `agents/` changes the workflow prompts run against real tickets; `implement.md` and agents are tightly coupled to Claude Code tool names.
 - After changing server code, a running `impl` must be restarted (`impl restart`), otherwise it serves a stale Next manifest (unstyled page).

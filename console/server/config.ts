@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { concurrencyLimit, positiveDuration } from "./domain.js";
+import { concurrencyLimit, permissionMode, positiveDuration } from "./domain.js";
 
 export const consoleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envFile = process.env.IMPL_ENV_FILE ?? path.resolve(consoleRoot, "..", ".env");
@@ -26,5 +26,6 @@ export const bundledPlugin = process.env.IMPL_BUNDLED_PLUGIN === "true" && !proc
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
+export const sessionPermissionMode = permissionMode(process.env.IMPL_PERMISSION_MODE, "auto");
 export const demoStepDuration = positiveDuration(process.env.IMPL_DEMO_STEP_MS, 5_000);
 export const maxConcurrentRuns = concurrencyLimit(process.env.IMPL_MAX_CONCURRENT_RUNS, 3);

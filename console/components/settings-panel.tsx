@@ -10,6 +10,13 @@ const sections = [
   { id: "runs" as const, label: "Exécutions", icon: SlidersHorizontalIcon, description: "Ajustez le fonctionnement des sessions Claude Code." },
   { id: "advanced" as const, label: "Avancé", icon: WrenchIcon, description: "Configurez le harnais et son scénario de démonstration." },
 ];
+const permissionModes = [
+  { value: "manual", label: "Demander avant chaque outil" },
+  { value: "acceptEdits", label: "Accepter les modifications de fichiers" },
+  { value: "auto", label: "Automatique (recommandé)" },
+  { value: "dontAsk", label: "Ne rien demander" },
+  { value: "bypassPermissions", label: "Sans aucune vérification" },
+];
 const button = "inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--line)] bg-white px-3.5 py-2 text-xs font-medium transition-colors hover:bg-[var(--paper)] active:translate-y-px disabled:cursor-default disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
 const primary = `${button} !border-[var(--accent)] !bg-[var(--accent)] !text-white hover:!bg-[#38644f]`;
 
@@ -141,6 +148,14 @@ export function SettingsPanel() {
               <p id="runs-help" className="mb-3 mt-1.5 text-xs leading-relaxed text-[var(--muted)]">De 1 à 10 sessions. Les demandes supplémentaires attendent en file ; chaque dépôt reste limité à une session.</p>
               <input id="IMPL_MAX_CONCURRENT_RUNS" type="number" min={1} max={10} step={1} value={draft.IMPL_MAX_CONCURRENT_RUNS} onChange={(event) => edit("IMPL_MAX_CONCURRENT_RUNS", event.target.value)} disabled={disabled("IMPL_MAX_CONCURRENT_RUNS")} aria-invalid={Boolean(errors.IMPL_MAX_CONCURRENT_RUNS)} aria-describedby="runs-help IMPL_MAX_CONCURRENT_RUNS-error" className="field max-w-24 font-mono text-sm disabled:opacity-60" />
               {feedback("IMPL_MAX_CONCURRENT_RUNS")}
+            </section>
+            <section className="border-t border-[var(--line)] pt-6">
+              <label htmlFor="IMPL_PERMISSION_MODE" className="text-sm font-medium">Permissions des sessions</label>
+              <p id="permission-help" className="mb-3 mt-1.5 text-xs leading-relaxed text-[var(--muted)]">Ce que Claude Code s’autorise sans vous. « Demander avant chaque outil » arrête un run laissé sans surveillance dès la première question.</p>
+              <select id="IMPL_PERMISSION_MODE" value={draft.IMPL_PERMISSION_MODE} onChange={(event) => edit("IMPL_PERMISSION_MODE", event.target.value)} disabled={disabled("IMPL_PERMISSION_MODE")} aria-invalid={Boolean(errors.IMPL_PERMISSION_MODE)} aria-describedby="permission-help IMPL_PERMISSION_MODE-error" className="field max-w-80 text-sm disabled:opacity-60">
+                {permissionModes.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              {feedback("IMPL_PERMISSION_MODE")}
             </section>
             <section className="border-t border-[var(--line)] pt-6"><Toggle id="IMPL_REMOTE_CONTROL" label="Accès à distance" help="Reprendre le terminal d’un run sur claude.ai, depuis votre compte Claude Code." checked={draft.IMPL_REMOTE_CONTROL === "true"} disabled={disabled("IMPL_REMOTE_CONTROL")} onChange={(value) => edit("IMPL_REMOTE_CONTROL", String(value))} />{feedback("IMPL_REMOTE_CONTROL")}</section>
             <section className="border-t border-[var(--line)] pt-6"><Toggle id="IMPL_SELF_IMPROVEMENT_AUTORUN" label="Auto-audit" help="Lancer une analyse Claude Code après chaque workflow pour proposer des améliorations au harnais. Utilise votre quota Claude Code." checked={draft.IMPL_SELF_IMPROVEMENT_AUTORUN === "true"} disabled={disabled("IMPL_SELF_IMPROVEMENT_AUTORUN")} onChange={(value) => edit("IMPL_SELF_IMPROVEMENT_AUTORUN", String(value))} />{feedback("IMPL_SELF_IMPROVEMENT_AUTORUN")}<button type="button" onClick={() => setSection("advanced")} className="mt-3 text-xs text-[var(--accent)] underline underline-offset-3">Configurer le dépôt du harnais</button></section>

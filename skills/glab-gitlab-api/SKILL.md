@@ -1,0 +1,82 @@
+---
+name: glab-gitlab-api
+description: Recipes and traps for the `glab` CLI and the GitLab API at Synapse Medicine - linking a ticket to an epic, passing a long description from a file, assigning an issue reliably, reading and writing a work item's native status. Use whenever a glab command fails silently or returns an unexpected error (404 on --epic, assignee_ids ignored, description filled with the literal text "@file.md", status absent from the REST API).
+---
+
+# glab / GitLab API - recipes and traps (Synapse Medicine)
+
+## Linking a ticket to an epic
+
+The `--epic <iid>` flag of `glab issue create` returns a `404 Not Found` (tested on `synapse-medicine&629`). Do not rely on it.
+
+The workflow that works, in three steps:
+
+```bash
+# 1. Create the ticket without --epic
+glab issue create -R <group/project> -t "..." -d "..." -l ... -a ... -y
+
+# 2. Fetch the ticket's INTERNAL id (not its displayed iid)
+glab api "projects/<group%2Fproject>/issues/<iid>"   # the `id` field
+
+# 3. Link it to the epic through the internal id
+glab api --method POST "groups/<group>/epics/<epic_iid>/issues/<internal_id>"
+```
+
+Real example: ticket `material#5854` (internal id `196700862`) linked to epic `synapse-medicine&629`: `glab api --method POST "groups/synapse-medicine/epics/629/issues/196700862"`.
+
+**Group trap**: an epic's iid is scoped to its group, not global. `synapse-medicine&6` and `synapse-medicine/app&6` are two completely different epics that share the iid `6` by coincidence. Always reuse the EXACT group path written in the ticket ("Épique : synapse-medicine/app&6"), never assume the root group applies. Check with `glab api "groups/<url-encoded-group-path>/epics/<iid>"` and compare the title before linking.
+
+MedGPT epics live in the root group `synapse-medicine` (id `3049991`), not `synapse-medicine/app`.
+
+## Passing a long description from a file
+
+For a multi-line markdown description with `glab api`: `--field "description=@file.md"`. The `@` prefix is only interpreted with `--field`.
+
+- `--raw-field "description=@file.md"` sends the literal string `@file.md` (no interpretation).
+- `--input file.json` returns HTTP 400 (wrong Content-Type for the GitLab API).
+
+Epic creation example: `glab api "groups/<gid>/epics" -X POST --field "title=..." --field "description=@desc.md"`.
+
+**Trap with `glab issue create` (not `glab api`)**: its `-d` / `--description` flag does NOT support the `@file` prefix. `-d "@file.md"` literally fills the description with the text `@file.md`. The correct workflow for a long description at creation time:
+
+```bash
+glab issue create -t "..." -d "placeholder" -l ... -a ...
+glab api --method PUT "projects/<path>/issues/<iid>" --field "description=@file.md"
+```
+
+## Assigning an issue
+
+Use `glab issue update <iid> --assignee <username> -R <project>`.
+
+Do not go through `glab api projects/:id/issues -f "assignee_ids[]=<userid>"` (POST or PUT): the assignment is silently ignored (`assignees` stays empty) with no error. The dedicated `glab issue update` command works reliably with the username.
+
+## A ticket's status (work item)
+
+The status ("In progress", "Done"...) is the work item's native field, **NOT a label**. It does not appear in the REST API (`glab api projects/<id>/issues/<iid>` never returns it). The `.statut::*` labels on `app/companion` are a separate, older mechanism.
+
+Read (current status plus the global id, which is NOT the iid):
+
+```bash
+glab api graphql -f query='
+query { project(fullPath: "<group>/<project>") { workItems(iid: "<iid>") { nodes {
+  id widgets { ... on WorkItemWidgetStatus { status { name } } } } } } }'
+```
+
+Write, by name, case insensitive:
+
+```bash
+glab api graphql -f query='
+mutation { workItemUpdate(input: {
+  id: "gid://gitlab/WorkItem/<numeric id>", statusWidget: { name: "In progress" } }) {
+  errors workItem { widgets { ... on WorkItemWidgetStatus { status { name } } } } } }'
+```
+
+Traps:
+- an unknown name writes nothing and returns an error listing the valid statuses;
+- GraphQL answers HTTP 200 with a populated `errors` array, so only `errors: []` proves the write;
+- statuses come from the group's lifecycle, so resolve them by name and never hardcode an id;
+- `glab api graphql` intercepts introspection queries (`__type`) and returns the whole schema.
+
+Statuses of the `synapse-medicine` group (exact casing): To triage, To refine, Backlog, To do, Ready to sprint, Blocked, To do - QA, In progress, In progress - Design review, In progress - Merge request, In progress - QA, Validated - To deploy, Deployed in PR, Done, Won't do, Duplicate.
+
+`/implementation-harness:implement` uses this twice: `In progress` when the branch is created, and `In progress - Merge request` once the merge request is open.

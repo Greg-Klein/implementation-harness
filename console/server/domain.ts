@@ -436,6 +436,18 @@ export function concurrencyLimit(value: string | undefined, fallback: number) {
   return Number.isInteger(parsed) && parsed >= 1 && parsed <= 10 ? parsed : fallback;
 }
 
+export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"] as const;
+
+/**
+ * A run is meant to go all the way without a watcher, so it carries its
+ * permission mode explicitly instead of inheriting whatever the machine that
+ * opens it happens to have configured.
+ */
+export function permissionMode(value: string | undefined, fallback: string) {
+  const mode = value?.trim();
+  return mode && (permissionModes as readonly string[]).includes(mode) ? mode : fallback;
+}
+
 /**
  * Why a queued launch is still waiting, and what it is waiting for. A checkout
  * held by a run always wins over the slot count: naming the free slot as the

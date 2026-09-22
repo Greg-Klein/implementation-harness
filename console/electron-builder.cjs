@@ -13,7 +13,7 @@ module.exports = {
   ],
   extraResources: [{
     from: "..", to: "plugin",
-    filter: [".claude-plugin/**/*", "agents/**/*", "commands/**/*", "hooks/**/*", "README.md", "LICENSE"],
+    filter: [".claude-plugin/**/*", "agents/**/*", "commands/**/*", "hooks/**/*", "skills/**/*", "README.md", "LICENSE"],
   }],
   mac: {
     category: "public.app-category.developer-tools", target: ["dmg", "zip"],

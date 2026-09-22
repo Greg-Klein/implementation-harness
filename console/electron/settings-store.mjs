@@ -5,7 +5,7 @@ import { parseEnv } from "node:util";
 import { expandHome, schema, splitRoots } from "../../bin/env-schema.mjs";
 import { applyEdits, serializeValue, unterminatedKeys } from "../../bin/env-file.mjs";
 
-const keys = ["IMPL_SEARCH_ROOTS", "IMPL_MAX_CONCURRENT_RUNS", "IMPL_REMOTE_CONTROL", "IMPL_SELF_IMPROVEMENT_AUTORUN", "IMPL_DEMO_STEP_MS", "IMPL_PLUGIN_ROOT"];
+const keys = ["IMPL_SEARCH_ROOTS", "IMPL_MAX_CONCURRENT_RUNS", "IMPL_PERMISSION_MODE", "IMPL_REMOTE_CONTROL", "IMPL_SELF_IMPROVEMENT_AUTORUN", "IMPL_DEMO_STEP_MS", "IMPL_PLUGIN_ROOT"];
 const descriptors = schema.filter((entry) => keys.includes(entry.key));
 const defaults = Object.fromEntries(descriptors.map((entry) => [entry.key, entry.fallback]));
 defaults.IMPL_PLUGIN_ROOT = "";

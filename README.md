@@ -24,7 +24,7 @@ Pour traiter un ticket, la machine doit disposer de Claude Code connecté, de Gi
 
 ### Installer une version macOS
 
-Une fois le DMG construit, l’ouvrir, copier **Implementation Harness.app** dans **Applications**, puis lancer l’application depuis le Finder ou le Dock. Le ZIP contient la même application. Le serveur et le plugin sont inclus ; aucune commande `impl` n’est nécessaire pour ouvrir la fenêtre.
+Une fois le DMG construit, l’ouvrir, copier **Implementation Harness.app** dans **Applications**, puis lancer l’application depuis le Finder ou le Dock. Le ZIP contient la même application. Le serveur et le plugin sont inclus : le paquet embarque les commandes, les agents, les hooks et les skills du harnais, et un run n’emprunte rien à la configuration Claude Code de la machine. Aucune commande `impl` n’est nécessaire pour ouvrir la fenêtre. Seul le binaire `claude` reste à installer.
 
 L’application est testée sur **macOS Apple Silicon**. La configuration d’empaquetage prévoit aussi Linux et Windows, mais ces plateformes nécessitent encore une validation complète.
 
@@ -250,6 +250,7 @@ Les réglages disponibles :
 | Variable | Effet | Défaut |
 |---|---|---|
 | `IMPL_SEARCH_ROOTS` | racines où chercher les checkouts, séparées par des virgules | `~/workspace` |
+| `IMPL_PERMISSION_MODE` | mode de permission de chaque run : `manual`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions` | `auto` |
 | `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `false` |
 | `IMPL_REMOTE_CONTROL` | Remote Control sur le terminal d’un run | `true` |
 | `IMPL_PORT` | port d’écoute | `3210` |
@@ -264,6 +265,10 @@ Une variable posée dans le shell l’emporte sur le `.env`, qui l’emporte sur
 IMPL_PORT=4321 impl
 IMPL_NO_OPEN=1 impl
 ```
+
+### Permissions des sessions
+
+Un run est fait pour aller au bout sans surveillance : il démarre donc avec un mode de permission explicite plutôt qu’avec celui configuré sur la machine qui l’ouvre. Par défaut `auto`, le même que les sessions d’arrière-plan du harnais. `manual` redonne la main avant chaque outil, au prix d’un run qui s’arrête à la première question. `bypassPermissions` ne vérifie plus rien. Le mode `plan` n’est pas proposé : il répond par un plan et n’ouvre jamais de merge request.
 
 ### Terminal joignable à distance
 

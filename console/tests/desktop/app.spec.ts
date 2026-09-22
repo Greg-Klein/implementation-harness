@@ -59,7 +59,7 @@ setInterval(() => {}, 1000);
   const environment: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`, IMPL_DESKTOP_USER_DATA: temporary, IMPL_ENV_FILE: envFile, IMPL_DATA_DIR: path.join(temporary, "data") };
   delete environment.ELECTRON_RUN_AS_NODE;
   delete environment.NODE_OPTIONS;
-  for (const key of ["IMPL_SEARCH_ROOTS", "IMPL_MAX_CONCURRENT_RUNS", "IMPL_REMOTE_CONTROL", "IMPL_SELF_IMPROVEMENT_AUTORUN", "IMPL_DEMO_STEP_MS", "IMPL_PLUGIN_ROOT"]) delete environment[key];
+  for (const key of ["IMPL_SEARCH_ROOTS", "IMPL_MAX_CONCURRENT_RUNS", "IMPL_PERMISSION_MODE", "IMPL_REMOTE_CONTROL", "IMPL_SELF_IMPROVEMENT_AUTORUN", "IMPL_DEMO_STEP_MS", "IMPL_PLUGIN_ROOT"]) delete environment[key];
   launchEnvironment = Object.fromEntries(Object.entries(environment).filter((entry): entry is [string, string] => entry[1] !== undefined));
   await launchApplication();
 });
@@ -177,6 +177,7 @@ test("should validate and save settings, then apply them after a native restart"
   await expect(settings.getByText("entier attendu entre 1 et 10")).toBeVisible();
   expect(await readFile(path.join(temporary, "settings.env"), "utf8")).not.toContain("IMPL_MAX_CONCURRENT_RUNS");
   await settings.getByLabel("Runs en parallèle", { exact: true }).fill("5");
+  await settings.getByLabel("Permissions des sessions").selectOption("manual");
   await settings.getByRole("switch", { name: "Accès à distance" }).click();
   await settings.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(settings.getByText("Enregistré. Un redémarrage est nécessaire.")).toBeVisible();
@@ -184,6 +185,7 @@ test("should validate and save settings, then apply them after a native restart"
   expect(saved).toContain("# Preserve this note");
   expect(saved).toContain("PRIVATE_TEST_VALUE='not-for-the-renderer'");
   expect(saved).toContain("IMPL_MAX_CONCURRENT_RUNS='5'");
+  expect(saved).toContain("IMPL_PERMISSION_MODE='manual'");
   expect(saved).toContain("IMPL_REMOTE_CONTROL='false'");
   expect((await (await fetch(`${url}api/runs`)).json()).maxConcurrentRuns).toBe(3);
   await settings.screenshot({ path: test.info().outputPath("settings.png") });

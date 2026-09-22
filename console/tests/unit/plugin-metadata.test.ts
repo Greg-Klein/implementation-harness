@@ -1,14 +1,22 @@
 import { describe, expect, it } from "@jest/globals";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse } from "yaml";
 
 const pluginRoot = path.resolve(process.cwd(), "..");
+/** The layout Claude Code reads from a plugin, and what the desktop package has to carry whole. */
+const pluginDirectories = [".claude-plugin", "agents", "commands", "hooks", "skills"];
 
 function definitions(directory: "agents" | "commands") {
   return readdirSync(path.join(pluginRoot, directory))
     .filter((file) => file.endsWith(".md"))
     .map((file) => path.join(pluginRoot, directory, file));
+}
+
+function skills() {
+  return readdirSync(path.join(pluginRoot, "skills"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(pluginRoot, "skills", entry.name, "SKILL.md"));
 }
 
 function frontmatter(file: string) {
@@ -24,6 +32,26 @@ describe("Claude Code plugin metadata", () => {
       const metadata = frontmatter(file);
       expect(metadata.name).toEqual(expect.any(String));
       expect(metadata.description).toEqual(expect.any(String));
+    }
+  });
+
+  it("should name every skill after the directory it is loaded from", () => {
+    const files = skills();
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const metadata = frontmatter(file);
+      expect(metadata.name).toBe(path.basename(path.dirname(file)));
+      expect(metadata.description).toEqual(expect.any(String));
+    }
+  });
+
+  it("should ship every plugin directory with the desktop application", () => {
+    const configuration = readFileSync(path.join(process.cwd(), "electron-builder.cjs"), "utf8");
+    const filter = configuration.match(/filter:\s*\[([^\]]*)\]/)?.[1];
+    expect(filter).toEqual(expect.any(String));
+    for (const directory of pluginDirectories) {
+      expect(existsSync(path.join(pluginRoot, directory))).toBe(true);
+      expect(filter).toContain(`"${directory}/**/*"`);
     }
   });
 

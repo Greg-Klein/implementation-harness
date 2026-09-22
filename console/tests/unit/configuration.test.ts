@@ -1,11 +1,19 @@
 import { describe, expect, it } from "@jest/globals";
-import { gitLabProjectPath, gitRemoteProjects, positiveDuration } from "../../server/domain";
+import { gitLabProjectPath, gitRemoteProjects, permissionMode, positiveDuration } from "../../server/domain";
 
 describe("harness configuration", () => {
   it("should use positive durations and reject invalid overrides", () => {
     expect(positiveDuration("500", 5_000)).toBe(500);
     expect(positiveDuration("0", 5_000)).toBe(5_000);
     expect(positiveDuration("invalid", 5_000)).toBe(5_000);
+  });
+
+  it("should start a run in a known permission mode rather than a mode Claude Code refuses", () => {
+    expect(permissionMode("bypassPermissions", "auto")).toBe("bypassPermissions");
+    expect(permissionMode(" manual ", "auto")).toBe("manual");
+    expect(permissionMode("plan", "auto")).toBe("auto");
+    expect(permissionMode("", "auto")).toBe("auto");
+    expect(permissionMode(undefined, "auto")).toBe("auto");
   });
 
   it("should extract nested GitLab project paths from issue URLs", () => {

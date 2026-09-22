@@ -1,6 +1,6 @@
 import type { RunAlert } from "./notifications";
 
-export type SettingKey = "IMPL_SEARCH_ROOTS" | "IMPL_MAX_CONCURRENT_RUNS" | "IMPL_REMOTE_CONTROL" | "IMPL_SELF_IMPROVEMENT_AUTORUN" | "IMPL_DEMO_STEP_MS" | "IMPL_PLUGIN_ROOT";
+export type SettingKey = "IMPL_SEARCH_ROOTS" | "IMPL_MAX_CONCURRENT_RUNS" | "IMPL_PERMISSION_MODE" | "IMPL_REMOTE_CONTROL" | "IMPL_SELF_IMPROVEMENT_AUTORUN" | "IMPL_DEMO_STEP_MS" | "IMPL_PLUGIN_ROOT";
 export type SettingsValues = Record<SettingKey, string>;
 export interface SettingsSnapshot {
   values: SettingsValues;

@@ -65,6 +65,15 @@ describe("impl config", () => {
     expect(stderr).toContain("true ou false");
   });
 
+  it("should refuse a permission mode Claude Code does not accept", () => {
+    const file = envFile();
+    const { code, stderr } = config(["set", "IMPL_PERMISSION_MODE=plan"], { IMPL_ENV_FILE: file });
+    expect(code).toBe(1);
+    expect(stderr).toContain("bypassPermissions");
+    expect(config(["set", "IMPL_PERMISSION_MODE=manual"], { IMPL_ENV_FILE: file }).code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("IMPL_PERMISSION_MODE='manual'");
+  });
+
   it("should write a valid value and point at the restart", () => {
     const file = envFile();
     const { code, stdout } = config(["set", "IMPL_PORT=4321"], { IMPL_ENV_FILE: file });

@@ -24,6 +24,7 @@ describe("desktop configuration storage", () => {
     assert.equal(snapshot.values.IMPL_MAX_CONCURRENT_RUNS, "4");
     assert.equal(snapshot.sources.IMPL_MAX_CONCURRENT_RUNS, "file");
     assert.equal(snapshot.sources.IMPL_REMOTE_CONTROL, "default");
+    assert.equal(snapshot.values.IMPL_PERMISSION_MODE, "auto");
     assert.equal(JSON.stringify(snapshot).includes("hidden"), false);
     assert.equal(JSON.stringify(snapshot).includes("PRIVATE_TOKEN"), false);
   });
@@ -41,9 +42,9 @@ describe("desktop configuration storage", () => {
   });
 
   it("should validate all fields before writing and reject unknown keys", () => {
-    const result = save({ IMPL_MAX_CONCURRENT_RUNS: "11", IMPL_REMOTE_CONTROL: "no", IMPL_SEARCH_ROOTS: "", IMPL_DEMO_STEP_MS: "0" });
+    const result = save({ IMPL_MAX_CONCURRENT_RUNS: "11", IMPL_REMOTE_CONTROL: "no", IMPL_SEARCH_ROOTS: "", IMPL_DEMO_STEP_MS: "0", IMPL_PERMISSION_MODE: "plan" });
     assert.equal(result.ok, false);
-    assert.equal(Object.keys(result.errors).length, 4);
+    assert.equal(Object.keys(result.errors).length, 5);
     assert.equal(fs.existsSync(envFile), false);
     assert.equal(save({ NODE_OPTIONS: "--require=/tmp/code.js" }).ok, false);
     assert.equal(save({ IMPL_PLUGIN_ROOT: "x\nNODE_OPTIONS=hello" }).ok, false);

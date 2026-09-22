@@ -40,6 +40,12 @@ function validateText(value) {
   return value.trim() ? [] : [issue("erreur", "une valeur non vide est attendue")];
 }
 
+/**
+ * The permission modes Claude Code accepts, minus "plan", which answers a run
+ * with a plan instead of a merge request.
+ */
+export const permissionModes = ["manual", "acceptEdits", "auto", "dontAsk", "bypassPermissions"];
+
 export const schema = [
   {
     key: "IMPL_SEARCH_ROOTS",
@@ -50,6 +56,17 @@ export const schema = [
     kind: "list",
     readBy: "console",
     validate: validateRoots,
+  },
+  {
+    key: "IMPL_PERMISSION_MODE",
+    label: "Mode de permission des runs",
+    comment: "Permission mode every run is started with; 'manual' asks before each tool and stops an unattended run.",
+    help: "Mode de permission de chaque run. « manual » demande avant chaque outil et bloque un run non surveillé.",
+    fallback: "auto",
+    kind: "choice",
+    options: permissionModes,
+    readBy: "console",
+    validate: validateEnum(permissionModes),
   },
   {
     key: "IMPL_SELF_IMPROVEMENT_AUTORUN",
