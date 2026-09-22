@@ -95,8 +95,9 @@ export type ServerMessage =
    * Something the harness did that belongs to no run: the improvement loop
    * replaying a branch, a queued launch that could not start. It used to land in
    * the activity feed of whichever run happened to be current, which with
-   * several runs means a feed picked at random.
+   * several runs means a feed picked at random. `queuedId` names the waiting
+   * launch a notice is about, so the page can drop it once that launch is gone.
    */
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   /** A launch or a panel action that failed, answered to the page that asked for it. */
   | { type: "error"; message: string; runId?: string };

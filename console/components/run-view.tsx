@@ -109,11 +109,12 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
           <div className="flex flex-wrap items-center gap-2">
             {/*
               A workflow that reached its end still holds its checkout while the
-              session sits at its prompt, and the queue waits on exactly that.
-              Closing the session is therefore an action of its own, named for
-              what it frees rather than for what it stops.
+              session sits at its prompt. The queue takes it back on its own as
+              soon as a launch waits on it; until then the session is the user's
+              to keep or to give up, hence an action of its own, named for what
+              it frees rather than for what it stops.
             */}
-            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient ce dépôt. La fermer libère une place pour la file." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
+            {idleSession && <button type="button" disabled={!connected} onClick={actions.stop} title="La session reste ouverte et tient ce dépôt. Elle se fermera d'elle-même si un run en file l'attend." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><SignOutIcon size={12} /> Libérer la place</button>}
             {active && <button type="button" disabled={!connected} onClick={actions.stop} className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--ink)] transition hover:bg-white active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><StopIcon size={12} weight="fill" /> Arrêter</button>}
             {isClosable(run) && <button type="button" disabled={!connected} onClick={actions.close} title="Retirer ce run de la liste. Ses documents restent archivés sur disque." className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--muted)] transition hover:bg-white hover:text-[var(--ink)] active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"><TrashIcon size={12} /> Fermer</button>}
           </div>

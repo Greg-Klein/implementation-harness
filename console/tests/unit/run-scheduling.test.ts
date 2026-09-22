@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { concurrencyLimit, describeQueue, emptyState, runHoldsRepository, summarizeRun } from "../../server/domain";
+import { concurrencyLimit, describeQueue, emptyState, exitReport, runHoldsRepository, sessionsToReleaseForQueue, summarizeRun } from "../../server/domain";
 import type { QueuedRun, RunState } from "../../server/types";
 
 function state(overrides: Partial<RunState> = {}): RunState {
@@ -104,5 +104,67 @@ describe("why a queued launch is still waiting", () => {
   it("should keep the order the launches were asked in", () => {
     const described = describeQueue([queued({ id: "q1" }), queued({ id: "q2" }), queued({ id: "q3" })], new Map());
     expect(described.map((entry) => entry.id)).toEqual(["q1", "q2", "q3"]);
+  });
+});
+
+/** A run as the release decision reads it, finished and still holding its session unless said otherwise. */
+function held(overrides: Partial<{ id: string; cwd: string; status: RunState["status"]; sessionActive: boolean; endedAt: string | null }> = {}) {
+  return { id: "run-1", cwd: "/work/repo-a", status: "completed" as const, sessionActive: true, endedAt: "2026-09-18T11:00:00.000Z", ...overrides };
+}
+
+describe("the finished sessions the queue takes back", () => {
+  it("should take none while nothing is waiting, however long the session has been idle", () => {
+    expect(sessionsToReleaseForQueue([held()], [], 3)).toEqual([]);
+  });
+
+  it("should take the session of the finished run a launch is waiting on", () => {
+    expect(sessionsToReleaseForQueue([held()], [queued()], 3)).toEqual(["run-1"]);
+  });
+
+  it("should leave a run that is still working, whoever is waiting for its checkout", () => {
+    expect(sessionsToReleaseForQueue([held({ status: "running" })], [queued()], 3)).toEqual([]);
+    expect(sessionsToReleaseForQueue([held({ status: "attention" })], [queued()], 3)).toEqual([]);
+  });
+
+  it("should leave a finished run whose session is already gone, since it holds nothing", () => {
+    expect(sessionsToReleaseForQueue([held({ sessionActive: false })], [queued()], 3)).toEqual([]);
+  });
+
+  it("should take the oldest finished session when the queue is short of a slot rather than of that checkout", () => {
+    const runs = [
+      held({ id: "run-1", cwd: "/work/repo-a", endedAt: "2026-09-18T11:00:00.000Z" }),
+      held({ id: "run-2", cwd: "/work/repo-b", endedAt: "2026-09-18T10:00:00.000Z" }),
+    ];
+    expect(sessionsToReleaseForQueue(runs, [queued({ cwd: "/work/repo-c" })], 2)).toEqual(["run-2"]);
+  });
+
+  it("should take every finished session a launch waits on, plus nothing else", () => {
+    const runs = [
+      held({ id: "run-1", cwd: "/work/repo-a" }),
+      held({ id: "run-2", cwd: "/work/repo-b" }),
+      held({ id: "run-3", cwd: "/work/repo-c" }),
+    ];
+    const queue = [queued({ id: "q1", cwd: "/work/repo-a" }), queued({ id: "q2", cwd: "/work/repo-c" })];
+    expect(sessionsToReleaseForQueue(runs, queue, 3).sort()).toEqual(["run-1", "run-3"]);
+  });
+
+  it("should keep the room it already has when a working run is what fills it", () => {
+    const runs = [held({ id: "run-1", cwd: "/work/repo-a", status: "running" })];
+    expect(sessionsToReleaseForQueue(runs, [queued({ cwd: "/work/repo-b" })], 1)).toEqual([]);
+  });
+});
+
+describe("what the feed says about a session that went away", () => {
+  it("should name the queue when the console gave the place back", () => {
+    expect(exitReport("queue", 143)).toBe("Place libérée pour la file d'attente");
+  });
+
+  it("should name the user when they stopped it themselves", () => {
+    expect(exitReport("user", 143)).toBe("Session arrêtée par l'utilisateur");
+  });
+
+  it("should tell a clean end from an interrupted one when nobody asked for it", () => {
+    expect(exitReport(null, 0)).toBe("Session terminée");
+    expect(exitReport(null, 1)).toBe("Session interrompue");
   });
 });

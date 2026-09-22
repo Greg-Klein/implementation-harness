@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
 import { dataRoot, hostname, maxConcurrentRuns, port, queueFile } from "./config.js";
-import { closeAbandonedAgents, describeQueue, runInProgress, terminalExitStatus } from "./domain.js";
+import { closeAbandonedAgents, describeQueue, exitReport, runInProgress, sessionsToReleaseForQueue, terminalExitStatus } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
 import { clearPendingQuestion } from "./hooks.js";
@@ -30,7 +30,8 @@ function runIdentifier() {
  *   Code session with its own quota and its own CPU.
  *
  * A launch that hits either one is queued rather than refused, and the queue is
- * drained the moment a run lets go of its checkout.
+ * drained the moment a run lets go of its checkout. A run whose workflow is over
+ * is made to let go, rather than waited for: see releaseFinishedSessions.
  */
 export class RunRegistry {
   private readonly sessions = new Map<string, RunSession>();
@@ -84,8 +85,9 @@ export class RunRegistry {
     };
     if (this.holders().has(cwd) || this.occupiedSlots() >= maxConcurrentRuns) {
       this.queue = [...this.queue, entry];
-      await this.persistQueue();
-      this.publishSnapshot();
+      // What blocks it may be a run that has already finished, and draining is
+      // where that is noticed and its session given up.
+      await this.drain();
       return { queued: entry };
     }
     const started = await this.start(entry);
@@ -147,11 +149,11 @@ export class RunRegistry {
     // The workflow can already have closed the run, and how its idle session
     // then ends says nothing about the outcome it reached.
     if (runInProgress(session.state.status)) {
-      session.state.status = terminalExitStatus(exitCode, session.intentionallyStopped);
+      session.state.status = terminalExitStatus(exitCode, session.stoppedBy !== null);
       session.state.endedAt = now();
       if (session.state.status === "failed") session.state.error = `${engine.label} s'est arrêté avec le code ${exitCode}.`;
     }
-    session.activity("system", session.intentionallyStopped ? "Session arrêtée par l'utilisateur" : exitCode === 0 ? "Session terminée" : "Session interrompue", `Code ${exitCode}`);
+    session.activity("system", exitReport(session.stoppedBy, exitCode), `Code ${exitCode}`);
     closeAgentsLeftBehind(session);
     session.publish();
     if (!this.shuttingDown) scheduleAutonomousReview(session);
@@ -174,7 +176,7 @@ export class RunRegistry {
       return;
     }
     if (!session.engine) return;
-    session.intentionallyStopped = true;
+    session.stoppedBy = "user";
     clearPendingQuestion(session);
     session.engine.kill();
     session.engine = null;
@@ -238,8 +240,26 @@ export class RunRegistry {
         broadcast({ type: "notice", level: "attention", title: "Run en file non démarré", detail: error instanceof Error ? error.message : String(error), at: now() });
       }
     }
+    this.releaseFinishedSessions();
     await this.persistQueue();
     this.publishSnapshot();
+  }
+
+  /**
+   * Closes the sessions of the finished runs the queue is waiting on. The kill
+   * is asynchronous: the entries they were blocking start from the exit of each
+   * session, which drains the queue again.
+   */
+  private releaseFinishedSessions() {
+    const runs = [...this.sessions.values()].map((session) => ({ id: session.id, cwd: session.state.cwd, status: session.state.status, sessionActive: session.state.sessionActive, endedAt: session.state.endedAt }));
+    for (const runId of sessionsToReleaseForQueue(runs, this.queue, maxConcurrentRuns)) {
+      const session = this.sessions.get(runId);
+      if (!session?.engine) continue;
+      session.stoppedBy = "queue";
+      clearPendingQuestion(session);
+      session.engine.kill();
+      session.engine = null;
+    }
   }
 
   private expect(runId: string) {
@@ -274,7 +294,7 @@ export class RunRegistry {
   async shutdown() {
     this.shuttingDown = true;
     for (const session of this.sessions.values()) {
-      session.intentionallyStopped = true;
+      session.stoppedBy = "user";
       if (runInProgress(session.state.status)) {
         session.state.status = "stopped";
         session.state.endedAt = now();

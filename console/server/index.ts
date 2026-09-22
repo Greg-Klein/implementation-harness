@@ -109,7 +109,7 @@ async function handleClientMessage(socket: WebSocket, message: ClientMessage) {
       return;
     }
     send(socket, {
-      type: "notice", level: "info", at: now(),
+      type: "notice", level: "info", at: now(), queuedId: outcome.queued.id,
       title: "Run mis en file",
       detail: `${path.basename(outcome.queued.cwd)} démarrera dès qu'une place et son dépôt seront libres.`,
     });

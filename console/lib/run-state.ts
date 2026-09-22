@@ -88,6 +88,16 @@ export function isClosable(run: { status: Status; sessionActive?: boolean }) {
   return !runInProgress(run.status) && run.sessionActive !== true;
 }
 
+/**
+ * Whether a notice about a queued launch has stopped being true. The message
+ * announces a wait, and the wait is over as soon as the entry leaves the queue,
+ * started or cancelled: leaving it on screen tells the user their run is still
+ * waiting while it is running under their eyes.
+ */
+export function noticeIsStale(notice: { queuedId?: string } | undefined, queued: { id: string }[]) {
+  return notice?.queuedId !== undefined && !queued.some((entry) => entry.id === notice.queuedId);
+}
+
 /** A run whose workflow is over but whose agent session is still up, holding its checkout against the queue. */
 export function holdsIdleSession(run: { status: Status; sessionActive?: boolean }) {
   return !runInProgress(run.status) && run.sessionActive === true;

@@ -40,12 +40,13 @@ export type RunSummary = {
 export type QueuedRun = { id: string; cwd: string; issueUrl: string; instruction: string; queuedAt: string };
 export type QueuedRunView = QueuedRun & { reason: "slot" | "repository"; blockedBy?: string };
 export type HarnessSnapshot = { runs: RunSummary[]; queued: QueuedRunView[]; maxConcurrentRuns: number };
-export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string };
+/** `queuedId`: the waiting launch this notice is about, which stops being true as soon as that launch leaves the queue. */
+export type Notice = { level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string };
 export type ServerMessage =
   | { type: "harness"; snapshot: HarnessSnapshot }
   | { type: "run"; state: RunState }
   | { type: "terminal.output"; runId: string; data: string }
-  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string }
+  | { type: "notice"; level: "info" | "attention"; title: string; detail?: string; at: string; queuedId?: string }
   | { type: "error"; message: string; runId?: string };
 
 export type RepositoryOption = { project: string; path: string; resolvedPath: string; exists: boolean };

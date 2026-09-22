@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, sessionAlive } from "../../lib/run-state";
+import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun, isTranscriptStalled, isWriting, noticeIsStale, sessionAlive } from "../../lib/run-state";
 import { terminalExitStatus } from "../../server/domain";
 
 describe("run state selectors", () => {
@@ -84,5 +84,21 @@ describe("run state selectors", () => {
     expect(terminalExitStatus(0, true)).toBe("stopped");
     expect(terminalExitStatus(0, false)).toBe("completed");
     expect(terminalExitStatus(1, false)).toBe("failed");
+  });
+});
+
+describe("the message announcing a queued launch", () => {
+  it("should stand while that launch is still waiting", () => {
+    expect(noticeIsStale({ queuedId: "q1" }, [{ id: "q1" }, { id: "q2" }])).toBe(false);
+  });
+
+  it("should fall as soon as that launch has left the queue, started or cancelled", () => {
+    expect(noticeIsStale({ queuedId: "q1" }, [{ id: "q2" }])).toBe(true);
+    expect(noticeIsStale({ queuedId: "q1" }, [])).toBe(true);
+  });
+
+  it("should leave every other message alone, however long the queue stays empty", () => {
+    expect(noticeIsStale({}, [])).toBe(false);
+    expect(noticeIsStale(undefined, [])).toBe(false);
   });
 });

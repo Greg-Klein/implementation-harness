@@ -28,8 +28,8 @@ export class RunSession {
   readonly id: string;
   state: RunState;
   terminalBuffer = "";
-  /** A stop the user asked for is neither a crash nor a workflow that ran to its end. */
-  intentionallyStopped = false;
+  /** Who ended the session, when it was not the workflow: a stop the user asked for, or the place given back to the queue. Neither is a crash. */
+  stoppedBy: "user" | "queue" | null = null;
   engine: EngineSession | null = null;
   artifactWatcher: FSWatcher | null = null;
   /** Where the dialogue is read from, and how far it has been read. */

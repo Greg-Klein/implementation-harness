@@ -96,6 +96,17 @@ export function terminalExitStatus(exitCode: number, intentionallyStopped: boole
 }
 
 /**
+ * What the feed says about a session that went away. A session the console
+ * itself killed left the same line as a crash, which on a finished run read as
+ * an incident where there was only a place given back.
+ */
+export function exitReport(stoppedBy: "user" | "queue" | null, exitCode: number) {
+  if (stoppedBy === "queue") return "Place libérée pour la file d'attente";
+  if (stoppedBy === "user") return "Session arrêtée par l'utilisateur";
+  return exitCode === 0 ? "Session terminée" : "Session interrompue";
+}
+
+/**
  * The autonomous loop only has something to learn from a run that left a trace:
  * a delegated agent, a produced document, or an unexpected exit. A session
  * stopped before any of that happened would otherwise spend a full improvement
@@ -350,10 +361,40 @@ export function emptyState(): RunState {
  * Whether a run still holds the checkout it was started on. The workflow reaching
  * its last phase does not release it: the session stays open at its prompt, the
  * user keeps talking to it and it keeps writing to the same working tree. Only a
- * session that is gone frees the repository, which is what the queue waits on.
+ * session that is gone frees the repository, which is what the queue waits on,
+ * and what sessionsToReleaseForQueue takes back when someone is waiting.
  */
 export function runHoldsRepository(state: Pick<RunState, "status" | "sessionActive">) {
   return runInProgress(state.status) || state.sessionActive;
+}
+
+/** A run as the release decision reads it: what it holds, and since when it has nothing left to do. */
+type HeldRun = { id: string; cwd: string; status: RunStatus; sessionActive: boolean; endedAt: string | null };
+
+/**
+ * The finished runs whose session has to go for the queue to move. Their
+ * workflow is over but their session sits at its prompt, holding a checkout and
+ * a slot: harmless while nobody is waiting, which is why the session is kept,
+ * and unacceptable the moment a queued launch needs exactly what it holds. So a
+ * run with nothing left to do yields to one that has work, rather than waiting
+ * for the user to notice and free the place by hand.
+ */
+export function sessionsToReleaseForQueue(runs: HeldRun[], queue: QueuedRun[], maxConcurrentRuns: number) {
+  if (queue.length === 0) return [];
+  const idle = runs
+    .filter((run) => runHoldsRepository(run) && !runInProgress(run.status))
+    .sort((left, right) => (left.endedAt ?? "").localeCompare(right.endedAt ?? ""));
+  const awaited = new Set(queue.map((entry) => entry.cwd));
+  const released = new Set(idle.filter((run) => awaited.has(run.cwd)).map((run) => run.id));
+  const held = runs.filter((run) => runHoldsRepository(run) && !released.has(run.id));
+  // Whoever is still waiting with its checkout free is waiting on a slot alone,
+  // and the run that finished first is the one that has held one the longest.
+  const waitsOnSlot = queue.some((entry) => !held.some((run) => run.cwd === entry.cwd));
+  if (waitsOnSlot && held.length >= maxConcurrentRuns) {
+    const oldest = idle.find((run) => !released.has(run.id));
+    if (oldest) released.add(oldest.id);
+  }
+  return [...released];
 }
 
 /**

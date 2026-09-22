@@ -3,7 +3,7 @@
 import { CodeIcon, SpeakerHighIcon, SpeakerSlashIcon, WarningIcon, XIcon } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { documentTitle, faviconColor, faviconDataUri, runAlerts } from "@/lib/notifications";
-import { isWriting, sessionAlive } from "@/lib/run-state";
+import { isWriting, noticeIsStale, sessionAlive } from "@/lib/run-state";
 import { isSoundEnabled, playCue, setSoundEnabled, unlockSound } from "@/lib/sound";
 import type { HarnessSnapshot, Notice, PendingImprovementsResponse, PendingSelfImprovementReview, RepositoryOption, RepositoryResponse, RunState, RunSummary, ServerMessage } from "@/lib/types";
 import { LaunchForm } from "./launch-form";
@@ -114,6 +114,12 @@ export function Harness() {
   useEffect(() => {
     if (openRunId && !snapshot.runs.some((summary) => summary.id === openRunId)) openRun(null);
   }, [snapshot.runs, openRunId, openRun]);
+
+  // The queue itself says what is still waiting, so a message announcing a wait
+  // goes as soon as the wait does, without the user having to close it.
+  useEffect(() => {
+    if (noticeIsStale(notice, snapshot.queued)) setNotice(undefined);
+  }, [snapshot.queued, notice]);
 
   /**
    * A page showing nothing, next to a console holding exactly one run, is
