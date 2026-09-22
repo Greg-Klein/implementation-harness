@@ -78,7 +78,7 @@ Two hard constraints shape the order:
 Round N:
 
 1. **senior-reviewer**. It reads code and opens no browser, so it may run **alongside a browser-based review** to save wall-clock time, **but only if it holds its fixes until that review is finished**. If it applies them live, the review measures a moving target and its findings become unreliable. When you cannot guarantee that, run it first and alone. This holds for every measurement in flight, not only the design review: a `qa-reviewer` driving the app counts, and so does a measurement the caller took itself and told you about. A measurement whose code moved under it is reported non conclusive and redone on the frozen code, never folded into the summary as a result.
-2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, and the viewports. It must not read source code. When the app is out of reach, skip it and hand the developer's browser evidence to `qa-reviewer` instead, so the observable criteria still get a verdict each rather than a single skipped line.
+2. **designer-reviewer**, only if a Figma link exists and the app is reachable. Give it the Figma links, the URL, the route, the viewports, and the path to `.claude/tasks/browser-recipe.md` when the implementation left one. It must not read source code. When the app is out of reach, skip it and hand the developer's browser evidence to `qa-reviewer` instead, so the observable criteria still get a verdict each rather than a single skipped line.
 3. **qa-reviewer** last, so it validates the final state of the round, fixes included.
 
 When in doubt, sequential. A faster loop that returns wrong findings costs more than the minutes it saves.

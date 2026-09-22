@@ -68,6 +68,7 @@ describe("artifact handling", () => {
   it("should map generated documents to workflow phases", () => {
     expect(phaseForArtifact("ticket-context.md")).toBe(1);
     expect(phaseForArtifact("nested/developer-report-2.md")).toBe(5);
+    expect(phaseForArtifact("browser-recipe.md")).toBe(5);
     expect(phaseForArtifact("senior-review.md")).toBe(6);
     expect(phaseForArtifact("mr-description.md")).toBe(8);
     expect(phaseForArtifact("unknown.txt")).toBe(0);
