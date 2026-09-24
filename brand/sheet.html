@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Planche de style</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("../console/node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Geist Mono"; src: url("../console/node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; }
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1600px; background: var(--paper); color: var(--ink); font-family: "Geist", sans-serif; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "Geist Mono", monospace; }
+  .sheet { padding: 64px 72px 72px; }
+  header { display: flex; align-items: center; gap: 22px; padding-bottom: 36px; border-bottom: 1px solid var(--line); }
+  header svg { width: 72px; height: 72px; }
+  header h1 { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+  header p { margin-top: 6px; font-size: 14px; color: var(--muted); }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .16em; color: var(--muted); margin-bottom: 18px; }
+  section { padding-top: 40px; }
+  .grid { display: grid; gap: 16px; }
+  .colors { grid-template-columns: repeat(9, 1fr); }
+  .swatch { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .swatch .chip { height: 112px; border-bottom: 1px solid var(--line); }
+  .swatch div.meta { padding: 12px 14px 14px; }
+  .swatch b { display: block; font-size: 12px; font-weight: 600; }
+  .swatch code { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .swatch span { display: block; margin-top: 8px; font-size: 11px; line-height: 1.45; color: var(--muted); }
+  .two { grid-template-columns: 1fr 1fr; gap: 56px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .stack > * + * { margin-top: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 600; }
+  .progress { background: var(--accent-soft); color: var(--accent); }
+  .success { background: var(--color-emerald-50); color: var(--color-emerald-700); }
+  .attention { background: var(--color-amber-100); color: var(--color-amber-800); }
+  .error { background: var(--color-red-50); color: var(--color-red-700); }
+  .neutral { background: var(--line); color: var(--muted); }
+  .alert { display: flex; gap: 10px; border-radius: 10px; border: 1px solid; padding: 12px 14px; font-size: 12px; line-height: 1.5; }
+  .alert.warn { background: var(--color-amber-50); border-color: var(--color-amber-200); color: var(--color-amber-900); }
+  .alert.fail { background: var(--color-red-50); border-color: var(--color-red-200); color: var(--color-red-800); }
+  .alert svg { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+  .type > div { display: grid; grid-template-columns: 170px 1fr; align-items: baseline; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .type > div:last-child { border-bottom: 0; }
+  .type small { font-size: 11px; color: var(--muted); }
+  .button { display: inline-flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid var(--line); background: white; padding: 8px 14px; font-size: 12px; font-weight: 500; }
+  .button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .button.dark { background: var(--ink); border-color: var(--ink); color: white; border-radius: 11px; padding: 12px 16px; font-size: 13px; }
+  .field { width: 100%; border-radius: 10px; border: 1px solid var(--line); background: white; padding: 12px 14px; font-size: 13px; }
+  .field.focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  label.l { display: block; font-size: 14px; font-weight: 500; }
+  .help { margin: 6px 0 10px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+  .toggle { width: 44px; height: 24px; border-radius: 999px; padding: 2px; background: #c7cdc7; }
+  .toggle.on { background: var(--accent); }
+  .toggle i { display: block; width: 20px; height: 20px; border-radius: 999px; background: white; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .toggle.on i { transform: translateX(20px); }
+  .nav { width: 200px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+  .nav div { border-radius: 8px; padding: 10px 12px; font-size: 12px; font-weight: 500; color: var(--muted); }
+  .nav div.active { background: var(--accent-soft); color: var(--accent); }
+  .phases { list-style: none; padding: 0; }
+  .phases li { position: relative; display: flex; align-items: center; gap: 10px; height: 36px; font-size: 12px; }
+  .phases li + li::before { content: ""; position: absolute; left: 9.5px; top: -16px; height: 16px; width: 1px; background: var(--line); }
+  .phases li.done + li::before { background: var(--accent); }
+  .dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font: 9px "Geist Mono", monospace; }
+  .done .dot { background: var(--accent); border-color: var(--accent); color: white; }
+  .current .dot { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .current { font-weight: 600; }
+  .terminal { background: var(--terminal); color: #dfe5df; border-radius: 12px; padding: 18px 20px; font: 12px/1.7 "Geist Mono", monospace; }
+  .terminal .g { color: #88ad8e; }
+  .terminal .m { color: #aeb6b0; }
+  .shapes { grid-template-columns: repeat(4, 1fr); }
+  .shape { height: 88px; background: white; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; color: var(--muted); }
+  .floating { box-shadow: 0 26px 70px -42px rgba(38,50,43,.42); border-color: transparent; }
+  .curve { display: flex; align-items: center; gap: 18px; font-size: 12px; color: var(--muted); }
+  .curve svg { width: 120px; height: 72px; background: white; border: 1px solid var(--line); border-radius: 10px; }
+  .doc { color: var(--doc); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <svg viewBox="0 0 1024 1024" aria-hidden="true"><rect x="80" y="80" width="864" height="864" rx="194" fill="#1c3029"/><path d="M325 354 477 512 325 670M537 670H713" fill="none" stroke="#e9eee5" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/><circle cx="716" cy="326" r="34" fill="#88ad8e"/></svg>
+    <div><h1>Implementation Harness</h1><p>Couleurs et styles de la console · générée depuis <span class="mono">console/app/globals.css</span></p></div>
+  </header>
+
+  <section>
+    <p class="eyebrow">Couleurs</p>
+    <div class="grid colors">
+      <div class="swatch"><div class="chip" style="background:var(--paper)"></div><div class="meta"><b>--paper</b><code class="mono" data-token="--paper"></code><span>Fond de page, colonnes, pieds</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="meta"><b>--surface</b><code class="mono" data-token="--surface"></code><span>Contenu principal, cartes</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="meta"><b>--ink</b><code class="mono" data-token="--ink"></code><span>Texte, marque, boutons sombres</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--muted)"></div><div class="meta"><b>--muted</b><code class="mono" data-token="--muted"></code><span>Texte secondaire, aides</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--line)"></div><div class="meta"><b>--line</b><code class="mono" data-token="--line"></code><span>Bordures, séparateurs</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><b>--accent</b><code class="mono" data-token="--accent"></code><span>Action principale, progression, focus</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--accent-soft)"></div><div class="meta"><b>--accent-soft</b><code class="mono" data-token="--accent-soft"></code><span>Sélection, halo de focus</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--doc)"></div><div class="meta"><b>--doc</b><code class="mono" data-token="--doc"></code><span>Documents du workflow</span></div></div>
+      <div class="swatch"><div class="chip" style="background:var(--terminal)"></div><div class="meta"><b>--terminal</b><code class="mono" data-token="--terminal"></code><span>Fond du terminal</span></div></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div>
+      <p class="eyebrow">Statuts</p>
+      <div class="card stack">
+        <div class="row">
+          <span class="pill progress">En cours</span>
+          <span class="pill success"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Terminé</span>
+          <span class="pill attention"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z" fill="currentColor"/></svg>À toi de jouer</span>
+          <span class="pill error">Erreur</span>
+          <span class="pill neutral">Arrêté</span>
+        </div>
+        <div class="alert warn"><svg viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v3.5M8 11.6v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>La version d’origine a changé depuis votre modification. Comparez-la avec la vôtre avant de la garder.</span></div>
+        <div class="alert fail"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.8v3.6M8 10.9v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Lancement refusé : Claude Code est introuvable dans PATH.</span></div>
+        <p class="help" style="margin-bottom:0">Vert : ça avance. Ambre : c’est à toi. Rouge : ça a cassé. Une couleur de statut est toujours accompagnée d’un libellé.</p>
+      </div>
+    </div>
+    <div>
+      <p class="eyebrow">Typographie · Geist Sans et Geist Mono</p>
+      <div class="card type">
+        <div><small>Titre de fenêtre · 24 / 600</small><span style="font-size:24px;font-weight:600;letter-spacing:-.02em">Réglages</span></div>
+        <div><small>Libellé · 14 / 500</small><span style="font-size:14px;font-weight:500">Runs en parallèle</span></div>
+        <div><small>Texte, aide · 12 / 400</small><span style="font-size:12px;color:var(--muted);line-height:1.6">Les demandes supplémentaires attendent en file.</span></div>
+        <div><small>Surtitre · 10 / capitales</small><span style="font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted)">Progression</span></div>
+        <div><small>Mono · chemins, commandes</small><span class="mono" style="font-size:12px">/implementation-harness:implement <span class="doc">planner-output.md</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Composants</p>
+    <div class="grid" style="grid-template-columns: 1.25fr 1fr 1fr 1.2fr; gap: 24px; align-items: start;">
+      <div class="card stack">
+        <div><label class="l">Dossiers de recherche</label><p class="help">Un dossier par ligne.</p><div class="field mono" style="font-size:12px">~/workspace</div></div>
+        <div><label class="l">Champ au focus</label><div class="field focus" style="margin-top:10px">Bordure accent, halo soft</div></div>
+        <div class="row" style="padding-top:4px"><span class="button">Annuler les modifications</span><span class="button primary">Enregistrer</span></div>
+        <div class="row"><span class="button dark">Lancer le run</span></div>
+      </div>
+      <div class="card stack">
+        <div class="row" style="justify-content:space-between"><span style="font-size:14px;font-weight:500">Son des alertes</span><div class="toggle on"><i></i></div></div>
+        <div class="row" style="justify-content:space-between"><span style="font-size:14px;font-weight:500">Accès à distance</span><div class="toggle"><i></i></div></div>
+        <div class="nav"><div>Général</div><div>Exécutions</div><div class="active">Prompts</div><div>Avancé</div></div>
+      </div>
+      <div class="card">
+        <p class="eyebrow" style="margin-bottom:12px">Progression</p>
+        <ol class="phases">
+          <li class="done"><span class="dot"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Clarification</li>
+          <li class="done"><span class="dot"><svg width="10" height="10" viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Plan</li>
+          <li class="current"><span class="dot">3</span>Implémentation</li>
+          <li><span class="dot">4</span>Revues</li>
+          <li><span class="dot">5</span>Merge request</li>
+        </ol>
+      </div>
+      <div class="terminal">
+        <div><span class="g">❯</span> /implementation-harness:implement</div>
+        <div class="m">  Lecture du ticket et des maquettes…</div>
+        <div class="m">  Agent developer démarré</div>
+        <div><span class="g">✓</span> Plan validé</div>
+        <div class="m">  La seule surface sombre de l’app</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div>
+      <p class="eyebrow">Formes et profondeur</p>
+      <div class="grid shapes">
+        <div class="shape" style="border-radius:6px">6 px · cible d’icône</div>
+        <div class="shape" style="border-radius:8px">8 px · bouton, alerte</div>
+        <div class="shape" style="border-radius:10px">10 px · champ</div>
+        <div class="shape floating" style="border-radius:14px">Ombre · flottant</div>
+      </div>
+    </div>
+    <div>
+      <p class="eyebrow">Mouvement</p>
+      <div class="curve">
+        <svg viewBox="0 0 120 72"><path d="M12 62 C 31 62, 32 10, 108 10" fill="none" stroke="var(--line)" stroke-width="1"/><path d="M12 62 C 31.2 10, 48 10, 108 10" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/></svg>
+        <div><p class="mono" style="color:var(--ink)">cubic-bezier(.16, 1, .3, 1)</p><p style="margin-top:6px">0,25 s état · 0,45 s apparition · 2,2 s respiration d’un statut vivant. Coupé sous prefers-reduced-motion.</p></div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
