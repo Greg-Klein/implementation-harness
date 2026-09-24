@@ -46,6 +46,7 @@ Several runs go at once. Nothing run-specific is module state any more: everythi
 - `server/artifacts.ts`: watches the target repo's `.claude/` (restricted to `tasks/`, because the workflow deletes and recreates `tasks/`) and copies documents into the run archive. Only files written since run start count.
 - `server/transcript.ts`: tails the session transcript for the conversation panel (lags behind the terminal by design).
 - `server/self-improvement.ts` + `worktree.ts`: feedback/self-audit storage, `self-improvement-*` worktrees, auto-rebase on HEAD moves, merge simulation via `git merge-tree --write-tree`, one improvement in flight at a time (autonomous audits are queued and launched one after another, so runs finishing together cannot each open a branch). Nothing is ever pushed or auto-merged; the UI merge button is the only promotion path.
+- `server/prompts.ts`: prompts edited from the desktop settings (system instructions, commands, agents, skills), kept as overrides in `data/prompts/` (the packaged plugin is read-only and the checkout must stay clean for the improvement loop). The Electron main process edits them over IPC; `registry.start` launches each run on a copy of the plugin in `data/runs/<id>/plugin` when any override exists, and passes the system instructions as `--append-system-prompt`.
 - `server/repository.ts`: finds the GitLab checkout for a ticket by scanning `IMPL_SEARCH_ROOTS` two levels deep and reading `.git/config`.
 - `lib/`: client-side helpers (run-state derivation, conversation, notifications, sound).
 
@@ -54,6 +55,7 @@ Runtime data lives in `console/data/runs/<run-id>/` (`run.json`, `terminal.log`,
 ## Conventions
 
 - Code, identifiers, comments and commit messages in English. User-facing UI text and READMEs in French.
+- UI styling and wording follow `brand/README.md` (tokens, type scale, components, tone). A screen that departs from it is fixed, or the brand book is updated in the same commit.
 - Commits: conventional prefixes (`fix:`, `feat:`, `chore:`), subject describes the behavior change in plain words. `self-improvement: apply improvements from self-improvement-<id>` is reserved for the improvement loop.
 - Server modules are ESM and import siblings with the `.js` suffix (Jest maps it back).
 - Unit tests: `describe(...)` + `it("should ...")`, one file per responsibility.
