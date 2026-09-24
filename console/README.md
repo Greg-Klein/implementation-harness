@@ -40,7 +40,7 @@ Fonctions natives :
 - « Parcourir les dossiers… » ouvre le sélecteur de dossier macOS/Windows/Linux.
 - Les notifications système signalent les décisions et fins de runs lorsque la fenêtre n’a pas le focus ; cliquer ramène au run concerné. Les signaux sonores sont émis par l’interface selon son réglage, désactivé par défaut.
 - Le badge du Dock compte les runs en attente d’attention ; la barre de progression indique une activité sur les systèmes qui la prennent en charge.
-- `⌘N` / `Ctrl+N` ouvre un nouveau run. **Réglages…** (`⌘,` / `Ctrl+,`) ouvre une fenêtre dédiée avec les dossiers de recherche, le son, le parallélisme, Remote Control, l’auto-audit et les options avancées. Les menus donnent aussi accès aux données, au zoom et aux outils de développement.
+- `⌘N` / `Ctrl+N` ouvre un nouveau run. **Réglages…** (`⌘,` / `Ctrl+,`) ouvre une fenêtre dédiée avec les dossiers de recherche, le son, le parallélisme, Remote Control, l’auto-audit, les prompts du plugin et les options avancées. Les menus donnent aussi accès aux données, au zoom et aux outils de développement.
 - La taille, la position de fenêtre et le réglage sonore sont conservés. Une deuxième ouverture ramène à l’instance existante.
 - Sur macOS, fermer la fenêtre la masque et laisse les runs continuer. « Quitter » propose d’arrêter les sessions encore ouvertes, ferme les terminaux et garde la file pour le prochain démarrage.
 
@@ -82,7 +82,7 @@ npm run test:desktop
 IMPL_DESKTOP_EXECUTABLE="/chemin/Implementation Harness.app/Contents/MacOS/Implementation Harness" npm run test:desktop
 ```
 
-Les tests utilisent des données temporaires et un faux exécutable Claude : aucun vrai ticket n’est traité. Ils vérifient le choix natif d’un dossier, les préférences, les réglages (validation, sauvegarde, conflit, fermeture et redémarrage), le parcours de démonstration, les notifications cliquables, un vrai PTY avec retour de hook et la fermeture du serveur. Les notifications sont interceptées dans le test ; leur autorisation d’affichage reste gérée par macOS pour l’application installée.
+Les tests utilisent des données temporaires et un faux exécutable Claude : aucun vrai ticket n’est traité. Ils vérifient le choix natif d’un dossier, les préférences, les réglages (validation, sauvegarde, conflit, fermeture et redémarrage), la modification d’un prompt et son application au run suivant, le parcours de démonstration, les notifications cliquables, un vrai PTY avec retour de hook et la fermeture du serveur. Les notifications sont interceptées dans le test ; leur autorisation d’affichage reste gérée par macOS pour l’application installée.
 
 ## Lancer la console web
 

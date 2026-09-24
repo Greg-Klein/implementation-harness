@@ -17,6 +17,8 @@ export const pluginRoot = path.resolve(process.env.IMPL_PLUGIN_ROOT?.trim() || p
 export const storageRoot = path.resolve(process.env.IMPL_DATA_DIR ?? path.join(consoleRoot, "data"));
 export const dataRoot = path.join(storageRoot, "runs");
 export const feedbackRoot = path.join(storageRoot, "feedback", "pending");
+/** The prompts edited from the settings, applied to every run launched afterwards. */
+export const promptsRoot = path.resolve(process.env.IMPL_PROMPTS_DIR?.trim() || path.join(storageRoot, "prompts"));
 /** The launches accepted but not started, kept across a restart of the console. */
 export const queueFile = path.join(storageRoot, "queue.json");
 export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);

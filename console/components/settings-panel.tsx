@@ -1,13 +1,14 @@
 "use client";
 
-import { ArrowClockwiseIcon, CheckIcon, FolderOpenIcon, GearSixIcon, SlidersHorizontalIcon, WarningCircleIcon, WrenchIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, ArrowCounterClockwiseIcon, CheckIcon, FolderOpenIcon, GearSixIcon, NotePencilIcon, SlidersHorizontalIcon, WarningCircleIcon, WrenchIcon } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import type { SettingKey, SettingsSnapshot, SettingsValues } from "@/lib/desktop";
+import type { PromptDocument, PromptEntry, PromptSaveResult, SettingKey, SettingsSnapshot, SettingsValues } from "@/lib/desktop";
 
-type Section = "general" | "runs" | "advanced";
+type Section = "general" | "runs" | "prompts" | "advanced";
 const sections = [
   { id: "general" as const, label: "Général", icon: GearSixIcon, description: "Retrouvez vos projets et choisissez vos alertes." },
   { id: "runs" as const, label: "Exécutions", icon: SlidersHorizontalIcon, description: "Ajustez le fonctionnement des sessions Claude Code." },
+  { id: "prompts" as const, label: "Prompts", icon: NotePencilIcon, description: "Adaptez les instructions du workflow, de ses agents et de ses skills. Les modifications s’appliquent aux prochains runs." },
   { id: "advanced" as const, label: "Avancé", icon: WrenchIcon, description: "Configurez le harnais et son scénario de démonstration." },
 ];
 const permissionModes = [
@@ -57,6 +58,7 @@ export function SettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [sound, setSound] = useState(false);
   const [desktop, setDesktop] = useState(true);
+  const [promptsDirty, setPromptsDirty] = useState(false);
   const dirty = Boolean(snapshot && draft && JSON.stringify(storedValues(draft, snapshot.values)) !== JSON.stringify(snapshot.values));
 
   const apply = (next: SettingsSnapshot) => { setSnapshot(next); setDraft(formValues(next.values)); setSound(next.sound); setErrors({}); setError(undefined); setConflict(false); };
@@ -77,7 +79,7 @@ export function SettingsPanel() {
     return () => { disposed = true; unsubscribe(); };
   }, []);
 
-  useEffect(() => { window.desktop?.setSettingsDirty(dirty); }, [dirty]);
+  useEffect(() => { window.desktop?.setSettingsDirty(dirty || promptsDirty); }, [dirty, promptsDirty]);
 
   const edit = (key: SettingKey, value: string) => {
     setDraft((draft) => draft && { ...draft, [key]: value });
@@ -176,9 +178,10 @@ export function SettingsPanel() {
             </section>
           </div>}
         </form>}
+        {desktop && <div hidden={section !== "prompts"}><PromptsSection onDirtyChange={setPromptsDirty} /></div>}
       </div>
     </div>
-    <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--line)] bg-[var(--paper)] px-5 py-4">
+    {section !== "prompts" && <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--line)] bg-[var(--paper)] px-5 py-4">
       <div role="status" aria-live="polite" className="min-w-0 text-xs text-[var(--muted)]">
         {busy ? "Enregistrement…" : dirty ? "Modifications non enregistrées" : snapshot?.restartRequired ? <span className="flex items-center gap-2 text-[var(--accent)]"><CheckIcon size={15} />Enregistré. Un redémarrage est nécessaire.</span> : saved ? "Réglages enregistrés" : "Les changements de session s’appliquent au redémarrage."}
       </div>
@@ -186,6 +189,101 @@ export function SettingsPanel() {
         {dirty && <button type="button" className={button} disabled={busy} onClick={() => { if (snapshot) apply(snapshot); setSaved(false); }}>Annuler les modifications</button>}
         {snapshot?.restartRequired && !dirty ? <button type="button" className={primary} onClick={() => void window.desktop?.restart().catch((error) => setError(errorMessage(error)))}><ArrowClockwiseIcon size={15} />Redémarrer l’application</button> : <button type="submit" form="settings-form" disabled={!dirty || busy || loading} className={primary}>Enregistrer</button>}
       </div>
-    </footer>
+    </footer>}
   </main>;
+}
+
+const promptGroups = [
+  { id: "system" as const, label: "Système" },
+  { id: "command" as const, label: "Commandes" },
+  { id: "agent" as const, label: "Agents" },
+  { id: "skill" as const, label: "Skills" },
+];
+
+function PromptsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+  const [prompts, setPrompts] = useState<PromptEntry[]>();
+  const [prompt, setPrompt] = useState<PromptDocument>();
+  const [content, setContent] = useState("");
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [error, setError] = useState<string>();
+  const [conflict, setConflict] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const dirty = Boolean(prompt && content !== prompt.content);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+  const open = async (id: string) => {
+    setError(undefined); setConflict(false); setSaved(false); setShowOriginal(false);
+    try {
+      const next = await window.desktop!.readPrompt(id);
+      setPrompt(next); setContent(next.content);
+    } catch (error) { setError(errorMessage(error)); }
+  };
+
+  useEffect(() => {
+    if (!window.desktop) return;
+    void window.desktop.listPrompts().then((list) => {
+      setPrompts(list);
+      const first = list.find((entry) => entry.group === "command") ?? list[0];
+      if (first) return open(first.id);
+    }).catch((error) => setError(errorMessage(error)));
+  }, []);
+
+  const select = (id: string) => {
+    if (dirty && !window.confirm("Abandonner les modifications de ce prompt ?")) return;
+    void open(id);
+  };
+
+  const run = async (action: () => Promise<PromptSaveResult>) => {
+    setBusy(true); setError(undefined); setConflict(false); setSaved(false);
+    try {
+      const result = await action();
+      if (result.ok) {
+        setPrompt(result.prompt); setContent(result.prompt.content); setSaved(true);
+        setPrompts(await window.desktop!.listPrompts());
+      } else { setError(result.message); setConflict(Boolean(result.conflict)); }
+    } catch (error) { setError(errorMessage(error)); }
+    finally { setBusy(false); }
+  };
+
+  const save = () => prompt && void run(() => window.desktop!.savePrompt({ id: prompt.id, content, revision: prompt.revision }));
+  const reset = () => {
+    if (!prompt || !window.confirm("Rétablir la version d’origine ? Votre version personnalisée sera supprimée.")) return;
+    void run(() => window.desktop!.resetPrompt({ id: prompt.id, revision: prompt.revision }));
+  };
+  const label = (entry: PromptEntry) => entry.group === "command" ? `/${entry.name}` : entry.name;
+
+  return <div className="space-y-6">
+    {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800"><span className="flex gap-2"><WarningCircleIcon size={16} className="shrink-0" />{error}</span>{conflict && prompt && <button type="button" onClick={() => void open(prompt.id)} className="mt-2 underline underline-offset-2">Recharger le prompt</button>}</div>}
+    <section>
+      <label htmlFor="prompt-select" className="block text-sm font-medium">Prompt</label>
+      <select id="prompt-select" value={prompt?.id ?? ""} onChange={(event) => select(event.target.value)} disabled={busy || !prompts} aria-describedby="prompt-description" className="field mt-3 max-w-96 text-sm disabled:opacity-60">
+        {promptGroups.map((group) => {
+          const entries = prompts?.filter((entry) => entry.group === group.id) ?? [];
+          return entries.length > 0 && <optgroup key={group.id} label={group.label}>
+            {entries.map((entry) => <option key={entry.id} value={entry.id}>{label(entry)}{entry.modified ? " · modifié" : ""}</option>)}
+          </optgroup>;
+        })}
+      </select>
+      {prompt && <p id="prompt-description" className="mt-2 text-xs leading-relaxed text-[var(--muted)]">{prompt.description}</p>}
+    </section>
+    {prompt && <section className="border-t border-[var(--line)] pt-6">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <label htmlFor="prompt-content" className="text-sm font-medium">{prompt.modified ? "Version personnalisée" : prompt.group === "system" ? "Instructions" : "Version d’origine"}</label>
+        {prompt.modified && prompt.group !== "system" && <button type="button" onClick={() => setShowOriginal((shown) => !shown)} className="text-xs text-[var(--accent)] underline underline-offset-3">{showOriginal ? "Masquer l’original" : "Afficher l’original"}</button>}
+      </div>
+      {prompt.drifted && <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">La version d’origine a changé depuis votre modification (mise à jour ou auto-amélioration du harnais). Comparez-la avec la vôtre avant de la garder.</p>}
+      <textarea id="prompt-content" value={content} onChange={(event) => { setContent(event.target.value); setSaved(false); }} disabled={busy} rows={18} spellCheck={false} placeholder={prompt.group === "system" ? "Aucune instruction supplémentaire" : undefined} className="field resize-y font-mono text-xs leading-relaxed disabled:opacity-60" />
+      {showOriginal && <textarea readOnly aria-label="Version d’origine" value={prompt.original} rows={14} spellCheck={false} className="field mt-3 resize-y bg-[var(--paper)] font-mono text-xs leading-relaxed" />}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p role="status" aria-live="polite" className="text-xs text-[var(--muted)]">{busy ? "Enregistrement…" : dirty ? "Modifications non enregistrées" : saved ? "Prompt enregistré. Il s’applique aux prochains runs." : "Les runs en cours gardent les prompts de leur lancement."}</p>
+        <div className="flex gap-2">
+          {prompt.modified && !dirty && <button type="button" className={button} disabled={busy} onClick={reset}><ArrowCounterClockwiseIcon size={15} />Rétablir l’original</button>}
+          {dirty && <button type="button" className={button} disabled={busy} onClick={() => setContent(prompt.content)}>Annuler les modifications</button>}
+          <button type="button" className={primary} disabled={!dirty || busy} onClick={save}>Enregistrer le prompt</button>
+        </div>
+      </div>
+    </section>}
+  </div>;
 }

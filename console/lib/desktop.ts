@@ -1,4 +1,7 @@
 import type { RunAlert } from "./notifications";
+import type { PromptDocument, PromptEntry, PromptSaveResult } from "@/server/prompts";
+
+export type { PromptDocument, PromptEntry, PromptSaveResult };
 
 export type SettingKey = "IMPL_SEARCH_ROOTS" | "IMPL_MAX_CONCURRENT_RUNS" | "IMPL_PERMISSION_MODE" | "IMPL_REMOTE_CONTROL" | "IMPL_SELF_IMPROVEMENT_AUTORUN" | "IMPL_DEMO_STEP_MS" | "IMPL_PLUGIN_ROOT";
 export type SettingsValues = Record<SettingKey, string>;
@@ -23,6 +26,10 @@ export interface DesktopBridge {
   openSettings(): Promise<void>;
   getSettings(): Promise<SettingsSnapshot>;
   saveSettings(request: { revision: string; values: SettingsValues }): Promise<SettingsSaveResult>;
+  listPrompts(): Promise<PromptEntry[]>;
+  readPrompt(id: string): Promise<PromptDocument>;
+  savePrompt(request: { id: string; content: string; revision: string }): Promise<PromptSaveResult>;
+  resetPrompt(request: { id: string; revision: string }): Promise<PromptSaveResult>;
   setSettingsDirty(dirty: boolean): void;
   restart(): Promise<void>;
   onPreferencesChanged(listener: (preferences: { sound: boolean }) => void): () => void;

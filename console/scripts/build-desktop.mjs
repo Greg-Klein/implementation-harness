@@ -15,3 +15,8 @@ await build({
   entryPoints: ["electron/settings-store.mjs"], outfile: ".desktop/settings-store.cjs",
   bundle: true, platform: "node", target: "node22", format: "cjs", packages: "external",
 });
+await build({
+  absWorkingDir: path.resolve(import.meta.dirname, ".."),
+  entryPoints: ["server/prompts.ts"], outfile: ".desktop/prompts.cjs",
+  bundle: true, platform: "node", target: "node22", format: "cjs", packages: "external",
+});

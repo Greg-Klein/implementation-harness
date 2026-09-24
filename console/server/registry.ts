@@ -1,7 +1,7 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { broadcast, now } from "./context.js";
-import { dataRoot, hostname, maxConcurrentRuns, port, queueFile } from "./config.js";
+import { dataRoot, hostname, maxConcurrentRuns, pluginRoot, port, promptsRoot, queueFile } from "./config.js";
 import { closeAbandonedAgents, describeQueue, exitReport, runInProgress, sessionsToReleaseForQueue, terminalExitStatus } from "./domain.js";
 import { clearTaskDirectory, closeArtifactWatcher, startArtifactWatcher } from "./artifacts.js";
 import { closeTranscript } from "./transcript.js";
@@ -10,6 +10,7 @@ import { acknowledgeDemoInstruction, demoLaunchState, startDemoRun } from "./dem
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
 import { engine } from "./engine/index.js";
+import { createPromptStore } from "./prompts.js";
 import { RunSession } from "./run-session.js";
 import type { HarnessSnapshot, QueuedRun } from "./types.js";
 
@@ -124,8 +125,10 @@ export class RunRegistry {
     await startArtifactWatcher(session);
     if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }
     const command = engine.command(session.state.issueUrl, session.state.instruction);
+    const plugin = createPromptStore({ pluginRoot: () => pluginRoot, promptsRoot }).sessionPlugin(path.join(dataRoot, id, "plugin"));
+    if (plugin.customized.length) session.activity("system", "Prompts personnalisés", plugin.customized.join(", "));
     session.engine = engine.start({
-      cwd: entry.cwd, runId: id, command,
+      cwd: entry.cwd, runId: id, command, pluginDir: plugin.pluginDir, systemPrompt: plugin.systemPrompt,
       hookUrl: `http://${hostname}:${port}/api/hooks`,
       onData: (data) => {
         session.appendTerminal(data);

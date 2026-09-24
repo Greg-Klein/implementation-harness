@@ -205,9 +205,12 @@ Le menu **Implementation Harness → Réglages…** (`⌘,` sur macOS, `Ctrl+,` 
 |---|---|
 | Général | Dossiers de recherche, avec sélection native et un dossier par ligne ; son des alertes |
 | Exécutions | Nombre de runs en parallèle (1 à 10), accès à distance, auto-audit |
+| Prompts | Instructions système ajoutées à chaque session, commandes, agents et skills du plugin |
 | Avancé | Dépôt Git du harnais utilisé pour l’auto-amélioration ; durée des étapes de démo en secondes |
 
 **Enregistrer** valide les champs et conserve les autres valeurs du fichier de configuration. Les changements prennent effet avec **Redémarrer l’application** ; si des sessions sont ouvertes, une confirmation prévient de leur arrêt. La file d’attente est conservée. Le son s’applique immédiatement et reste synchronisé avec le bouton de l’en-tête.
+
+La rubrique **Prompts** modifie les instructions sans toucher au plugin : chaque prompt modifié est enregistré dans `data/prompts/` et s’applique aux runs lancés ensuite. Un run démarre alors sur une copie du plugin placée dans son dossier (`data/runs/<run>/plugin`), si bien que les runs en cours gardent les prompts de leur lancement. L’en-tête YAML reste obligatoire et le champ `name` ne peut pas changer, car le workflow y fait référence. **Rétablir l’original** supprime la version personnalisée, et un avertissement signale un prompt dont l’original a changé depuis (mise à jour ou auto-amélioration). Les sessions d’auto-amélioration travaillent toujours sur le dépôt du harnais, sans ces modifications.
 
 Les réglages imposés par l’environnement de lancement sont affichés mais non modifiables. Une modification externe du fichier demande de recharger les valeurs avant d’enregistrer, et fermer une fenêtre contenant des modifications non enregistrées demande confirmation. Aucun éditeur de fichier n’est nécessaire.
 

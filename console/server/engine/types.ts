@@ -32,6 +32,10 @@ export type StartOptions = {
   runId: string;
   /** The workflow entry point, already built by the engine and logged by the caller. */
   command: string;
+  /** The plugin the session loads, with the prompts edited in the settings. */
+  pluginDir: string;
+  /** Instructions appended to the agent's own system prompt. */
+  systemPrompt?: string;
   hookUrl: string;
   onData(data: string): void;
   onExit(exitCode: number): void;

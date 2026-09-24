@@ -3,6 +3,7 @@ const { mkdirSync, readFileSync, writeFileSync, appendFileSync } = require("node
 const path = require("node:path");
 const { isAppUrl, isExternalUrl, shellPath, windowBounds } = require("./policy.cjs");
 const { createSettingsStore } = require("../.desktop/settings-store.cjs");
+const { createPromptStore } = require("../.desktop/prompts.cjs");
 
 app.setName("Implementation Harness");
 // Overrides are useful for isolated smoke tests and separate development profiles.
@@ -28,6 +29,10 @@ const envFile = process.env.IMPL_ENV_FILE || (app.isPackaged ? path.join(userDat
 const logFile = path.join(userData, "logs", "server.log");
 const dev = !app.isPackaged && process.argv.includes("--dev");
 const settingsStore = createSettingsStore({ envFile, bundledPlugin: app.isPackaged });
+const dataDirectory = process.env.IMPL_DATA_DIR || (app.isPackaged ? path.join(userData, "data") : path.resolve(__dirname, "../data"));
+const promptsRoot = process.env.IMPL_PROMPTS_DIR || path.join(dataDirectory, "prompts");
+const bundledPluginRoot = app.isPackaged ? path.join(process.resourcesPath, "plugin") : path.resolve(__dirname, "../..");
+const promptStore = createPromptStore({ promptsRoot, pluginRoot: () => settingsStore.snapshot().values.IMPL_PLUGIN_ROOT.trim() || bundledPluginRoot });
 
 function savePreferences() {
   try { writeFileSync(preferencesFile, JSON.stringify(preferences, null, 2)); }
@@ -120,6 +125,22 @@ function installNativeActions() {
     if (result.ok) { settingsDirty = false; result.snapshot.sound = preferences.sound === true; }
     return result;
   });
+  ipcMain.handle("desktop:list-prompts", (event) => {
+    if (!trustedSettings(event)) throw new Error("Fenêtre non autorisée.");
+    return promptStore.list();
+  });
+  ipcMain.handle("desktop:read-prompt", (event, id) => {
+    if (!trustedSettings(event)) throw new Error("Fenêtre non autorisée.");
+    return promptStore.read(id);
+  });
+  ipcMain.handle("desktop:save-prompt", (event, request) => {
+    if (!trustedSettings(event)) throw new Error("Fenêtre non autorisée.");
+    return promptStore.save(request);
+  });
+  ipcMain.handle("desktop:reset-prompt", (event, request) => {
+    if (!trustedSettings(event)) throw new Error("Fenêtre non autorisée.");
+    return promptStore.reset(request);
+  });
   ipcMain.on("desktop:settings-dirty", (event, dirty) => { if (trustedSettings(event) && typeof dirty === "boolean") settingsDirty = dirty; });
   ipcMain.handle("desktop:restart", (event) => {
     if (!trustedSettings(event) || settingsDirty || quitting || quitDialogOpen) return;
@@ -152,7 +173,7 @@ function installMenu() {
       { role: "about", label: "À propos d’Implementation Harness" },
       { type: "separator" },
       { label: "Afficher l’application", click: showWindow },
-      { label: "Ouvrir les données locales", click: () => void shell.openPath(process.env.IMPL_DATA_DIR || (app.isPackaged ? path.join(userData, "data") : path.resolve(__dirname, "../data"))) },
+      { label: "Ouvrir les données locales", click: () => void shell.openPath(dataDirectory) },
       { label: "Réglages…", accelerator: "CmdOrCtrl+,", click: () => void openSettings().catch((error) => dialog.showErrorBox("Réglages indisponibles", error.message)) },
       { type: "separator" },
       ...(process.platform === "darwin" ? [{ role: "hide", label: "Masquer" }, { role: "hideOthers", label: "Masquer les autres" }, { type: "separator" }] : []),
@@ -169,7 +190,7 @@ function installMenu() {
 }
 
 async function startBackend() {
-  const environment = { ...process.env, PATH: await shellPath(process.env), NODE_ENV: dev ? "development" : "production", PORT: "0", IMPL_HOST: "127.0.0.1", IMPL_ENV_FILE: envFile };
+  const environment = { ...process.env, PATH: await shellPath(process.env), NODE_ENV: dev ? "development" : "production", PORT: "0", IMPL_HOST: "127.0.0.1", IMPL_ENV_FILE: envFile, IMPL_PROMPTS_DIR: promptsRoot };
   if (quitting) return;
   settingsStore.markApplied();
   delete environment.NODE_OPTIONS;

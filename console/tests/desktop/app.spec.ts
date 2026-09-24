@@ -47,6 +47,7 @@ test.beforeEach(async () => {
   await writeFile(path.join(bin, "claude"), `#!/usr/bin/env node
 const fs = require('node:fs');
 fs.writeFileSync(require('node:path').join(process.cwd(), 'agent.pid'), String(process.pid));
+fs.writeFileSync(require('node:path').join(process.cwd(), 'agent.argv'), JSON.stringify(process.argv.slice(2)));
 const plugin = process.argv[process.argv.indexOf('--plugin-dir') + 1];
 if (!fs.existsSync(require('node:path').join(plugin, '.claude-plugin', 'plugin.json'))) process.exit(2);
 console.log('DESKTOP_PTY_READY');
@@ -224,4 +225,43 @@ test("should preserve external edits and warn before discarding unsaved settings
   expect(await readFile(path.join(temporary, "settings.env"), "utf8")).toBe("IMPL_MAX_CONCURRENT_RUNS='6'\n");
   await settings.getByRole("button", { name: "Recharger les réglages" }).click();
   await expect(settings.getByLabel("Runs en parallèle", { exact: true })).toHaveValue("6");
+});
+
+test("should edit a prompt from the settings and launch the next run with it", async () => {
+  const settings = await openSettings();
+  await settings.getByRole("button", { name: "Prompts", exact: true }).click();
+  await expect(settings.getByLabel("Prompt", { exact: true })).toHaveValue("commands/implement.md");
+  await settings.getByLabel("Prompt", { exact: true }).selectOption("agents/developer.md");
+  const editor = settings.locator("#prompt-content");
+  await expect(editor).toHaveValue(/^---\nname: developer\n/);
+  const original = await editor.inputValue();
+  await editor.fill(original.replace("name: developer", "name: coder"));
+  await settings.getByRole("button", { name: "Enregistrer le prompt" }).click();
+  await expect(settings.getByText("Le champ « name » doit rester « developer »")).toBeVisible();
+  await editor.fill(`${original}\nDESKTOP_PROMPT_EDIT\n`);
+  await settings.getByRole("button", { name: "Enregistrer le prompt" }).click();
+  await expect(settings.getByText("Prompt enregistré. Il s’applique aux prochains runs.")).toBeVisible();
+  await expect(settings.getByRole("option", { name: "developer · modifié" })).toBeAttached();
+  await settings.getByLabel("Prompt", { exact: true }).selectOption("system.md");
+  await settings.locator("#prompt-content").fill("DESKTOP_SYSTEM_EDIT");
+  await settings.getByRole("button", { name: "Enregistrer le prompt" }).click();
+  await expect(settings.getByText("Prompt enregistré. Il s’applique aux prochains runs.")).toBeVisible();
+  expect(await readFile(path.join(temporary, "data", "prompts", "agents", "developer.md"), "utf8")).toContain("DESKTOP_PROMPT_EDIT");
+  await settings.screenshot({ path: test.info().outputPath("prompts.png") });
+
+  await page.evaluate(({ directory }) => new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(`ws://${location.host}/ws`);
+    socket.onopen = () => socket.send(JSON.stringify({ type: "run.start", cwd: directory, issueUrl: "https://gitlab.com/test/local/-/issues/1" }));
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "error") { socket.close(); reject(new Error(message.message)); }
+      if (message.type === "run") { socket.close(); resolve(); }
+    };
+  }), { directory: project });
+  const argv = await expect.poll(() => readFile(path.join(project, "agent.argv"), "utf8").catch(() => "")).not.toBe("").then(async () => JSON.parse(await readFile(path.join(project, "agent.argv"), "utf8")) as string[]);
+  expect(argv[argv.indexOf("--append-system-prompt") + 1]).toBe("DESKTOP_SYSTEM_EDIT");
+  const pluginDir = argv[argv.indexOf("--plugin-dir") + 1];
+  expect(pluginDir.startsWith(path.join(temporary, "data", "runs"))).toBe(true);
+  expect(await readFile(path.join(pluginDir, "agents", "developer.md"), "utf8")).toContain("DESKTOP_PROMPT_EDIT");
+  expect(await readFile(path.resolve("..", "agents", "developer.md"), "utf8")).not.toContain("DESKTOP_PROMPT_EDIT");
 });
