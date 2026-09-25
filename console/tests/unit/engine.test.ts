@@ -34,6 +34,12 @@ describe("engine event translation", () => {
       .toEqual({ kind: "agent.stop", agentId: "a1", agentName: "implementation-harness:developer" });
   });
 
+  it("should read a stopped background task as a killed agent", () => {
+    expect(claudeCode.event({ hook_event_name: "PostToolUse", tool_name: "TaskStop", tool_input: { task_id: "a1" }, tool_response: {} }))
+      .toEqual({ kind: "agent.kill", agentId: "a1" });
+    expect(claudeCode.event({ hook_event_name: "PostToolUse", tool_name: "TaskStop", tool_input: {} })).toBeUndefined();
+  });
+
   it("should pass the command whole, since it is matched against and never shown", () => {
     const command = `git commit -m "${"x".repeat(400)}"`;
     expect(claudeCode.event({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command, description: "Commit" } }))

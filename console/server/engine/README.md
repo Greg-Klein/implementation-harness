@@ -61,6 +61,7 @@ Un événement, dit dans les mots du harnais. Le moteur traduit, `hooks.ts` appl
 | Événement | Effet dans le harnais |
 |---|---|
 | `agent.start` / `agent.stop` | met à jour la liste des agents, fait avancer la phase |
+| `agent.kill` | clôt un agent arrêté de l'extérieur (Claude Code n'émet pas de fin pour lui) |
 | `tool.start` | nomme l'action en cours dans l'interface, détecte la création de branche |
 | `tool.end` | y cherche l'adresse de la merge request |
 | `question` | **bloque l'agent** jusqu'à la réponse de l'utilisateur |

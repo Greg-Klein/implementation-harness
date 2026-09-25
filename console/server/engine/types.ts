@@ -49,6 +49,8 @@ export type StartOptions = {
 export type EngineEvent =
   | { kind: "agent.start"; agentId: string; agentName: string }
   | { kind: "agent.stop"; agentId: string; agentName: string }
+  /** The agent was stopped from the outside, which reports no outcome of its own. */
+  | { kind: "agent.kill"; agentId: string }
   /**
    * What the harness reads from a tool call: the command it may recognise, and
    * the name of the tool with a neutral `target` (a file, a pattern, an agent,

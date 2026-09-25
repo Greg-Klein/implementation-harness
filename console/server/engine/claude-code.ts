@@ -148,7 +148,14 @@ function event(payload: Record<string, unknown>): EngineEvent | undefined {
     if (tool === "AskUserQuestion") return questionEvent(payload);
     return { kind: "tool.start", tool: tool ?? "", command, target: toolTarget(input) };
   }
-  if (name === "PostToolUse") return { kind: "tool.end", command, response: payload.tool_response };
+  if (name === "PostToolUse") {
+    // Claude Code fires no SubagentStop for a background agent it kills.
+    if (normalizeText(payload.tool_name) === "TaskStop") {
+      const agentId = normalizeText(input?.task_id) ?? normalizeText(input?.shell_id);
+      return agentId ? { kind: "agent.kill", agentId } : undefined;
+    }
+    return { kind: "tool.end", command, response: payload.tool_response };
+  }
   return undefined;
 }
 

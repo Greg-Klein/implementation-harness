@@ -105,6 +105,15 @@ function apply(session: RunSession, event: EngineEvent) {
     resumeFromAttention(session);
     return;
   }
+  if (event.kind === "agent.kill") {
+    const killed = session.state.agents.find((agent) => agent.id === event.agentId && agent.status === "running");
+    if (killed) {
+      session.state.agents = session.state.agents.map((agent) => agent.id === killed.id ? { ...agent, status: "abandoned" as const, endedAt: now() } : agent);
+      session.activity("agent", `${killed.name} arrêté`);
+    }
+    resumeFromAttention(session);
+    return;
+  }
   // A tool call is not a milestone: two hundred of them in a run bury the dozen
   // events that tell what the workflow did. The terminal panel keeps the detail;
   // what the feed takes from a tool call is the branch it creates. The call does

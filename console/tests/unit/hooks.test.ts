@@ -102,6 +102,21 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.agents[0]).toMatchObject({ name: "implementation-harness:developer", status: "completed" });
   });
 
+  it("should close a background agent that was killed, so the run can end", () => {
+    session.state.phase = 9;
+    hook({ hook_event_name: "SubagentStart", agent_type: "implementation-harness:developer", agent_id: "a1" });
+    hook({ hook_event_name: "PostToolUse", tool_name: "TaskStop", tool_input: { task_id: "a1" }, tool_response: {} });
+    expect(session.state.agents[0]).toMatchObject({ id: "a1", status: "abandoned" });
+    hook({ hook_event_name: "Stop" });
+    expect(session.state.status).toBe("completed");
+  });
+
+  it("should ignore a stopped task that is not a running agent", () => {
+    hook({ hook_event_name: "PostToolUse", tool_name: "TaskStop", tool_input: { task_id: "shell-1" }, tool_response: {} });
+    expect(session.state.agents).toEqual([]);
+    expect(session.state.activities).toEqual([]);
+  });
+
   it("should date the end of the run from the workflow, not from the session", () => {
     session.state.phase = 9;
     expect(session.state.endedAt).toBeNull();
