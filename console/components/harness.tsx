@@ -68,6 +68,14 @@ export function Harness() {
     if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "run.subscribe", runId }));
   }, []);
 
+  const clearLaunchForm = useCallback(() => {
+    cwdRef.current = "";
+    setCwd("");
+    setDetectedProject(undefined);
+    setIssueUrl("");
+    setInstruction("");
+  }, []);
+
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
@@ -112,8 +120,10 @@ export function Harness() {
 
   // A run the console no longer holds cannot stay open in front of the user.
   useEffect(() => {
-    if (openRunId && !snapshot.runs.some((summary) => summary.id === openRunId)) openRun(null);
-  }, [snapshot.runs, openRunId, openRun]);
+    if (!openRunId || snapshot.runs.some((summary) => summary.id === openRunId)) return;
+    openRun(null);
+    clearLaunchForm();
+  }, [snapshot.runs, openRunId, openRun, clearLaunchForm]);
 
   // The queue itself says what is still waiting, so a message announcing a wait
   // goes as soon as the wait does, without the user having to close it.
@@ -267,11 +277,9 @@ export function Harness() {
 
   const newRun = useCallback(() => {
     openRun(null);
-    setIssueUrl("");
-    setInstruction("");
+    clearLaunchForm();
     setError(undefined);
-    changeCwd("");
-  }, [openRun, changeCwd]);
+  }, [openRun, clearLaunchForm]);
 
   useEffect(() => window.desktop?.onOpenRun(openRun), [openRun]);
   useEffect(() => window.desktop?.onNewRun(newRun), [newRun]);

@@ -83,6 +83,29 @@ test("should clear the launch form fields when starting a new run", async ({ pag
   await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
 });
 
+test("should clear the launch form fields when a finished run is closed", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByLabel("Répertoire du projet").fill("acme-dashboard");
+  await page.getByLabel("Ticket GitLab").fill("https://gitlab.com/acme/demo/-/issues/217");
+  await page.getByLabel("Instruction particulière").fill("reste sur desktop");
+
+  await startDemoRun(page);
+
+  await expect(page.getByText("Décision requise")).toBeVisible();
+  await page.getByRole("button", { name: "develop" }).click();
+  await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
+  await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await expectDemoCompleted(page);
+
+  await page.getByRole("button", { name: "Fermer" }).click();
+
+  await expect(page.getByRole("button", { name: "Lancer l’implémentation" })).toBeVisible();
+  await expect(page.getByLabel("Ticket GitLab")).toHaveValue("");
+  await expect(page.getByLabel("Répertoire du projet")).toHaveValue("");
+  await expect(page.getByLabel("Instruction particulière")).toHaveValue("");
+});
+
 test("should size the instruction field when another run is opened from another tab", async ({ page }) => {
   await page.goto("/?demo=1");
   // The tab the user leaves a run on is the tab the next one is opened on, and
