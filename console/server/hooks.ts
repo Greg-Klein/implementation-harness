@@ -42,7 +42,9 @@ function waitForQuestionAnswer(session: RunSession, event: Extract<EngineEvent, 
   if (session.resolvePendingQuestion) return undefined;
   session.pendingQuestionInput = event.input;
   session.state.pendingQuestion = { id: event.id ?? crypto.randomUUID(), questions: event.questions };
-  session.state.status = "attention";
+  // A finished run keeps its outcome: putting it back in progress would have
+  // the next turn end close it again, a second time, with a second self-audit.
+  if (runInProgress(session.state.status)) session.state.status = "attention";
   session.state.action = undefined;
   session.activity("attention", event.questions.length > 1 ? `${event.questions.length} décisions attendent ta réponse` : "Une décision attend ta réponse");
 
@@ -59,7 +61,7 @@ export function answerQuestion(session: RunSession, answers: Record<string, stri
   if (!session.pendingQuestionInput || !session.resolvePendingQuestion) {
     if (!session.demo) throw new Error(`Le pont de réponse avec ${engine.label} n'est plus actif.`);
     session.state.pendingQuestion = undefined;
-    session.state.status = "running";
+    if (session.state.status === "attention") session.state.status = "running";
     session.activity("system", "Réponses reçues", Object.values(normalizedAnswers).join(" · "));
     session.publish();
     continueDemoRun(session);
@@ -71,7 +73,7 @@ export function answerQuestion(session: RunSession, answers: Record<string, stri
   session.resolvePendingQuestion = null;
   session.pendingQuestionInput = null;
   session.state.pendingQuestion = undefined;
-  session.state.status = "running";
+  if (session.state.status === "attention") session.state.status = "running";
   session.activity("system", `Réponse transmise à ${engine.label}`);
   session.publish();
   resolve(output);
@@ -151,14 +153,18 @@ function apply(session: RunSession, event: EngineEvent) {
  * landing on each other's run.
  */
 export function processHook(session: RunSession, body: Record<string, unknown>) {
-  // A finished run keeps receiving events while the session sits idle at its
-  // prompt, and an idle notification must not put it back in progress.
-  if (!runInProgress(session.state.status)) return;
+  const inProgress = runInProgress(session.state.status);
+  if (!inProgress && !session.state.sessionActive) return;
   const event = engine.event((body.payload ?? {}) as Record<string, unknown>);
   if (!event) return;
   // A question publishes its own state from inside the promise it hands back,
-  // and that promise is what keeps the agent waiting.
+  // and that promise is what keeps the agent waiting. It is raised even once
+  // the workflow is over: the user can keep talking to the idle session, and a
+  // question dropped here would only ever show in the terminal.
   if (event.kind === "question") return waitForQuestionAnswer(session, event);
+  // A finished run keeps receiving events while the session sits idle at its
+  // prompt, and an idle notification must not put it back in progress.
+  if (!inProgress) return;
   apply(session, event);
   session.publish();
 }

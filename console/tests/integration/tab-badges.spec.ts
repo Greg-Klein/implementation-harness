@@ -84,10 +84,10 @@ test("should flag a new message on the Conversation tab, and clear it on reading
   await expect(conversation.getByText("Lecture du ticket GitLab simulé…")).toBeVisible();
   await expect(badge).toBeHidden();
 
-  await page.getByRole("tab", { name: "Terminal" }).click();
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("tab", { name: "Terminal" }).click();
 
   await expect(badge).toBeVisible();
   await page.getByRole("tab", { name: "Conversation" }).click();
@@ -109,7 +109,7 @@ test("should not flag the dialogue for an instruction the user typed", async ({ 
 test("should keep the tab bar aligned when a dot appears on the first tab", async ({ page }) => {
   await page.goto("/?demo=1");
   await page.getByRole("tab", { name: "Terminal" }).click();
-  await expect(page.getByRole("img", { name: "nouveau message" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /nouveau message|décision en attente/ })).toBeVisible();
 
   // Conversation is the first tab, so its dot shifts every button after it.
   // The pill slides there over a 200ms CSS transition, so retry until it settles.
@@ -132,12 +132,23 @@ test("should keep the tab bar aligned when a dot appears on the first tab", asyn
 
 test("should never flag the tab the user is already reading", async ({ page }) => {
   await page.goto("/?demo=1");
-  await page.getByRole("tab", { name: "Preuves" }).click();
 
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();
+  await page.getByRole("tab", { name: "Preuves" }).click();
   await expectDemoCompleted(page);
 
   await expect(page.getByRole("img", { name: "nouvelles preuves" })).toBeHidden();
+});
+
+test("should flag a pending decision on the Conversation tab, where it is answered", async ({ page }) => {
+  await page.goto("/?demo=1");
+  await page.getByRole("tab", { name: "Terminal" }).click();
+
+  const badge = page.getByRole("img", { name: "décision en attente" });
+  await expect(badge).toBeVisible();
+  await page.getByRole("tab", { name: "Conversation" }).click();
+  await expect(badge).toBeHidden();
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Décision requise")).toBeVisible();
 });

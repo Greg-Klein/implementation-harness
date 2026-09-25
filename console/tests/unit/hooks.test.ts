@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 
-import { processHook } from "../../server/hooks";
+import { answerQuestion, processHook } from "../../server/hooks";
 import { RunSession } from "../../server/run-session";
 
 // A demonstration identifier keeps the completion out of the self-improvement loop.
@@ -123,5 +123,28 @@ describe("workflow signals from Claude Code hooks", () => {
     expect(session.state.status).toBe("completed");
     hook({ hook_event_name: "Stop" });
     expect(session.state.status).toBe("completed");
+  });
+
+  it("should still raise a question asked by the idle session of a finished run, and leave its outcome alone", async () => {
+    session.state = { ...session.state, status: "completed", phase: 10, sessionActive: true, endedAt: "2026-09-18T14:00:45.000Z" };
+    const parked = hook({
+      hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
+      tool_input: { questions: [{ question: "Quelle portée ?", header: "Portée", options: [{ label: "Un fichier" }] }] },
+    });
+    expect(session.state.pendingQuestion?.questions).toEqual([expect.objectContaining({ question: "Quelle portée ?" })]);
+    expect(session.state.status).toBe("completed");
+
+    answerQuestion(session, { "Quelle portée ?": "Un fichier" });
+    await expect(parked).resolves.toMatchObject({ hookSpecificOutput: { permissionDecision: "allow" } });
+    expect(session.state).toMatchObject({ status: "completed", endedAt: "2026-09-18T14:00:45.000Z", pendingQuestion: undefined });
+  });
+
+  it("should ignore a question from a finished run whose session is gone", () => {
+    session.state = { ...session.state, status: "stopped", sessionActive: false };
+    void hook({
+      hook_event_name: "PreToolUse", tool_name: "AskUserQuestion", tool_use_id: "q1",
+      tool_input: { questions: [{ question: "Quelle portée ?", header: "Portée", options: [] }] },
+    });
+    expect(session.state.pendingQuestion).toBeUndefined();
   });
 });

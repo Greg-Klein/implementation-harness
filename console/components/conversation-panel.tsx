@@ -3,8 +3,9 @@
 import { ArrowDownIcon, ChatCircleDotsIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { messageBlocks } from "@/lib/conversation";
-import type { ConversationMessage } from "@/lib/types";
+import type { ConversationMessage, PendingQuestion } from "@/lib/types";
 import { InlineText } from "./inline-text";
+import { QuestionPanel } from "./question-panel";
 
 function MessageBody({ text }: { text: string }) {
   return <>{messageBlocks(text).map((block, index) => block.kind === "code"
@@ -26,7 +27,7 @@ function WritingHint({ action }: { action?: string }) {
   );
 }
 
-export function ConversationPanel({ messages, writing, action, stalled, canSend, visible, onSend, onCheckTerminal }: { messages: ConversationMessage[]; writing: boolean; action?: string; stalled: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onCheckTerminal: () => void }) {
+export function ConversationPanel({ messages, pendingQuestion, writing, action, stalled, canSend, visible, onSend, onAnswer, onCheckTerminal }: { messages: ConversationMessage[]; pendingQuestion?: PendingQuestion; writing: boolean; action?: string; stalled: boolean; canSend: boolean; visible: boolean; onSend: (text: string) => void; onAnswer: (answers: Record<string, string>) => void; onCheckTerminal: () => void }) {
   // The flow of terminal output falls silent during a long command, and a named
   // action is proof on its own that the turn is still running.
   const busy = writing || Boolean(action);
@@ -42,6 +43,16 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
     const list = listRef.current;
     if (list && pinnedRef.current) list.scrollTop = list.scrollHeight;
   }, [messages.length, busy]);
+
+  // A decision blocks the whole run, so it is brought into view even when the
+  // user had scrolled up to reread something.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !pendingQuestion || !visible) return;
+    pinnedRef.current = true;
+    setPinned(true);
+    list.scrollTop = list.scrollHeight;
+  }, [pendingQuestion?.id, visible]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -83,7 +94,7 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
           onScroll={() => { const list = listRef.current; if (!list) return; pinnedRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; setPinned(pinnedRef.current); }}
           className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-6 md:px-7"
         >
-          {messages.length === 0 ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+          {messages.length === 0 && !pendingQuestion ? <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <div className="grid size-10 place-items-center rounded-full border border-dashed border-[var(--line)] text-[var(--muted)]"><ChatCircleDotsIcon size={18} /></div>
             {stalled ? (
               <>
@@ -110,7 +121,8 @@ export function ConversationPanel({ messages, writing, action, stalled, canSend,
               </div>
             </article>
           ))}
-          {messages.length > 0 && busy && <WritingHint action={action} />}
+          {pendingQuestion && <div className="flex flex-col items-start"><QuestionPanel key={pendingQuestion.id} pending={pendingQuestion} onAnswer={onAnswer} /></div>}
+          {messages.length > 0 && busy && !pendingQuestion && <WritingHint action={action} />}
         </div>
         {!pinned && (
           <button

@@ -8,6 +8,7 @@ test("should keep the document reader open until clarification requires an answe
   page.on("pageerror", (error) => browserErrors.push(error.message));
 
   await page.goto("/?demo=1");
+  await page.getByRole("tab", { name: "Preuves" }).click();
   const documents = page.getByRole("button", { name: /Documents générés/ });
   await expect(documents).toContainText("1");
   await documents.click();
@@ -22,7 +23,8 @@ test("should keep the document reader open until clarification requires an answe
 
   await reader.getByRole("button", { name: "Répondre" }).click();
   await expect(reader).toBeHidden();
-  await expect(page.getByText("Décision requise")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Conversation" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("log", { name: "Conversation" }).getByText("Décision requise")).toBeVisible();
   await page.getByRole("button", { name: "develop" }).click();
   await page.getByRole("button", { name: "Garder les alertes critiques" }).click();
   await page.getByRole("button", { name: "Transmettre à Claude" }).click();

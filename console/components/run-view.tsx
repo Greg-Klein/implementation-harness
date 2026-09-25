@@ -47,7 +47,7 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
    * is not news to them.
    */
   const unread: Partial<Record<Tab, string>> = {
-    conversation: tab !== "conversation" && lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
+    conversation: tab === "conversation" ? undefined : run.pendingQuestion ? "décision en attente" : lastMessage?.author === "claude" && lastMessage.id !== seenMessageId ? "nouveau message" : undefined,
     preuves: tab !== "preuves" && Boolean(run.evidenceUpdatedAt) && run.evidenceUpdatedAt !== seenEvidenceAt ? "nouvelles preuves" : undefined,
   };
 
@@ -120,7 +120,7 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
           </div>
         </div>
         <div className={tab === "conversation" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-          <ConversationPanel messages={run.messages} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onCheckTerminal={() => setTab("terminal")} />
+          <ConversationPanel messages={run.messages} pendingQuestion={run.pendingQuestion} writing={writing} action={run.action} stalled={isTranscriptStalled(run.messages.length, run.phase, run.agents.length, run.artifacts.length)} canSend={sessionAlive(run.status, run.sessionActive) && connected} visible={tab === "conversation"} onSend={actions.sendInstruction} onAnswer={actions.answer} onCheckTerminal={() => setTab("terminal")} />
         </div>
         <div className={tab === "terminal" ? "min-h-0 flex-1 bg-[var(--terminal)]" : "hidden"}>
           <TerminalPanel ref={terminalRef} onInput={actions.terminalInput} onResize={actions.terminalResize} />
@@ -129,7 +129,7 @@ export function RunView({ run, connected, writing, terminalRef, actions }: {
           <EvidencePanel run={run} />
         </div>
       </section>
-      <ActivityPanel run={run} onFeedback={actions.feedback} onAnswer={actions.answer} />
+      <ActivityPanel run={run} onFeedback={actions.feedback} onShowQuestion={() => setTab("conversation")} />
     </div>
   );
 }

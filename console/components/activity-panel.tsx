@@ -6,9 +6,8 @@ import { activeAgents, elapsedLabel, generatedDocuments, isDemoRun } from "@/lib
 import { useNow } from "@/lib/use-now";
 import type { RunState } from "@/lib/types";
 import { DocumentViewer } from "./document-viewer";
-import { QuestionPanel } from "./question-panel";
 
-export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; onFeedback: (body: string) => void; onAnswer: (answers: Record<string, string>) => void }) {
+export function ActivityPanel({ run, onFeedback, onShowQuestion }: { run: RunState; onFeedback: (body: string) => void; onShowQuestion: () => void }) {
   const runningAgents = activeAgents(run.agents);
   const now = useNow(runningAgents.length > 0);
   const [feedback, setFeedback] = useState("");
@@ -36,7 +35,6 @@ export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; on
         <button type="button" disabled={!feedback.trim()} onClick={submitFeedback} className="mt-2 w-full rounded-lg bg-[var(--accent)] px-3 py-2 text-[11px] font-semibold text-white transition hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-35">Ajouter à la boucle d’auto-amélioration</button>
         {queued && <p className="mt-2 text-[10px] leading-4 text-[var(--accent)]">{demo ? "Retour simulé. Rien n’a été enregistré." : <>Retour enregistré. Lance <code>impl improve</code> pour produire l&apos;amélioration.</>}</p>}
       </div>}
-      {run.pendingQuestion && <QuestionPanel key={run.pendingQuestion.id} pending={run.pendingQuestion} onAnswer={onAnswer} />}
       {run.error && <div className="m-4 flex gap-2.5 rounded-2.5 border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-800"><WarningIcon className="mt-0.5 shrink-0" size={15} /> {run.error}</div>}
       {!(ended && runningAgents.length === 0) && <section aria-labelledby="active-agents-title" className="shrink-0 border-b border-[var(--line)] p-5">
         <div className="mb-4 flex items-center justify-between"><h2 id="active-agents-title" className="text-xs font-semibold">Agents</h2><span className="font-mono text-[10px] text-[var(--muted)]">{runningAgents.length} actif{runningAgents.length > 1 ? "s" : ""}</span></div>
@@ -57,7 +55,7 @@ export function ActivityPanel({ run, onFeedback, onAnswer }: { run: RunState; on
       <section className="shrink-0 border-t border-[var(--line)] p-5">
         <button type="button" disabled={documents.length === 0} onClick={() => setDocumentsOpen(true)} title="Contexte, plans, rapports de tests et de review, description de MR" className="flex w-full items-center justify-between rounded-md text-xs transition hover:text-[var(--accent)] disabled:cursor-default disabled:text-[var(--muted)]"><span className="flex items-center gap-2 font-medium"><FileTextIcon size={14} /> Documents générés</span><span className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--accent)]">{documents.length}<ArrowRightIcon size={11} /></span></button>
       </section>
-      {documentsOpen && <DocumentViewer runId={run.id ?? ""} documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} />}
+      {documentsOpen && <DocumentViewer runId={run.id ?? ""} documents={documents} workflowActive={run.status === "starting" || run.status === "running" || run.status === "attention"} pendingQuestionCount={run.pendingQuestion?.questions.length ?? 0} onClose={() => setDocumentsOpen(false)} onAnswer={() => { setDocumentsOpen(false); onShowQuestion(); }} />}
     </aside>
   );
 }

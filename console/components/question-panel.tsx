@@ -17,7 +17,7 @@ export function QuestionPanel({ pending, onAnswer }: { pending: PendingQuestion;
   };
 
   return (
-    <section className="max-h-[72vh] overflow-y-auto border-b border-[var(--line)] bg-[#eef2ec] p-5">
+    <section aria-label="Décision requise" className="reveal w-full max-w-[min(680px,92%)] rounded-3 border border-[var(--line)] bg-[#eef2ec] p-5 shadow-[0_10px_30px_-26px_rgba(30,42,35,.5)]">
       <div className="mb-4 flex items-start gap-3">
         <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--ink)] text-white"><RobotIcon size={14} /></div>
         <div><p className="text-xs font-semibold">Décision requise</p><p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Claude attend ta réponse. Le terminal reste disponible.</p></div>
