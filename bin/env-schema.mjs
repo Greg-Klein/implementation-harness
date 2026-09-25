@@ -73,7 +73,7 @@ export const schema = [
     label: "Auto-audit à la fin de chaque run",
     comment: "Run a Claude Code self-audit after every completed workflow.",
     help: "Lance une auto-analyse Claude Code après chaque workflow terminé.",
-    fallback: "false",
+    fallback: "true",
     kind: "boolean",
     readBy: "console",
     validate: validateEnum(["true", "false"]),

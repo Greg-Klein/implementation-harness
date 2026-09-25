@@ -27,6 +27,9 @@ export default defineConfig({
       IMPL_SEARCH_ROOTS: checkoutsRoot,
       // Isolate the suite from whatever .env the developer keeps locally.
       IMPL_ENV_FILE: path.join(checkoutsRoot, "absent.env"),
+      // The self-audit is on by default, and a run finishing under test must not
+      // start a real improvement session on this checkout.
+      IMPL_SELF_IMPROVEMENT_AUTORUN: "false",
     },
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: false,

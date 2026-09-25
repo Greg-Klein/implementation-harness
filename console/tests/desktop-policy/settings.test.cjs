@@ -12,10 +12,18 @@ before(async () => { ({ createSettingsStore } = await import("../../electron/set
 beforeEach(() => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), "harness-settings-"));
   envFile = path.join(directory, ".env");
-  store = createSettingsStore({ envFile, environment: {}, bundledPlugin: true });
+  // Imposed so that the harness checkout detection never scans the real ~/workspace.
+  store = createSettingsStore({ envFile, environment: { IMPL_SEARCH_ROOTS: directory }, bundledPlugin: true });
 });
 afterEach(() => fs.rmSync(directory, { recursive: true, force: true }));
 const save = (values, revision = store.snapshot().revision) => store.save({ revision, values });
+function makeCheckout(relative, name) {
+  const checkout = path.join(directory, relative);
+  fs.mkdirSync(path.join(checkout, ".git"), { recursive: true });
+  fs.mkdirSync(path.join(checkout, ".claude-plugin"));
+  fs.writeFileSync(path.join(checkout, ".claude-plugin", "plugin.json"), JSON.stringify({ name }));
+  return checkout;
+}
 
 describe("desktop configuration storage", () => {
   it("should expose editable values without leaking unrelated configuration", () => {
@@ -67,15 +75,42 @@ describe("desktop configuration storage", () => {
     assert.match(fs.readFileSync(envFile, "utf8"), /IMPL_MAX_CONCURRENT_RUNS='3'/);
   });
 
-  it("should require a harness checkout for packaged autonomous audits", () => {
-    assert.equal(save({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true" }).ok, false);
+  it("should turn the autonomous audit on by default, and say so when no harness checkout backs it", () => {
+    const snapshot = store.snapshot();
+    assert.equal(snapshot.values.IMPL_SELF_IMPROVEMENT_AUTORUN, "true");
+    assert.equal(snapshot.values.IMPL_PLUGIN_ROOT, "");
+    assert.match(snapshot.warnings.IMPL_PLUGIN_ROOT.join(" "), /auto-audit reste inactif/);
+    // The other settings stay editable while no checkout is found.
+    assert.equal(save({ IMPL_MAX_CONCURRENT_RUNS: "4" }).ok, true);
     assert.equal(save({ IMPL_PLUGIN_ROOT: directory }).ok, false);
-    fs.mkdirSync(path.join(directory, ".git"));
-    fs.mkdirSync(path.join(directory, ".claude-plugin"));
-    fs.writeFileSync(path.join(directory, ".claude-plugin", "plugin.json"), "{}");
-    assert.equal(save({ IMPL_PLUGIN_ROOT: directory, IMPL_SELF_IMPROVEMENT_AUTORUN: "true" }).ok, true);
+  });
+
+  it("should find the harness checkout in the search roots when none was chosen", () => {
+    const harness = makeCheckout("workspace/implementation-harness", "implementation-harness");
+    makeCheckout("another", "another-plugin");
+    const found = createSettingsStore({ envFile, environment: { IMPL_SEARCH_ROOTS: directory }, bundledPlugin: true }).snapshot();
+    assert.equal(found.values.IMPL_PLUGIN_ROOT, harness);
+    assert.equal(found.sources.IMPL_PLUGIN_ROOT, "default");
+    assert.equal(found.warnings.IMPL_PLUGIN_ROOT, undefined);
+    // Found, not chosen: nothing is written for it.
+    assert.equal(fs.existsSync(envFile), false);
+  });
+
+  it("should keep a checkout cleared on purpose, and refuse it only while the audit stays on", () => {
+    makeCheckout("implementation-harness", "implementation-harness");
+    store = createSettingsStore({ envFile, environment: { IMPL_SEARCH_ROOTS: directory }, bundledPlugin: true });
+    assert.equal(save({ IMPL_PLUGIN_ROOT: "" }).ok, false);
     assert.equal(save({ IMPL_PLUGIN_ROOT: "", IMPL_SELF_IMPROVEMENT_AUTORUN: "false" }).ok, true);
     assert.equal(store.snapshot().values.IMPL_PLUGIN_ROOT, "");
+    assert.equal(save({ IMPL_SELF_IMPROVEMENT_AUTORUN: "true" }).ok, false);
+  });
+
+  it("should accept a harness checkout chosen by hand, outside the search roots", () => {
+    const harness = makeCheckout("elsewhere", "implementation-harness");
+    fs.mkdirSync(path.join(directory, "roots"));
+    store = createSettingsStore({ envFile, environment: { IMPL_SEARCH_ROOTS: path.join(directory, "roots") }, bundledPlugin: true });
+    assert.equal(save({ IMPL_PLUGIN_ROOT: harness, IMPL_SELF_IMPROVEMENT_AUTORUN: "true" }).ok, true);
+    assert.equal(store.snapshot().sources.IMPL_PLUGIN_ROOT, "file");
   });
 
   it("should report inaccessible or malformed configuration without replacing it", () => {

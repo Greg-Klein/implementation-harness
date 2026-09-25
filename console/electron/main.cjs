@@ -199,6 +199,10 @@ async function startBackend() {
     environment.IMPL_DATA_DIR ??= path.join(userData, "data");
     environment.IMPL_BUNDLED_PLUGIN = "true";
     environment.IMPL_BUNDLED_PLUGIN_ROOT = path.join(process.resourcesPath, "plugin");
+    // A checkout found by the settings store is not written to the .env the
+    // server reads, so it has to be handed over here.
+    const harnessCheckout = settingsStore.snapshot().values.IMPL_PLUGIN_ROOT.trim();
+    if (harnessCheckout && !environment.IMPL_PLUGIN_ROOT?.trim()) environment.IMPL_PLUGIN_ROOT = harnessCheckout;
   }
   backend = utilityProcess.fork(path.join(__dirname, "../.desktop/server.mjs"), [], {
     cwd: app.getAppPath(), env: environment, stdio: "pipe", serviceName: "Implementation Harness Server",

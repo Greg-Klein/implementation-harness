@@ -254,7 +254,7 @@ Les réglages disponibles :
 |---|---|---|
 | `IMPL_SEARCH_ROOTS` | racines où chercher les checkouts, séparées par des virgules | `~/workspace` |
 | `IMPL_PERMISSION_MODE` | mode de permission de chaque run : `manual`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions` | `auto` |
-| `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `false` |
+| `IMPL_SELF_IMPROVEMENT_AUTORUN` | auto-audit à la fin de chaque run | `true` |
 | `IMPL_REMOTE_CONTROL` | Remote Control sur le terminal d’un run | `true` |
 | `IMPL_PORT` | port d’écoute | `3210` |
 | `IMPL_HOST` | interface d’écoute | `127.0.0.1` |
@@ -304,10 +304,10 @@ Le harnais peut également se critiquer sans retour humain. À la fin de chaque 
 La politique se règle avec `impl config`, ou directement :
 
 ```bash
-impl config set IMPL_SELF_IMPROVEMENT_AUTORUN=true
+impl config set IMPL_SELF_IMPROVEMENT_AUTORUN=false
 ```
 
-Elle lance l’analyse en arrière-plan à la fin du run. L’option vaut `false` par défaut; il faut l’activer consciemment.
+Elle lance l’analyse en arrière-plan à la fin du run. L’option est active par défaut ; la passer à `false` coupe la boucle. Dans l’application, l’auto-audit travaille sur le dépôt du harnais : s’il n’est pas renseigné dans les réglages, l’application le cherche dans les dossiers de recherche (un checkout Git dont le plugin s’appelle `implementation-harness`) et signale dans les réglages quand elle n’en trouve aucun.
 
 L’agent travaille dans un worktree isolé et laisse toujours son commit sur sa branche `self-improvement-*`. Rien n’est fusionné automatiquement et rien n’est poussé sur GitHub. Le panneau de droite affiche le diff : c’est la seule porte de promotion. Après une fusion, redémarrer le harnais avec `impl restart` pour charger les changements du serveur local.
 

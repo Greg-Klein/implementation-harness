@@ -25,6 +25,8 @@ export let port = Number(process.env.PORT ?? process.env.IMPL_PORT ?? 3210);
 /** Port zero lets the OS bind a free port; agent hooks need the actual one. */
 export function setListeningPort(value: number) { port = value; }
 export const bundledPlugin = process.env.IMPL_BUNDLED_PLUGIN === "true" && !process.env.IMPL_PLUGIN_ROOT?.trim();
+/** On unless explicitly turned off. */
+export function selfImprovementAutorun() { return process.env.IMPL_SELF_IMPROVEMENT_AUTORUN !== "false"; }
 export const hostname = process.env.IMPL_HOST ?? "127.0.0.1";
 export const dev = process.env.NODE_ENV !== "production";
 export const remoteControl = process.env.IMPL_REMOTE_CONTROL !== "false";
