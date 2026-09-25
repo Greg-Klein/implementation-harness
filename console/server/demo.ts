@@ -30,7 +30,7 @@ export const DEMO_CWD = "~/workspace/acme-dashboard";
 
 export function demoLaunchState() {
   return {
-    status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42",
+    status: "running" as const, phase: 1, cwd: DEMO_CWD, issueUrl: "ticket-simule://IH-42", ticketTitle: "Ajouter les préférences de notification",
     instruction: "Mode démonstration — aucun dépôt ne sera modifié.", startedAt: now(),
     action: "Lecture du ticket GitLab",
   };

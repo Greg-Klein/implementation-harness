@@ -173,6 +173,17 @@ export function gitLabProjectPath(issueUrl: string) {
   }
 }
 
+/** The GitLab API path of the issue a ticket URL points at, with the host it lives on. */
+export function gitLabIssueEndpoint(issueUrl: string) {
+  try {
+    const url = new URL(issueUrl);
+    const match = url.pathname.match(/^\/(.+?)\/-\/(?:issues|work_items)\/(\d+)/);
+    return match ? { hostname: url.hostname, path: `projects/${encodeURIComponent(match[1])}/issues/${match[2]}` } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The agents a finished run leaves behind. A stop event can never arrive for an
  * agent whose session is gone, so one that was still running keeps reading as
@@ -409,6 +420,7 @@ export function summarizeRun(state: RunState): RunSummary {
     phase: state.phase,
     cwd: state.cwd,
     issueUrl: state.issueUrl,
+    ticketTitle: state.ticketTitle,
     startedAt: state.startedAt,
     endedAt: state.endedAt,
     branch: state.branch,

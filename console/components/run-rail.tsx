@@ -25,6 +25,22 @@ function PhaseBar({ phase, status }: { phase: number; status: RunSummary["status
   );
 }
 
+/** The native tooltip is only set once the title is actually cut off. */
+function TicketTitle({ title }: { title: string }) {
+  return (
+    <span
+      className="block truncate text-[11px] font-semibold text-[var(--ink)]"
+      onMouseEnter={(event) => {
+        const element = event.currentTarget;
+        if (element.scrollWidth > element.clientWidth) element.title = title;
+        else element.removeAttribute("title");
+      }}
+    >
+      {title}
+    </span>
+  );
+}
+
 /**
  * A finished run stays in the list until it is removed, because its documents,
  * its dialogue and its merge request are still worth reading. Removing it is
@@ -48,8 +64,9 @@ function RunRow({ run, selected, index, onOpen, onClose }: { run: RunSummary; se
       >
         <Dot status={run.status} pulsing={runInProgress(run.status)} />
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[11px] font-semibold text-[var(--ink)]">{runLabel(run)}</span>
+          {run.ticketTitle && <TicketTitle title={run.ticketTitle} />}
+          <span className={`flex items-baseline justify-between gap-2 ${run.ticketTitle ? "mt-0.5" : ""}`}>
+            <span className={`truncate ${run.ticketTitle ? "text-[10px] font-medium text-[var(--ink)]" : "text-[11px] font-semibold text-[var(--ink)]"}`}>{runLabel(run)}</span>
             {waiting
               ? <span title={`${run.pendingQuestionCount} décision${run.pendingQuestionCount > 1 ? "s" : ""} en attente`} className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-amber-800"><WarningIcon size={9} weight="fill" />{run.pendingQuestionCount}</span>
               : <span className="shrink-0 font-mono text-[9px] text-[var(--muted)]">{run.phase}/{PHASES}</span>}

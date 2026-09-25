@@ -9,6 +9,7 @@ import { clearPendingQuestion } from "./hooks.js";
 import { acknowledgeDemoInstruction, demoLaunchState, startDemoRun } from "./demo.js";
 import { scheduleAutonomousReview } from "./self-improvement.js";
 import { resolveProjectDirectory } from "./repository.js";
+import { fetchTicketTitle } from "./ticket.js";
 import { engine } from "./engine/index.js";
 import { createPromptStore } from "./prompts.js";
 import { RunSession } from "./run-session.js";
@@ -121,6 +122,11 @@ export class RunRegistry {
     }));
     session.activity("system", "Session créée", path.basename(entry.cwd));
     session.publish();
+    void fetchTicketTitle(entry.issueUrl, entry.cwd).then((title) => {
+      if (!title) return;
+      session.state.ticketTitle = title;
+      session.publish();
+    });
     await clearTaskDirectory(entry.cwd);
     await startArtifactWatcher(session);
     if (this.shuttingDown) { await session.dispose(); throw new Error("L'application est en cours de fermeture."); }

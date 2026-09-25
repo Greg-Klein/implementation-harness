@@ -24,6 +24,8 @@ export type RunState = {
   action?: string;
   /** When a file of the "Preuves" tab was last written, a rewrite by a later review round included. */
   evidenceUpdatedAt?: string;
+  /** Read from GitLab once the run has started; absent until then, or when GitLab could not be reached. */
+  ticketTitle?: string;
 };
 
 /**
@@ -35,7 +37,7 @@ export type RunState = {
  * the rest arrives only for the run the page has opened.
  */
 export type RunSummary = {
-  id: string; status: RunStatus; phase: number; cwd: string; issueUrl: string;
+  id: string; status: RunStatus; phase: number; cwd: string; issueUrl: string; ticketTitle?: string;
   startedAt: string | null; endedAt: string | null;
   branch?: string; mergeRequestUrl?: string; error?: string; action?: string;
   sessionActive: boolean;
